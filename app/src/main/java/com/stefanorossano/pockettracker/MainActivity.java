@@ -95,31 +95,31 @@ public class MainActivity extends Activity {
     // ===== Wizard di creazione Season, a step: Nome -> Hai già giocato prima del tracker? -> (Sì: punteggio
     // attuale -> sessione non tracciata) oppure (No: scelta deck -> Session 1). Ogni step e' un dialog a se',
     // mai impilato sopra un altro: si passa da uno step al successivo chiudendo quello corrente, cosi'
-    // "Back" puo' sempre tornare allo step precedente senza restare mai "intrappolati" in un dialog.
+    // "Indietro" puo' sempre tornare allo step precedente senza restare mai "intrappolati" in un dialog.
 
     void wizardStep1(boolean first, String prefillName){
         LinearLayout box = formBox();
         String defaultName = first ? "Season 1" : ("Season " + (store.seasons.size()+1));
-        box.addView(label("Season name"));
+        box.addView(label("Nome Season"));
         EditText name = field(defaultName);
         if (prefillName != null) name.setText(prefillName);
         box.addView(name);
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? "Create your first Season" : "New Season")
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? "Crea la prima Season" : "Nuova Season")
             .setView(box).setCancelable(!first)
-            .setPositiveButton("Next", (d,w) -> {
+            .setPositiveButton("Avanti", (d,w) -> {
                 String n = name.getText().toString().trim();
                 wizardStep2(first, n.isEmpty() ? defaultName : n);
             });
-        if (!first) b.setNegativeButton("Cancel", null); // solo se NON e' la primissima Season: qui c'e' gia' una lista a cui tornare
+        if (!first) b.setNegativeButton("Annulla", null); // solo se NON e' la primissima Season: qui c'e' gia' una lista a cui tornare
         b.show();
     }
 
     void wizardStep2(boolean first, String name){
         new AlertDialog.Builder(this).setTitle(name)
-            .setMessage("Have you already been playing this Season before using the tracker?")
+            .setMessage("Hai già giocato questa Season prima di usare il tracker?")
             .setCancelable(false)
-            .setNeutralButton("Back", (d,w) -> wizardStep1(first, name))
-            .setPositiveButton("Yes", (d,w) -> wizardStep3Yes(first, name))
+            .setNeutralButton("Indietro", (d,w) -> wizardStep1(first, name))
+            .setPositiveButton("Sì", (d,w) -> wizardStep3Yes(first, name))
             .setNegativeButton("No", (d,w) -> wizardStep3No(first, name))
             .show();
     }
@@ -128,20 +128,26 @@ public class MainActivity extends Activity {
     // differenza come un'unica sessione non tracciata, esattamente come una correzione manuale di punteggio.
     void wizardStep3Yes(boolean first, String name){
         LinearLayout box = formBox();
-        EditText points = numberField("Current points", true);
-        EditText streak = numberField("Current win streak", true);
-        box.addView(label("Current points")); box.addView(points);
-        box.addView(label("Current win streak")); box.addView(streak);
+        EditText points = numberField("Punti attuali", true);
+        EditText streak = numberField("Vittorie consecutive attuali", true);
+        EditText wins = numberField("Partite vinte finora", false);
+        EditText losses = numberField("Partite perse finora", false);
+        box.addView(label("Punti attuali")); box.addView(points);
+        box.addView(label("Vittorie consecutive attuali")); box.addView(streak);
+        box.addView(label("Partite vinte finora")); box.addView(wins);
+        box.addView(label("Partite perse finora")); box.addView(losses);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle(name)
             .setView(box).setCancelable(false)
-            .setPositiveButton("Create Season", null)
-            .setNeutralButton("Back", (d,w) -> wizardStep2(first, name))
+            .setPositiveButton("Crea Season", null)
+            .setNeutralButton("Indietro", (d,w) -> wizardStep2(first, name))
             .create();
         showNonDismissing(dialog, () -> {
             try {
                 int np = Integer.parseInt(points.getText().toString());
                 int ns = Integer.parseInt(streak.getText().toString());
-                if (ns < 0) return false;
+                int nw = Integer.parseInt(wins.getText().toString());
+                int nl = Integer.parseInt(losses.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
                 Season s = new Season(name);
                 s.points = DEFAULT_BASELINE; s.baseline = DEFAULT_BASELINE;
                 s.streak = 0; s.initialStreak = 0;
@@ -149,6 +155,7 @@ public class MainActivity extends Activity {
                 sess.untracked = true;
                 sess.startPoints = s.points; sess.endPoints = np;
                 sess.startStreak = s.streak; sess.endStreak = ns;
+                sess.untrackedWins = nw; sess.untrackedLosses = nl;
                 sess.matches.add(Match.untracked(s.points, np));
                 s.sessions.add(sess); s.currentSession = 0;
                 s.points = np; s.streak = ns;
@@ -157,12 +164,12 @@ public class MainActivity extends Activity {
                 screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Enter valid current points and win streak (streak >= 0).");
+        }, "Inserisci punti attuali e vittorie consecutive validi (streak >= 0).");
         dialog.show();
     }
 
     // "No": niente da chiedere sul punteggio (parte dallo standard 810/streak 0), si passa dritti alla
-    // scelta del deck per la prima sessione (con "Skip" per andare veloci, come al solito).
+    // scelta del deck per la prima sessione (con "Salta" per andare veloci, come al solito).
     void wizardStep3No(boolean first, String name){
         Season s = new Season(name);
         s.points = DEFAULT_BASELINE; s.baseline = DEFAULT_BASELINE;
@@ -183,7 +190,7 @@ public class MainActivity extends Activity {
     void showNewDeckAndSession(boolean first) {
         final Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
-        box.addView(label("Deck (tap to select, or \"Skip\" to go fast)"));
+        box.addView(label("Deck (tocca per selezionare, o \"Skip\" per andare veloce)"));
 
         // Lista di righe selezionabili al posto dello Spinner nativo: lo Spinner, senza uno stile esplicito
         // sul tema scuro dell'app, risultava praticamente invisibile (solo una freccina fluttuante) e con
@@ -216,9 +223,9 @@ public class MainActivity extends Activity {
         // effetto visivo con il popup precedente che traspariva dietro).
         LinearLayout newDeckSection = new LinearLayout(this); newDeckSection.setOrientation(LinearLayout.VERTICAL);
         newDeckSection.setVisibility(View.GONE);
-        EditText newDeckName = field("Deck name");
+        EditText newDeckName = field("Nome Deck");
         TextView newDeckError = new TextView(this); newDeckError.setTextColor(red()); newDeckError.setTextSize(12); newDeckError.setVisibility(View.GONE); newDeckError.setPadding(0,dp(4),0,0);
-        Button createDeckBtn = new Button(this); createDeckBtn.setText("Create"); styleSecondaryButton(createDeckBtn);
+        Button createDeckBtn = new Button(this); createDeckBtn.setText("Crea"); styleSecondaryButton(createDeckBtn);
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         btnLp.topMargin = dp(8); createDeckBtn.setLayoutParams(btnLp);
         newDeckSection.addView(newDeckName);
@@ -226,7 +233,7 @@ public class MainActivity extends Activity {
         newDeckSection.addView(createDeckBtn);
         box.addView(newDeckSection);
 
-        Button newDeckBtn = new Button(this); newDeckBtn.setText("New Deck"); styleSecondaryButton(newDeckBtn);
+        Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newDeckBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         newDeckBtnLp.topMargin = dp(10); newDeckBtn.setLayoutParams(newDeckBtnLp);
         box.addView(newDeckBtn);
@@ -234,7 +241,7 @@ public class MainActivity extends Activity {
         createDeckBtn.setOnClickListener(v -> {
             String n = newDeckName.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) {
-                newDeckError.setText("Invalid or already existing deck name.");
+                newDeckError.setText("Nome Deck non valido o già esistente.");
                 newDeckError.setVisibility(View.VISIBLE);
                 return;
             }
@@ -244,13 +251,13 @@ public class MainActivity extends Activity {
             newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE);
         });
 
-        new AlertDialog.Builder(MainActivity.this).setTitle(first ? "Choose starting Deck" : "New Session")
+        new AlertDialog.Builder(MainActivity.this).setTitle(first ? "Scegli il Deck iniziale" : "Nuova Sessione")
             .setView(box).setCancelable(false)
-            .setPositiveButton("Confirm", (d,w)->{
+            .setPositiveButton("Conferma", (d,w)->{
                 String deck = selected[0] != null ? selected[0] : (s.decks.isEmpty() ? "Unknown" : s.decks.get(0).name);
                 createSessionWithDeck(s, first, deck);
             })
-            .setNeutralButton("Skip", (d,w)-> createSessionWithDeck(s, first, "Unknown"))
+            .setNeutralButton("Salta", (d,w)-> createSessionWithDeck(s, first, "Unknown"))
             .show();
     }
 
@@ -276,9 +283,9 @@ public class MainActivity extends Activity {
 
     // Crea un nuovo Deck e lo assegna subito alla sessione attualmente aperta (usato da chooseDeck()).
     void createDeckAndAssign(Season s) {
-        EditText e = field("Deck name");
-        AlertDialog nd = new AlertDialog.Builder(this).setTitle("New Deck").setView(e)
-            .setPositiveButton("Create", null).setNegativeButton("Cancel", null).create();
+        EditText e = field("Nome Deck");
+        AlertDialog nd = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(e)
+            .setPositiveButton("Crea", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(nd, () -> {
             String n = e.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) return false;
@@ -286,7 +293,7 @@ public class MainActivity extends Activity {
             s.sessions.get(s.currentSession).deck = n;
             store.save(); view.invalidate();
             return true;
-        }, "Invalid or already existing deck name.");
+        }, "Nome Deck non valido o già esistente.");
         nd.show();
     }
 
@@ -297,8 +304,8 @@ public class MainActivity extends Activity {
         String[] names=deckNames(s);
         if(names.length==0){ createDeckAndAssign(s); return; }
         String[] items = Arrays.copyOf(names, names.length+1);
-        items[names.length] = "+ New Deck...";
-        new AlertDialog.Builder(this).setTitle("Change Deck")
+        items[names.length] = "+ Nuovo Deck...";
+        new AlertDialog.Builder(this).setTitle("Cambia Deck")
             .setItems(items,(d,which)->{
                 if (which==names.length) createDeckAndAssign(s);
                 else { s.sessions.get(s.currentSession).deck=names[which]; store.save(); view.invalidate(); }
@@ -310,25 +317,31 @@ public class MainActivity extends Activity {
     void showUntracked() {
         Season s=store.seasons.get(store.current);
         LinearLayout box=formBox();
-        EditText p=numberField("Current points", true);
-        EditText st=numberField("Current win streak", true);
-        box.addView(label("Current points")); box.addView(p);
-        box.addView(label("Current win streak")); box.addView(st);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Untracked session").setMessage("Enter just the current state. The app will link the new score to the last known one automatically.")
-            .setView(box).setPositiveButton("Confirm", null).setNegativeButton("Cancel",null).create();
+        EditText p=numberField("Punti attuali", true);
+        EditText st=numberField("Vittorie consecutive attuali", true);
+        EditText w=numberField("Partite vinte in questo periodo", false);
+        EditText l=numberField("Partite perse in questo periodo", false);
+        box.addView(label("Punti attuali")); box.addView(p);
+        box.addView(label("Vittorie consecutive attuali")); box.addView(st);
+        box.addView(label("Partite vinte in questo periodo")); box.addView(w);
+        box.addView(label("Partite perse in questo periodo")); box.addView(l);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Sessione non tracciata").setMessage("Inserisci solo lo stato attuale. L'app collegherà automaticamente il nuovo punteggio all'ultimo conosciuto.")
+            .setView(box).setPositiveButton("Conferma", null).setNegativeButton("Annulla",null).create();
         showNonDismissing(dialog, () -> {
             try {
                 int np=Integer.parseInt(p.getText().toString()), ns=Integer.parseInt(st.getText().toString());
-                if (ns < 0) return false;
+                int nw=Integer.parseInt(w.getText().toString()), nl=Integer.parseInt(l.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
                 Session x=new Session("Session "+(s.sessions.size()+1),"Unknown");
                 x.untracked=true; x.startPoints=s.points; x.endPoints=np; x.startStreak=s.streak; x.endStreak=ns;
+                x.untrackedWins=nw; x.untrackedLosses=nl;
                 x.matches.add(Match.untracked(s.points,np));
                 s.sessions.add(x); s.currentSession=s.sessions.size()-1; s.points=np; s.streak=ns;
                 // Resta sulla lista sessioni: una sessione non tracciata non si "gioca" col W/L.
                 store.save(); view.invalidate();
                 return true;
             } catch(Exception e) { return false; }
-        }, "Invalid values (streak >= 0).");
+        }, "Valori non validi (streak/vittorie/sconfitte >= 0).");
         dialog.show();
     }
 
@@ -338,7 +351,7 @@ public class MainActivity extends Activity {
     void play(boolean win) {
         Season s=store.seasons.get(store.current);
         Session x=s.sessions.get(s.currentSession);
-        if(x.untracked){ Toast.makeText(this,"Start a new session to continue.",Toast.LENGTH_SHORT).show(); return; }
+        if(x.untracked){ Toast.makeText(this,"Crea una nuova sessione per continuare.",Toast.LENGTH_SHORT).show(); return; }
         int before=s.points, beforeStreak=s.streak;
         if(win){ s.streak++; s.points += reward(s.streak); }
         else { s.points -= 10; s.streak=0; }
@@ -355,7 +368,7 @@ public class MainActivity extends Activity {
 
     void undo() {
         Season s=store.seasons.get(store.current);
-        if(s.undo.empty()){Toast.makeText(this,"Nothing to undo.",Toast.LENGTH_SHORT).show();return;}
+        if(s.undo.empty()){Toast.makeText(this,"Niente da annullare.",Toast.LENGTH_SHORT).show();return;}
         State prev=s.undo.pop();
         if (prev.sessionIndex >= 0 && prev.sessionIndex < s.sessions.size() && prev.match != null) {
             s.sessions.get(prev.sessionIndex).matches.remove(prev.match);
@@ -367,7 +380,7 @@ public class MainActivity extends Activity {
 
     void redo() {
         Season s=store.seasons.get(store.current);
-        if(s.redo.empty()){Toast.makeText(this,"Nothing to redo.",Toast.LENGTH_SHORT).show();return;}
+        if(s.redo.empty()){Toast.makeText(this,"Niente da ripetere.",Toast.LENGTH_SHORT).show();return;}
         State next=s.redo.pop();
         if (next.match != null && next.sessionIndex >= 0 && next.sessionIndex < s.sessions.size()) {
             Session x = s.sessions.get(next.sessionIndex);
@@ -388,7 +401,7 @@ public class MainActivity extends Activity {
     void deleteCurrentSession(){
         Season s=store.seasons.get(store.current);
         int idx=s.currentSession;
-        if(s.sessions.size()<=1){ Toast.makeText(this,"Can't delete the only session in this Season.",Toast.LENGTH_SHORT).show(); return; }
+        if(s.sessions.size()<=1){ Toast.makeText(this,"Non puoi eliminare l'unica sessione di questa Season.",Toast.LENGTH_SHORT).show(); return; }
         Session sess=s.sessions.get(idx);
         Runnable doDelete = () -> {
             s.sessions.remove(idx);
@@ -397,10 +410,10 @@ public class MainActivity extends Activity {
             store.save(); view.invalidate();
         };
         if(sess.matches.isEmpty()){ doDelete.run(); return; }
-        new AlertDialog.Builder(this).setTitle("Delete session?")
-            .setMessage("This will permanently delete \""+sess.name+"\" and its "+sess.matches.size()+" game(s). This can't be undone.")
-            .setPositiveButton("Delete", (d,w)-> doDelete.run())
-            .setNegativeButton("Cancel", null)
+        new AlertDialog.Builder(this).setTitle("Eliminare la sessione?")
+            .setMessage("Questo eliminerà definitivamente \""+sess.name+"\" e le sue "+sess.matches.size()+" partita/e. L'azione non può essere annullata.")
+            .setPositiveButton("Elimina", (d,w)-> doDelete.run())
+            .setNegativeButton("Annulla", null)
             .show();
     }
 
@@ -410,53 +423,111 @@ public class MainActivity extends Activity {
     void convertToUntracked(){
         Season s=store.seasons.get(store.current);
         Session sess=s.sessions.get(s.currentSession);
-        if(!sess.matches.isEmpty()){ Toast.makeText(this,"Only a session with no games yet can be marked as untracked.",Toast.LENGTH_SHORT).show(); return; }
+        if(!sess.matches.isEmpty()){ Toast.makeText(this,"Solo una sessione senza ancora partite può essere segnata come non tracciata.",Toast.LENGTH_SHORT).show(); return; }
         LinearLayout box=formBox();
-        EditText p=numberField("Current points", true);
-        EditText st=numberField("Current win streak", true);
-        box.addView(label("Current points")); box.addView(p);
-        box.addView(label("Current win streak")); box.addView(st);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Mark as untracked")
-            .setMessage("This session has no games yet, so it can be safely turned into an untracked score correction.")
-            .setView(box).setPositiveButton("Confirm", null).setNegativeButton("Cancel", null).create();
+        EditText p=numberField("Punti attuali", true);
+        EditText st=numberField("Vittorie consecutive attuali", true);
+        EditText w=numberField("Partite vinte in questo periodo", false);
+        EditText l=numberField("Partite perse in questo periodo", false);
+        box.addView(label("Punti attuali")); box.addView(p);
+        box.addView(label("Vittorie consecutive attuali")); box.addView(st);
+        box.addView(label("Partite vinte in questo periodo")); box.addView(w);
+        box.addView(label("Partite perse in questo periodo")); box.addView(l);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Segna come non tracciata")
+            .setMessage("Questa sessione non ha ancora partite, quindi può essere trasformata in una correzione di punteggio non tracciata.")
+            .setView(box).setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             try {
                 int np=Integer.parseInt(p.getText().toString()), ns=Integer.parseInt(st.getText().toString());
-                if (ns < 0) return false;
-                sess.untracked = true; sess.deck = null;
+                int nw=Integer.parseInt(w.getText().toString()), nl=Integer.parseInt(l.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
+                sess.untracked = true; sess.deck = "Unknown";
                 sess.startPoints = s.points; sess.endPoints = np; sess.startStreak = s.streak; sess.endStreak = ns;
+                sess.untrackedWins = nw; sess.untrackedLosses = nl;
                 sess.matches.clear();
                 sess.matches.add(Match.untracked(s.points, np));
                 s.points = np; s.streak = ns;
                 store.save(); view.invalidate();
                 return true;
             } catch(Exception e) { return false; }
-        }, "Invalid values (streak >= 0).");
+        }, "Valori non validi (streak/vittorie/sconfitte >= 0).");
         dialog.show();
     }
 
     void newSeason(){ wizardStep1(false, null); }
+
+    // Modifica i dati di una sessione non tracciata GIA' ESISTENTE. Permesso solo se e' la sessione corrente
+    // (l'ultima): modificare una correzione passata romperebbe la coerenza numerica di tutto cio' che viene
+    // dopo (i punti "before" delle sessioni successive erano gia' calcolati sul valore vecchio).
+    void editUntrackedSession(){
+        Season s = store.seasons.get(store.current);
+        Session sess = s.sessions.get(s.currentSession);
+        boolean isLast = s.currentSession == s.sessions.size()-1;
+        if(!isLast){ Toast.makeText(this,"Solo la sessione corrente può essere modificata qui.",Toast.LENGTH_SHORT).show(); return; }
+        LinearLayout box=formBox();
+        EditText p=numberField("Punti attuali", true); p.setText(String.valueOf(sess.endPoints));
+        EditText st=numberField("Vittorie consecutive attuali", true); st.setText(String.valueOf(sess.endStreak));
+        EditText w=numberField("Partite vinte in questo periodo", false); w.setText(String.valueOf(sess.untrackedWins));
+        EditText l=numberField("Partite perse in questo periodo", false); l.setText(String.valueOf(sess.untrackedLosses));
+        box.addView(label("Punti attuali")); box.addView(p);
+        box.addView(label("Vittorie consecutive attuali")); box.addView(st);
+        box.addView(label("Partite vinte in questo periodo")); box.addView(w);
+        box.addView(label("Partite perse in questo periodo")); box.addView(l);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Modifica sessione non tracciata")
+            .setView(box).setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
+        showNonDismissing(dialog, () -> {
+            try {
+                int np=Integer.parseInt(p.getText().toString()), ns=Integer.parseInt(st.getText().toString());
+                int nw=Integer.parseInt(w.getText().toString()), nl=Integer.parseInt(l.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
+                sess.endPoints = np; sess.endStreak = ns; sess.untrackedWins = nw; sess.untrackedLosses = nl;
+                if (!sess.matches.isEmpty()) sess.matches.set(0, Match.untracked(sess.startPoints, np));
+                s.points = np; s.streak = ns;
+                store.save(); view.invalidate();
+                return true;
+            } catch(Exception e) { return false; }
+        }, "Valori non validi (streak/vittorie/sconfitte >= 0).");
+        dialog.show();
+    }
+
+    // Cancella TUTTI i dati salvati (ogni Season, sessione, deck, nota). Richiede sempre conferma esplicita,
+    // dato che e' un'azione distruttiva e irreversibile. Dopo la cancellazione, l'app si comporta come al
+    // primissimo avvio: riparte dal wizard obbligatorio di creazione della prima Season.
+    void resetAllData(){
+        new AlertDialog.Builder(this).setTitle("Cancellare tutti i dati?")
+            .setMessage("Questo eliminerà definitivamente ogni Season, sessione, deck e nota. L'azione non può essere annullata.")
+            .setPositiveButton("Elimina tutto", (d,w) -> {
+                store.seasons.clear();
+                store.current = 0;
+                store.save();
+                if (view != null) view.invalidate();
+                wizardStep1(true, null);
+            })
+            .setNegativeButton("Annulla", null)
+            .show();
+    }
+
     void renameSeason(){
         Season s=store.seasons.get(store.current); EditText e=field(s.name);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rename Season").setView(e)
-            .setPositiveButton("Save", null).setNegativeButton("Cancel", null).create();
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rinomina Season").setView(e)
+            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             String n = e.getText().toString().trim();
             if (n.isEmpty()) return false;
             s.name = n; store.save(); view.invalidate();
             return true;
-        }, "Season name can't be empty.");
+        }, "Il nome della Season non può essere vuoto.");
         dialog.show();
     }
 
     void addDeck(){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
-        EditText e=field("Deck name"); box.addView(label("Deck name")); box.addView(e);
-        Button img=new Button(this); img.setText("Add screenshot (optional)"); styleSecondaryButton(img); box.addView(img);
+        EditText e=field("Nome Deck"); box.addView(label("Nome Deck")); box.addView(e);
+        Button img=new Button(this); img.setText("Aggiungi screenshot (opzionale)"); styleSecondaryButton(img); box.addView(img);
         img.setOnClickListener(v-> pickImageFor(null)); // null = immagine "in sospeso", verra' assegnata al Deck solo se il salvataggio va a buon fine
-        EditText notes=multilineField("Notes (optional)", null); box.addView(label("Notes")); box.addView(notes);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("New Deck").setView(box)
-            .setPositiveButton("Save", null).setNegativeButton("Cancel", null).create();
+        EditText notes=multilineField("Note (opzionale)", null); box.addView(label("Notes")); box.addView(notes);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(box)
+            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             String n=e.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) return false;
@@ -464,7 +535,7 @@ public class MainActivity extends Activity {
             String noteText=notes.getText().toString().trim(); if(!noteText.isEmpty()) deck.notes=noteText;
             s.decks.add(deck);store.save();view.invalidate();
             return true;
-        }, "Invalid or already existing deck name.");
+        }, "Nome Deck non valido o già esistente.");
         dialog.show();
     }
 
@@ -482,7 +553,7 @@ public class MainActivity extends Activity {
     void pickImageFor(Deck target){
         pendingImageTargetDeck = target;
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("image/*"); i.addCategory(Intent.CATEGORY_OPENABLE);
-        try { startActivityForResult(i,101); } catch(Exception ex) { Toast.makeText(this,"No app available to pick images.",Toast.LENGTH_SHORT).show(); }
+        try { startActivityForResult(i,101); } catch(Exception ex) { Toast.makeText(this,"Nessuna app disponibile per selezionare immagini.",Toast.LENGTH_SHORT).show(); }
     }
 
     @Override protected void onActivityResult(int req,int result,Intent data){
@@ -490,7 +561,7 @@ public class MainActivity extends Activity {
         if(req==101 && result==RESULT_OK && data!=null){
             Uri uri = data.getData();
             try{ getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-            catch(Exception e){ Log.w(TAG, "Couldn't get persistent permission for the image", e); }
+            catch(Exception e){ Log.w(TAG, "Impossibile ottenere il permesso persistente sull'immagine", e); }
             if (pendingImageTargetDeck != null) {
                 // Modifica diretta di un Deck gia' esistente (da tab Deck o dalla Sessione in gioco).
                 pendingImageTargetDeck.image = uri.toString();
@@ -507,7 +578,7 @@ public class MainActivity extends Activity {
     void editDeckScreenshot(Deck d){
         if (d==null) return;
         if (d.image==null) { pickImageFor(d); return; }
-        String[] options = {"View screenshot","Change screenshot","Remove screenshot"};
+        String[] options = {"Visualizza screenshot","Cambia screenshot","Rimuovi screenshot"};
         new AlertDialog.Builder(this).setTitle(d.name).setItems(options,(dlg,which)->{
             if (which==0) viewDeck(d);
             else if (which==1) pickImageFor(d);
@@ -519,41 +590,27 @@ public class MainActivity extends Activity {
     void editDeckNotes(Deck d){
         if (d==null) return;
         LinearLayout box = formBox();
-        box.addView(label("Deck notes"));
-        EditText e = multilineField("E.g. techniques, matchups, reminders...", d.notes);
+        box.addView(label("Note sul Deck"));
+        EditText e = multilineField("Es. tecniche, matchup, promemoria...", d.notes);
         box.addView(e);
         new AlertDialog.Builder(this).setTitle(d.name).setView(box)
-            .setPositiveButton("Save", (dlg,w)->{
+            .setPositiveButton("Salva", (dlg,w)->{
                 String n = e.getText().toString().trim();
                 d.notes = n.isEmpty() ? null : n;
                 store.save(); view.invalidate();
-            }).setNegativeButton("Cancel", null).show();
+            }).setNegativeButton("Annulla", null).show();
     }
 
     // Note libere su una Sessione (es. avversari, mulligan, momenti chiave). Funziona su qualunque sessione,
     // anche passata: agisce sempre sulla sessione ATTUALMENTE APERTA in Session Play.
-    void editSessionNotes(Session se){
-        if (se==null) return;
-        LinearLayout box = formBox();
-        box.addView(label("Session notes"));
-        EditText e = multilineField("E.g. opponents, key moments, how you felt...", se.notes);
-        box.addView(e);
-        new AlertDialog.Builder(this).setTitle(se.name).setView(box)
-            .setPositiveButton("Save", (dlg,w)->{
-                String n = e.getText().toString().trim();
-                se.notes = n.isEmpty() ? null : n;
-                store.save(); view.invalidate();
-            }).setNegativeButton("Cancel", null).show();
-    }
-
     void viewDeck(Deck d){
-        if(d.image==null){Toast.makeText(this,"No screenshot attached.",Toast.LENGTH_SHORT).show();return;}
+        if(d.image==null){Toast.makeText(this,"Nessuno screenshot allegato.",Toast.LENGTH_SHORT).show();return;}
         try {
             Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(Uri.parse(d.image),"image/*");i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(i);
         } catch (Exception e) {
-            Log.w(TAG, "Couldn't open the screenshot for deck " + d.name, e);
-            Toast.makeText(this,"Couldn't open the screenshot (file no longer available).",Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "Impossibile aprire lo screenshot del deck " + d.name, e);
+            Toast.makeText(this,"Impossibile aprire lo screenshot (file non più disponibile).",Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -595,6 +652,19 @@ public class MainActivity extends Activity {
         return e;
     }
     static boolean hasNotes(String s){ return s!=null && !s.trim().isEmpty(); }
+
+    // Conteggio W/L unificato: per le sessioni non tracciate usa i conteggi aggregati inseriti dall'utente
+    // (untrackedWins/untrackedLosses), per le altre conta le singole partite escludendo quelle "unknown".
+    // Centralizzare qui evita il bug per cui una correzione "unknown" con win=true (solo perche' i punti
+    // sono saliti) veniva erroneamente contata come una vittoria vera in alcuni punti dell'app.
+    static int[] countWL(List<Session> sessions){
+        int w=0,l=0;
+        for(Session se: sessions){
+            if(se.untracked){ w+=se.untrackedWins; l+=se.untrackedLosses; continue; }
+            for(Match m: se.matches) if(!m.unknown){ if(m.win) w++; else l++; }
+        }
+        return new int[]{w,l};
+    }
     EditText numberField(String hint, boolean signed){
         EditText e = field(hint);
         // Tastiera numerica...
@@ -638,7 +708,7 @@ public class MainActivity extends Activity {
 
         // Colore del win rate: verde se >50%, rosso se <50%, colore neutro (muted) se == 50% o 0 partite.
         int wrColor(float wr,int total){ return total==0?muted:(wr>50?green:(wr<50?red:muted)); }
-        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "No deck" : deckName; }
+        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "Nessun deck" : deckName; }
 
         float rowWidth(String[] parts,float size){ p.setTextSize(size); float w=0; for(String s:parts) w+=p.measureText(s); return w; }
         // Riga di testo composta da segmenti con colori diversi (es. "7W" verde + "3L" rosso + "70%" verde), allineata a sinistra.
@@ -681,25 +751,28 @@ public class MainActivity extends Activity {
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear();
             txt(c,"Pokémon Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
-            box(c,w-150,20,w-18,58,blue); txt(c,"+ Season",w-84,44,13,white,Paint.Align.CENTER);
             txt(c,"SEASONS",24,74,12,muted,Paint.Align.LEFT);
             float y=92;
             for(int i=0;i<store.seasons.size();i++){
                 Season s=store.seasons.get(i);
                 boolean isCurrent = i==store.current;
                 box(c,18,y,w-18,y+94, isCurrent?Color.rgb(20,44,80):card);
-                if(isCurrent) txt(c,"CURRENT",w-34,y+22,10,blue,Paint.Align.RIGHT);
+                if(isCurrent) txt(c,"ATTUALE",w-34,y+22,10,blue,Paint.Align.RIGHT);
                 txt(c,s.name,34,y+30,18,white,Paint.Align.LEFT);
-                ArrayList<Match> all=s.allMatches();
-                int W=0,L=0;for(Match m:all)if(m.win)W++;else if(!m.unknown)L++;
+                int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
                 float wr=(W+L)==0?0:100f*W/(W+L);
                 txtRow(c,34,y+58,12,
-                    new String[]{"POINTS "+s.points+"   WS "+s.streak+"   ", W+"W ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
+                    new String[]{"PUNTI "+s.points+"   VC "+s.streak+"   ", W+"W ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
                     new int[]{muted, green, red, wrColor(wr,W+L)});
                 txt(c,s.sessions.size()+" sessions",34,y+80,11,muted,Paint.Align.LEFT);
                 seasonHits.add(new Hit(y,y+94,i));
                 y+=104;
             }
+            // Link discreto in fondo, non invasivo ma sempre raggiungibile: azione distruttiva, quindi
+            // richiede sempre conferma esplicita (vedi resetAllData()).
+            txt(c,"Cancella tutti i dati",w/2,h-18,12,Color.rgb(200,90,85),Paint.Align.CENTER);
+            // Pulsante "Nuova Season" in basso a destra (floating action button), sempre raggiungibile col pollice.
+            box(c,w-166,h-104,w-18,h-54,blue); txt(c,"Nuova Season",w-92,h-73,14,white,Paint.Align.CENTER);
         }
 
         void detailHeader(Canvas c, Season s, float w){
@@ -711,54 +784,61 @@ public class MainActivity extends Activity {
         void sessionsList(Canvas c, Season s, float w, float h){
             sessionHits.clear();
             ArrayList<Match> all=s.allMatches();
-            int W=0,L=0;for(Match m:all)if(m.win)W++;else if(!m.unknown)L++;
+            int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
-            box(c,18,58,w-18,108,card);
-            txtRowCentered(c,w/2,80,12,
-                new String[]{"GAMES "+all.size()+"   ", "W "+W+"   ", "L "+L+"   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
-                new int[]{white, green, red, wrColor(wr,W+L)});
-            txt(c,"POINTS "+s.points+"   WS "+s.streak,w/2,100,11,muted,Paint.Align.CENTER);
-            box(c,18,118,w-18,160,blue);
-            txt(c,"NEW SESSION",w/2,144,14,white,Paint.Align.CENTER);
-            box(c,18,166,w-18,196,card);
-            txt(c,"Untracked session",w/2,185,12,muted,Paint.Align.CENTER);
-            float y=204;
+            // Punti attuali: il dato piu' importante della schermata, quindi in grande e ben visibile,
+            // in un riquadro dedicato invece che infilato in una riga di testo piccolo.
+            box(c,18,58,w/2-8,132,card);
+            txt(c,"PUNTI ATTUALI",w/4,80,10,muted,Paint.Align.CENTER);
+            txt(c,""+s.points,w/4,120,30,white,Paint.Align.CENTER);
+            box(c,w/2+8,58,w-18,132,card);
+            txt(c,"PARTITE "+(W+L)+"   VC "+s.streak,w*3/4,80,10,muted,Paint.Align.CENTER);
+            txtRowCentered(c,w*3/4,110,14,
+                new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
+                new int[]{green, red, wrColor(wr,W+L)});
+            box(c,18,142,w-18,184,blue);
+            txt(c,"NUOVA SESSIONE",w/2,168,14,white,Paint.Align.CENTER);
+            box(c,18,190,w-18,220,card);
+            txt(c,"Sessione non tracciata",w/2,209,12,muted,Paint.Align.CENTER);
+            float y=228;
             for(int i=s.sessions.size()-1;i>=0;i--){
                 Session se=s.sessions.get(i);
                 boolean isLast = i==s.sessions.size()-1;
                 box(c,18,y,w-18,y+72,card);
-                txt(c, se.name + (hasNotes(se.notes)?"  ✎":""), 34,y+26,15,white,Paint.Align.LEFT);
-                txt(c, se.untracked ? "Untracked session" : deckDisplayShort(se.deck), 34,y+48,12,muted,Paint.Align.LEFT);
-                int sw=0,sl=0;for(Match m:se.matches)if(!m.unknown){if(m.win)sw++;else sl++;}
+                txt(c, se.name, 34,y+26,15,white,Paint.Align.LEFT);
+                txt(c, se.untracked ? "Sessione non tracciata" : deckDisplayShort(se.deck), 34,y+48,12,muted,Paint.Align.LEFT);
+                int sw,sl;
+                if(se.untracked){ sw=se.untrackedWins; sl=se.untrackedLosses; }
+                else { sw=0; sl=0; for(Match m:se.matches)if(!m.unknown){if(m.win)sw++;else sl++;} }
                 txtRowRight(c,w-34,y+30,13,new String[]{sw+"W ", ""+sl+"L"},new int[]{green,red});
-                if(isLast && !se.untracked) txt(c,"CONTINUE →",w-34,y+52,11,blue,Paint.Align.RIGHT);
+                if(isLast && !se.untracked) txt(c,"CONTINUA →",w-34,y+52,11,blue,Paint.Align.RIGHT);
                 sessionHits.add(new Hit(y,y+72,i));
                 y+=80;
             }
-            y+=8;
-            txt(c,"OVERALL CHART",18,y,12,muted,Paint.Align.LEFT);
-            drawChart(c,18,y+14,w-18,y+14+220,all,s);
+            y+=28; // spazio ben visibile prima del grafico, prima era troppo attaccato all'ultima card sessione
+            txt(c,"GRAFICO TOTALE",18,y,12,muted,Paint.Align.LEFT);
+            drawChart(c,18,y+16,w-18,y+16+220,all,s);
         }
 
         int deckSortMode = 0; // 0=Win rate, 1=Games, 2=Best streak, 3=Name — condiviso tra tab Deck e Statistiche
         boolean deckSortAsc = false; // false = decrescente (default), true = crescente
 
         String deckSortLabel(){
-            if (deckSortMode==3) return "Name "+(deckSortAsc?"A→Z":"Z→A");
-            String name = deckSortMode==0?"Win rate":deckSortMode==1?"Games":"Best streak";
+            if (deckSortMode==3) return "Nome "+(deckSortAsc?"A→Z":"Z→A");
+            String name = deckSortMode==0?"Win rate":deckSortMode==1?"Partite":"Miglior serie";
             return name+" "+(deckSortAsc?"↑":"↓");
         }
         // Menu a tendina con tutte le combinazioni criterio+direzione (invece di ciclare "alla cieca").
         void showDeckSortMenu(){
             String[] items = {
-                "Win rate (High to Low)","Win rate (Low to High)",
-                "Games (High to Low)","Games (Low to High)",
-                "Best streak (High to Low)","Best streak (Low to High)",
-                "Name (A to Z)","Name (Z to A)"
+                "Win rate (dal più alto)","Win rate (dal più basso)",
+                "Partite (dal più alto)","Partite (dal più basso)",
+                "Miglior serie (dal più alto)","Miglior serie (dal più basso)",
+                "Nome (A→Z)","Nome (Z→A)"
             };
             int[] modes = {0,0,1,1,2,2,3,3};
             boolean[] ascs = {false,true,false,true,false,true,true,false};
-            new AlertDialog.Builder(MainActivity.this).setTitle("Sort decks by").setItems(items,(d,which)->{
+            new AlertDialog.Builder(MainActivity.this).setTitle("Ordina deck per").setItems(items,(d,which)->{
                 deckSortMode = modes[which]; deckSortAsc = ascs[which];
                 view.invalidate();
             }).show();
@@ -792,7 +872,7 @@ public class MainActivity extends Activity {
 
         void decks(Canvas c,Season s,float w,float h){
             txt(c,"Deck",18,64,15,muted,Paint.Align.LEFT);
-            box(c,w-150,48,w-18,76,card); txt(c,"Sort: "+deckSortLabel()+" ▾",w-84,67,11,white,Paint.Align.CENTER);
+            box(c,w-150,48,w-18,76,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-84,67,11,white,Paint.Align.CENTER);
             float y=90;
             for(Deck d: sortedDecks(s)){
                 box(c,18,y,w-18,y+78,card);
@@ -800,9 +880,9 @@ public class MainActivity extends Activity {
                 int[] wl=deckWL(s,d.name); int W=wl[0],L=wl[1];
                 float wr=(W+L)==0?0:100f*W/(W+L);
                 int best=longestStreakForDeck(s,d.name);
-                txt(c,(W+L)+" games",34,y+46,12,white,Paint.Align.LEFT);
+                txt(c,(W+L)+" partite",34,y+46,12,white,Paint.Align.LEFT);
                 txtRow(c,34,y+64,12,
-                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "BEST "+best},
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "MIGLIORE "+best},
                     new int[]{green, red, wrColor(wr,W+L), muted});
                 txt(c, d.image!=null?"◉":"＋", w-38,y+43,22, d.image!=null?white:muted, Paint.Align.CENTER);
                 txt(c, "✎", w-76,y+43,20, hasNotes(d.notes)?blue:muted, Paint.Align.CENTER);
@@ -813,22 +893,25 @@ public class MainActivity extends Activity {
             int[] nd = noDeckWL(s);
             if (nd[0]+nd[1] > 0) {
                 box(c,18,y,w-18,y+78,card);
-                txt(c,"No deck",34,y+26,17,muted,Paint.Align.LEFT);
+                txt(c,"Nessun deck",34,y+26,17,muted,Paint.Align.LEFT);
                 float ndwr=100f*nd[0]/(nd[0]+nd[1]);
                 int ndbest=longestStreakForDeck(s,"Unknown");
-                txt(c,(nd[0]+nd[1])+" games",34,y+46,12,muted,Paint.Align.LEFT);
+                txt(c,(nd[0]+nd[1])+" partite",34,y+46,12,muted,Paint.Align.LEFT);
                 txtRow(c,34,y+64,12,
-                    new String[]{nd[0]+"W   ", nd[1]+"L   ", String.format(Locale.US,"%.1f%%",ndwr)+"   ", "BEST "+ndbest},
+                    new String[]{nd[0]+"W   ", nd[1]+"L   ", String.format(Locale.US,"%.1f%%",ndwr)+"   ", "MIGLIORE "+ndbest},
                     new int[]{green, red, wrColor(ndwr,nd[0]+nd[1]), muted});
                 y+=90;
             }
-            box(c,18,y,w-18,y+58,blue);txt(c,"+  ADD DECK",w/2,y+37,14,white,Paint.Align.CENTER);
+            box(c,18,y,w-18,y+58,blue);txt(c,"+  AGGIUNGI DECK",w/2,y+37,14,white,Paint.Align.CENTER);
         }
 
         // Statistiche aggregate (W/L) delle sessioni senza un deck assegnato in questa Season.
         int[] noDeckWL(Season s){
             int w=0,l=0;
-            for(Session se:s.sessions) if("Unknown".equals(se.deck)) for(Match m:se.matches) if(!m.unknown){ if(m.win) w++; else l++; }
+            for(Session se:s.sessions) if("Unknown".equals(se.deck)){
+                if(se.untracked){ w+=se.untrackedWins; l+=se.untrackedLosses; }
+                else for(Match m:se.matches) if(!m.unknown){ if(m.win) w++; else l++; }
+            }
             return new int[]{w,l};
         }
 
@@ -836,33 +919,47 @@ public class MainActivity extends Activity {
         // sessione di gioco (che persiste correttamente tra una sessione e la successiva, si azzera solo su una
         // sconfitta). Cosi' se lo stesso deck continua a vincere su piu' sessioni consecutive, lo streak si somma
         // automaticamente; se in mezzo c'e' una sconfitta (con qualsiasi deck), la catena si interrompe correttamente.
+        // Longest win streak *davvero attribuibile* a un deck: attraversa la cronologia in ordine e mantiene
+        // una serie SOLO finche' le vittorie consecutive sono state giocate tutte con questo stesso deck.
+        // Una sconfitta, una vittoria con un deck diverso, o una sessione non tracciata interrompono la serie:
+        // non possiamo sapere con quale deck (se non tracciato) o se con questo deck siano state ottenute le
+        // vittorie precedenti, quindi non gliele attribuiamo.
         int longestStreakForDeck(Season s, String deckName){
-            int best=0;
-            for(Session se:s.sessions) if(deckName.equals(se.deck)) for(Match m:se.matches) if(!m.unknown && m.win) best=Math.max(best,m.streak);
+            int best=0, run=0;
+            for(Session se: s.sessions){
+                if(se.untracked){ run=0; continue; }
+                boolean thisDeck = deckName.equals(se.deck);
+                for(Match m: se.matches){
+                    if(m.unknown) continue;
+                    if(m.win){ if(thisDeck){ run++; best=Math.max(best,run); } else { run=0; } }
+                    else { run=0; }
+                }
+            }
             return best;
         }
 
         void stats(Canvas c,Season s,float w,float h){
-            txt(c,"Stats",18,64,15,muted,Paint.Align.LEFT);
+            txt(c,"Statistiche",18,64,15,muted,Paint.Align.LEFT);
             box(c,18,80,w-18,250,card);
-            ArrayList<Match> all=s.allMatches();int W=0,L=0,maxStreak=s.initialStreak,cur= s.initialStreak;
-            for(Match m:all){if(m.unknown)continue;if(m.win){W++;cur++;maxStreak=Math.max(maxStreak,cur);}else{L++;cur=0;}}
+            ArrayList<Match> all=s.allMatches();int maxStreak=s.initialStreak,cur= s.initialStreak;
+            for(Match m:all){if(m.unknown)continue;if(m.win){cur++;maxStreak=Math.max(maxStreak,cur);}else{cur=0;}}
+            int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
             int yy=108;
-            txt(c,"Total games: "+(W+L),34,yy,14,white,Paint.Align.LEFT);yy+=16;
-            txtRow(c,34,yy,14,new String[]{"Wins: ", ""+W},new int[]{white,green});yy+=16;
-            txtRow(c,34,yy,14,new String[]{"Losses: ", ""+L},new int[]{white,red});yy+=16;
+            txt(c,"Partite totali: "+(W+L),34,yy,14,white,Paint.Align.LEFT);yy+=16;
+            txtRow(c,34,yy,14,new String[]{"Vittorie: ", ""+W},new int[]{white,green});yy+=16;
+            txtRow(c,34,yy,14,new String[]{"Sconfitte: ", ""+L},new int[]{white,red});yy+=16;
             txtRow(c,34,yy,14,new String[]{"Win rate: ", String.format(Locale.US,"%.1f%%",wr)},new int[]{white,wrColor(wr,W+L)});yy+=16;
-            String[] rest={"Current win streak: "+s.streak,"Longest win streak: "+maxStreak,"Starting points: "+s.baseline,"Current points: "+s.points,"Net gain: "+(s.points-s.baseline)};
+            String[] rest={"Vittorie consecutive attuali: "+s.streak,"Vittorie consecutive massime: "+maxStreak,"Punti di partenza: "+s.baseline,"Punti attuali: "+s.points,"Guadagno netto: "+(s.points-s.baseline)};
             for(String z:rest){txt(c,z,34,yy,14,white,Paint.Align.LEFT);yy+=16;}
-            box(c,w-150,262,w-18,290,card); txt(c,"Sort: "+deckSortLabel()+" ▾",w-84,281,11,white,Paint.Align.CENTER);
-            txt(c,"BY DECK",18,278,14,muted,Paint.Align.LEFT);yy=304;
+            box(c,w-150,262,w-18,290,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-84,281,11,white,Paint.Align.CENTER);
+            txt(c,"PER DECK",18,278,14,muted,Paint.Align.LEFT);yy=304;
             for(Deck d: sortedDecks(s)){
-                int[] wl=deckWL(s,d.name); int dw=wl[0],dl=wl[1];
+                int[] dwl=deckWL(s,d.name); int dw=dwl[0],dl=dwl[1];
                 float dwr=dw+dl==0?0:100f*dw/(dw+dl);
                 int dbest=longestStreakForDeck(s,d.name);
                 txtRow(c,18,yy,13,
-                    new String[]{d.name+"   ", (dw+dl)+" games   ", dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)+"  ", "Best "+dbest},
+                    new String[]{d.name+"   ", (dw+dl)+" partite   ", dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)+"  ", "Migliore "+dbest},
                     new int[]{white, muted, green, red, wrColor(dwr,dw+dl), muted});
                 yy+=20;
             }
@@ -871,7 +968,7 @@ public class MainActivity extends Activity {
                 float ndwr=100f*nd[0]/(nd[0]+nd[1]);
                 int ndbest=longestStreakForDeck(s,"Unknown");
                 txtRow(c,18,yy,13,
-                    new String[]{"No deck   ", (nd[0]+nd[1])+" games   ", nd[0]+"W  ", nd[1]+"L  ", String.format(Locale.US,"%.1f%%",ndwr)+"  ", "Best "+ndbest},
+                    new String[]{"Nessun deck   ", (nd[0]+nd[1])+" partite   ", nd[0]+"W  ", nd[1]+"L  ", String.format(Locale.US,"%.1f%%",ndwr)+"  ", "Migliore "+ndbest},
                     new int[]{muted, muted, green, red, wrColor(ndwr,nd[0]+nd[1]), muted});
                 yy+=20;
             }
@@ -892,49 +989,49 @@ public class MainActivity extends Activity {
             float chartBottom = h-BOTTOM_UI_HEIGHT;
 
             if(x.untracked){
-                box(c,18,58,w-18,118,card);
-                txt(c,"UNTRACKED SESSION",32,80,11,muted,Paint.Align.LEFT);
-                txt(c,"Points "+x.startPoints+" → "+x.endPoints,32,104,15,white,Paint.Align.LEFT);
-                notesRow(c,124,166,w,x.notes);
-                netGainRow(c,172,214,w,x.endPoints-x.startPoints);
-                txt(c,"Start a new session to keep playing.",18,238,13,muted,Paint.Align.LEFT);
-                drawChart(c,18,254,w-18,Math.min(254+430,chartBottom),x.matches,s);
+                box(c,18,58,w-18,140,card);
+                txt(c,"SESSIONE NON TRACCIATA",32,80,11,muted,Paint.Align.LEFT);
+                txt(c,"Punti "+x.startPoints+" → "+x.endPoints,32,104,15,white,Paint.Align.LEFT);
+                txtRow(c,32,128,12,new String[]{x.untrackedWins+"W  ", ""+x.untrackedLosses+"L"},new int[]{green,red});
+                if(isLast) txt(c,"✎",w-32,80,18,blue,Paint.Align.CENTER);
+                netGainRow(c,146,188,w,x.endPoints-x.startPoints);
+                txt(c,"Crea una nuova sessione per continuare a giocare.",18,212,13,muted,Paint.Align.LEFT);
+                drawChart(c,18,228,w-18,Math.min(228+430,chartBottom),x.matches,s);
                 bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
                 return;
             }
 
             box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
-            txt(c, "Unknown".equals(x.deck) ? "No deck — tap to choose" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
+            txt(c, "Unknown".equals(x.deck) ? "Nessun deck — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
             Deck linkedDeck = findDeck(s, x.deck);
             boolean hasShot = linkedDeck!=null && linkedDeck.image!=null;
             txt(c, hasShot?"◉":"＋", w-40, 94, 20, hasShot?white:muted, Paint.Align.CENTER);
-            notesRow(c,124,166,w,x.notes);
             int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
-            netGainRow(c,172,214,w,gain);
+            netGainRow(c,124,166,w,gain);
 
             if(!isLast){
-                box(c,18,222,w-18,268,card); txt(c,"Session ended",w/2,250,13,muted,Paint.Align.CENTER);
-                drawChart(c,18,282,w-18,Math.min(282+610,chartBottom),x.matches,s);
+                box(c,18,172,w-18,218,card); txt(c,"Sessione conclusa",w/2,200,13,muted,Paint.Align.CENTER);
+                drawChart(c,18,232,w-18,Math.min(232+610,chartBottom),x.matches,s);
                 bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
                 return;
             }
 
-            box(c,18,222,w/2-8,296,card); box(c,w/2+8,222,w-18,296,card);
-            txt(c,"CURRENT POINTS",w/4,243,10,muted,Paint.Align.CENTER); txt(c,""+s.points,w/4,279,28,white,Paint.Align.CENTER);
-            txt(c,"WIN STREAK",w*3/4,243,9,muted,Paint.Align.CENTER); txt(c,""+s.streak,w*3/4,279,28,white,Paint.Align.CENTER);
-            box(c,18,308,w/2-8,384,green); box(c,w/2+8,308,w-18,384,red);
-            txt(c,"W",w/4,344,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,370,14,Color.WHITE,Paint.Align.CENTER);
-            txt(c,"L",w*3/4,344,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,370,14,Color.WHITE,Paint.Align.CENTER);
-            box(c,18,396,w/2-8,442,card); box(c,w/2+8,396,w-18,442,card);
-            txt(c,"↶  UNDO",w/4,425,14,white,Paint.Align.CENTER); txt(c,"↷  REDO",w*3/4,425,14,white,Paint.Align.CENTER);
-            drawChart(c,18,454,w-18,Math.min(454+610,chartBottom),x.matches,s);
+            box(c,18,172,w/2-8,246,card); box(c,w/2+8,172,w-18,246,card);
+            txt(c,"PUNTI ATTUALI",w/4,193,10,muted,Paint.Align.CENTER); txt(c,""+s.points,w/4,229,28,white,Paint.Align.CENTER);
+            txt(c,"VITTORIE CONSECUTIVE",w*3/4,193,9,muted,Paint.Align.CENTER); txt(c,""+s.streak,w*3/4,229,28,white,Paint.Align.CENTER);
+            box(c,18,258,w/2-8,334,green); box(c,w/2+8,258,w-18,334,red);
+            txt(c,"W",w/4,294,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,320,14,Color.WHITE,Paint.Align.CENTER);
+            txt(c,"L",w*3/4,294,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,320,14,Color.WHITE,Paint.Align.CENTER);
+            box(c,18,346,w/2-8,392,card); box(c,w/2+8,346,w-18,392,card);
+            txt(c,"↶  UNDO",w/4,375,14,white,Paint.Align.CENTER); txt(c,"↷  REDO",w*3/4,375,14,white,Paint.Align.CENTER);
+            drawChart(c,18,404,w-18,Math.min(404+610,chartBottom),x.matches,s);
             bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
         }
 
         // Riga con il guadagno netto della sessione (ultimo punteggio - punteggio di partenza di QUESTA sessione).
         void netGainRow(Canvas c, float top, float bottom, float w, int gain){
             box(c,18,top,w-18,bottom,card);
-            txt(c,"NET GAIN",32,top+18,10,muted,Paint.Align.LEFT);
+            txt(c,"GUADAGNO NETTO",32,top+18,10,muted,Paint.Align.LEFT);
             int col = gain>0?green:(gain<0?red:white);
             txt(c, (gain>0?"+":"")+gain, w-32, top+28, 20, col, Paint.Align.RIGHT);
         }
@@ -945,18 +1042,12 @@ public class MainActivity extends Activity {
             if(hasPrev){ box(c,18,navY,w/2-8,navY+40,card); txtRow(c,32,navY+26,13,new String[]{"← ", prevName},new int[]{muted,white}); }
             if(hasNext){ box(c,w/2+8,navY,w-18,navY+40,card); txtRowRight(c,w-32,navY+26,13,new String[]{nextName, " →"},new int[]{white,muted}); }
             float ty = navY+68;
-            if(canConvert){ txt(c,"Mark as untracked",w/2,ty,13,muted,Paint.Align.CENTER); ty+=34; }
-            if(isLast){ txt(c,"Delete session",w/2,ty,13,red,Paint.Align.CENTER); }
+            if(canConvert){ txt(c,"Segna come non tracciata",w/2,ty,13,muted,Paint.Align.CENTER); ty+=34; }
+            if(isLast){ txt(c,"Elimina sessione",w/2,ty,13,red,Paint.Align.CENTER); }
         }
 
         // Riga NOTE separata dal box DECK: prima la nota condivideva lo spazio con lo screenshot del deck ed era
         // facile confonderla con "cambia deck". Ora e' una riga a se', con la sua etichetta, cosi' non c'e' ambiguita'.
-        void notesRow(Canvas c, float top, float bottom, float w, String notes){
-            box(c,18,top,w-18,bottom,card);
-            txt(c,"NOTES",32,top+16,10,muted,Paint.Align.LEFT);
-            txt(c, hasNotes(notes) ? notes : "Tap to add notes", 32, top+34, 13, hasNotes(notes)?white:muted, Paint.Align.LEFT);
-            txt(c, "✎", w-32, top+27, 18, hasNotes(notes)?blue:muted, Paint.Align.CENTER);
-        }
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s){
             box(c,l,t,rr,b,Color.rgb(10,18,30)); if(ms.isEmpty())return;
@@ -980,15 +1071,15 @@ public class MainActivity extends Activity {
                 c.drawCircle(x,y,4,p);
             }
             txt(c,""+Math.round(min),l+8,b-8,10,muted,Paint.Align.LEFT);
-            txt(c,"GAMES",rr-8,b-8,10,muted,Paint.Align.RIGHT);
+            txt(c,"PARTITE",rr-8,b-8,10,muted,Paint.Align.RIGHT);
             // Etichette ben visibili con il punteggio di partenza e quello attuale di questo grafico.
-            txt(c,"START: "+ms.get(0).before,l+10,t+18,12,white,Paint.Align.LEFT);
-            txt(c,"NOW: "+ms.get(ms.size()-1).after,rr-10,t+18,12,white,Paint.Align.RIGHT);
+            txt(c,"INIZIO: "+ms.get(0).before,l+10,t+18,12,white,Paint.Align.LEFT);
+            txt(c,"ORA: "+ms.get(ms.size()-1).after,rr-10,t+18,12,white,Paint.Align.RIGHT);
         }
 
         void detailNav(Canvas c,float w,float h){
             float y=h-72; p.setColor(Color.rgb(9,15,25));p.setStyle(Paint.Style.FILL);c.drawRect(0,y,w,h,p);
-            String[] n={"Sessions","Deck","Stats"};
+            String[] n={"Sessioni","Deck","Statistiche"};
             for(int i=0;i<3;i++){int col=i==detailTab?blue:muted; txt(c,n[i],w*(i+.5f)/3,y+48,12,col,Paint.Align.CENTER);}
         }
 
@@ -1002,7 +1093,8 @@ public class MainActivity extends Activity {
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
 
             if(screen==SCREEN_SEASON_LIST){
-                if(y<58 && x>w-150){ newSeason(); return true; }
+                if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
+                if(y>=h-34 && y<=h-4){ resetAllData(); return true; }
                 for(Hit hit: seasonHits){ if(y>=hit.top&&y<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
                 return true;
             }
@@ -1031,16 +1123,16 @@ public class MainActivity extends Activity {
                     if(canConvert){ if(y>=ty-16 && y<=ty+16){ convertToUntracked(); return true; } ty+=34; }
                     if(isLast){ if(y>=ty-16 && y<=ty+16){ deleteCurrentSession(); return true; } }
                 }
-                if(y>=124 && y<=166){ editSessionNotes(sess); return true; } // riga NOTE: sempre attiva, sessione tracciata o no
                 if(sess.untracked){
+                    if(isLast && y>=58 && y<=140 && x>=w-56){ editUntrackedSession(); return true; } // icona ✎: solo sessione corrente
                     return true;
                 }
                 if(y>=58 && y<=118){
                     if(x>=w-70){ editDeckScreenshot(findDeck(s, sess.deck)); return true; } // zona screenshot: sempre attiva
                     chooseDeck(); return true; // zona nome deck: modificabile anche su sessioni passate (skip -> assegnazione retroattiva)
                 }
-                if(isLast && y>=308 && y<=384){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && y>=396 && y<=442){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && y>=258 && y<=334){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && y>=346 && y<=392){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
@@ -1052,8 +1144,8 @@ public class MainActivity extends Activity {
             }
             if(y>h-72){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(y>=118&&y<=160){ showNewSession(); return true; }
-                if(y>=166&&y<=196){ showUntracked(); return true; }
+                if(y>=142&&y<=184){ showNewSession(); return true; }
+                if(y>=190&&y<=220){ showUntracked(); return true; }
                 for(Hit hit: sessionHits){ if(y>=hit.top&&y<=hit.bottom){ s.currentSession=hit.index; screen=SCREEN_SESSION_PLAY; invalidate(); return true; } }
             } else if(detailTab==1){
                 if(y>=48&&y<=76&&x>=w-150){ showDeckSortMenu(); return true; }
@@ -1087,7 +1179,7 @@ public class MainActivity extends Activity {
         static Match from(JSONObject o)throws Exception{return new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0));}
     }
     static class Deck {String name,image,notes;Deck(String n){name=n;} JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("n",name);if(image!=null)o.put("i",image);if(notes!=null)o.put("notes",notes);return o;}static Deck from(JSONObject o){Deck d=new Deck(o.optString("n"));d.image=o.optString("i",null);d.notes=o.optString("notes",null);return d;}}
-    static class Session {String name,deck,notes;boolean untracked;int startPoints,endPoints,startStreak,endStreak;ArrayList<Match> matches=new ArrayList<>();Session(String n,String d){name=n;deck=d;}JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("n",name);o.put("d",deck);o.put("u",untracked);o.put("sp",startPoints);o.put("ep",endPoints);o.put("ss",startStreak);o.put("es",endStreak);if(notes!=null)o.put("notes",notes);JSONArray a=new JSONArray();for(Match m:matches)a.put(m.json());o.put("m",a);return o;}static Session from(JSONObject o)throws Exception{Session s=new Session(o.optString("n"),o.optString("d"));s.untracked=o.optBoolean("u");s.startPoints=o.optInt("sp");s.endPoints=o.optInt("ep");s.startStreak=o.optInt("ss");s.endStreak=o.optInt("es");s.notes=o.optString("notes",null);JSONArray a=o.optJSONArray("m");if(a!=null)for(int i=0;i<a.length();i++)s.matches.add(Match.from(a.getJSONObject(i)));return s;}}
+    static class Session {String name,deck,notes;boolean untracked;int startPoints,endPoints,startStreak,endStreak,untrackedWins,untrackedLosses;ArrayList<Match> matches=new ArrayList<>();Session(String n,String d){name=n;deck=d;}JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("n",name);o.put("d",deck);o.put("u",untracked);o.put("sp",startPoints);o.put("ep",endPoints);o.put("ss",startStreak);o.put("es",endStreak);o.put("uw",untrackedWins);o.put("ul",untrackedLosses);if(notes!=null)o.put("notes",notes);JSONArray a=new JSONArray();for(Match m:matches)a.put(m.json());o.put("m",a);return o;}static Session from(JSONObject o)throws Exception{Session s=new Session(o.optString("n"),o.optString("d"));s.untracked=o.optBoolean("u");s.startPoints=o.optInt("sp");s.endPoints=o.optInt("ep");s.startStreak=o.optInt("ss");s.endStreak=o.optInt("es");s.untrackedWins=o.optInt("uw");s.untrackedLosses=o.optInt("ul");s.notes=o.optString("notes",null);JSONArray a=o.optJSONArray("m");if(a!=null)for(int i=0;i<a.length();i++)s.matches.add(Match.from(a.getJSONObject(i)));return s;}}
     static class Season {
         String name;int baseline,initialStreak,points,streak,currentSession=0;ArrayList<Deck> decks=new ArrayList<>();ArrayList<Session> sessions=new ArrayList<>();Stack<State> undo=new Stack<>(),redo=new Stack<>();
         Season(String n){name=n;}
@@ -1098,7 +1190,7 @@ public class MainActivity extends Activity {
     static class Store {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).apply();}catch(Exception e){Log.e(TAG,"Error saving data",e);}}
-        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));}catch(Exception e){Log.e(TAG,"Error loading data, starting fresh",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
     }
 }
