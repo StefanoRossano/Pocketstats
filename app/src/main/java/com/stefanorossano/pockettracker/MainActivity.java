@@ -326,6 +326,7 @@ public class MainActivity extends Activity {
     void sessionOptionsMenu(Session sess, boolean isLast, boolean canConvert, float anchorX, float anchorY){
         boolean showNewSessionItem = isLast && !sess.untracked;
         boolean showDeckEditItem = !sess.untracked;
+        boolean showEditUntrackedItem = sess.untracked;
         boolean showDeleteItem = isLast;
 
         ArrayList<String> labels = new ArrayList<>();
@@ -333,6 +334,7 @@ public class MainActivity extends Activity {
         ArrayList<Runnable> actions = new ArrayList<>();
         if (showNewSessionItem) { labels.add("Nuova sessione"); colors.add(Color.WHITE); actions.add(this::showNewSession); }
         if (showDeckEditItem) { labels.add("Modifica deck"); colors.add(Color.WHITE); actions.add(() -> deckOptionsMenu(sess)); }
+        if (showEditUntrackedItem) { labels.add("Modifica sessione"); colors.add(Color.WHITE); actions.add(this::editUntrackedSession); }
         if (canConvert) { labels.add("Segna come non tracciata"); colors.add(Color.WHITE); actions.add(this::convertToUntracked); }
         if (showDeleteItem) { labels.add("Elimina sessione"); colors.add(red()); actions.add(this::deleteCurrentSession); }
 
@@ -680,6 +682,25 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    // Elimina un deck: se e' usato in una o piu' sessioni, avvisa prima e, se confermato, imposta quelle
+    // sessioni su "Deck sconosciuto" (Unknown) invece di lasciarle con un riferimento a un deck inesistente.
+    void confirmDeleteDeck(Season s, Deck d){
+        int usedCount = 0;
+        for (Session se: s.sessions) if (d.name.equals(se.deck)) usedCount++;
+        String message = usedCount>0
+            ? "Questo deck e' usato in "+usedCount+" "+(usedCount==1?"sessione":"sessioni")+". Eliminandolo, "+(usedCount==1?"verra' impostata":"verranno impostate")+" su \"Deck sconosciuto\"."
+            : "Eliminare definitivamente questo deck?";
+        new AlertDialog.Builder(this).setTitle("Elimina "+d.name)
+            .setMessage(message)
+            .setPositiveButton("Elimina", (dlg,w)-> {
+                for (Session se: s.sessions) if (d.name.equals(se.deck)) se.deck = "Unknown";
+                s.decks.remove(d);
+                store.save(); if (view!=null) view.invalidate();
+            })
+            .setNegativeButton("Annulla", null)
+            .show();
+    }
+
     void addDeck(){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
         // Tolta l'etichetta "Nome Deck" sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
@@ -730,9 +751,13 @@ public class MainActivity extends Activity {
             if (pendingImageTargetDeck != null) {
                 // Aggiunge alla lista di un Deck gia' esistente (da tab Deck o dalla Sessione in gioco):
                 // un Deck puo' avere piu' di uno screenshot associato.
-                pendingImageTargetDeck.images.add(uri.toString());
+                Deck targetDeck = pendingImageTargetDeck;
+                targetDeck.images.add(uri.toString());
                 pendingImageTargetDeck = null;
                 store.save(); if (view != null) view.invalidate();
+                // Dopo il caricamento, apre subito la galleria sull'immagine appena aggiunta (prima non dava
+                // alcun feedback visivo immediato).
+                showImageGallery(targetDeck, targetDeck.images.size()-1);
             } else {
                 pendingImage = uri; // in attesa che l'utente completi la creazione del nuovo Deck
             }
@@ -758,18 +783,41 @@ public class MainActivity extends Activity {
         Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
         float s = sizePx;
         pp.setColor(color); pp.setStyle(Paint.Style.FILL);
-        cc.drawRect(s*0.28f, s*0.16f, s*0.72f, s*0.26f, pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(Math.max(1.5f, s*0.07f));
+        // Silhouette piena e pulita (prima: contorno con linee verticali separate, risultava frastagliato/brutto).
+        // Maniglietta
+        cc.drawRoundRect(s*0.40f, s*0.06f, s*0.60f, s*0.16f, s*0.02f, s*0.02f, pp);
+        // Coperchio
+        cc.drawRoundRect(s*0.20f, s*0.16f, s*0.80f, s*0.26f, s*0.02f, s*0.02f, pp);
+        // Corpo: trapezio pieno con angoli inferiori arrotondati
         android.graphics.Path body = new android.graphics.Path();
-        body.moveTo(s*0.20f, s*0.28f);
-        body.lineTo(s*0.27f, s*0.86f);
-        body.quadTo(s*0.27f, s*0.90f, s*0.32f, s*0.90f);
-        body.lineTo(s*0.68f, s*0.90f);
-        body.quadTo(s*0.73f, s*0.90f, s*0.73f, s*0.86f);
-        body.lineTo(s*0.80f, s*0.28f);
+        body.moveTo(s*0.26f, s*0.30f);
+        body.lineTo(s*0.74f, s*0.30f);
+        body.lineTo(s*0.67f, s*0.88f);
+        body.quadTo(s*0.67f, s*0.92f, s*0.63f, s*0.92f);
+        body.lineTo(s*0.37f, s*0.92f);
+        body.quadTo(s*0.33f, s*0.92f, s*0.33f, s*0.88f);
+        body.close();
         cc.drawPath(body, pp);
-        cc.drawLine(s*0.40f, s*0.40f, s*0.40f, s*0.78f, pp);
-        cc.drawLine(s*0.60f, s*0.40f, s*0.60f, s*0.78f, pp);
+        return bmp;
+    }
+
+    // Freccia "‹"/"›" disegnata su Bitmap (invece del glifo testuale via TextView): garantisce centratura
+    // perfetta nel cerchio (i glifi di testo, per via delle metriche del font/line-height, non si centrano
+    // mai in modo affidabile con setGravity(CENTER) da soli).
+    Bitmap makeChevronIcon(int color, int sizePx, boolean pointRight){
+        Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas cc = new Canvas(bmp);
+        Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pp.setColor(color); pp.setStyle(Paint.Style.STROKE);
+        pp.setStrokeWidth(sizePx*0.14f); pp.setStrokeCap(Paint.Cap.ROUND); pp.setStrokeJoin(Paint.Join.ROUND);
+        float s = sizePx;
+        android.graphics.Path p2 = new android.graphics.Path();
+        if (pointRight){
+            p2.moveTo(s*0.38f, s*0.22f); p2.lineTo(s*0.66f, s*0.5f); p2.lineTo(s*0.38f, s*0.78f);
+        } else {
+            p2.moveTo(s*0.62f, s*0.22f); p2.lineTo(s*0.34f, s*0.5f); p2.lineTo(s*0.62f, s*0.78f);
+        }
+        cc.drawPath(p2, pp);
         return bmp;
     }
 
@@ -806,16 +854,19 @@ public class MainActivity extends Activity {
         iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
         imageFrame.addView(iv, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
 
-        TextView prevBtn = new TextView(this); prevBtn.setText("‹"); prevBtn.setTextColor(Color.WHITE); prevBtn.setTextSize(22);
-        prevBtn.setGravity(Gravity.CENTER);
+        int arrowIconPx = dp(16);
+        ImageView prevBtn = new ImageView(this);
+        prevBtn.setImageBitmap(makeChevronIcon(Color.WHITE, arrowIconPx, false));
+        prevBtn.setScaleType(ImageView.ScaleType.CENTER);
         GradientDrawable prevBg = new GradientDrawable(); prevBg.setShape(GradientDrawable.OVAL); prevBg.setColor(Color.argb(140,10,18,30));
         prevBtn.setBackground(prevBg);
         android.widget.FrameLayout.LayoutParams prevLp = new android.widget.FrameLayout.LayoutParams(dp(36), dp(36));
         prevLp.gravity = Gravity.START|Gravity.CENTER_VERTICAL; prevLp.leftMargin=dp(10);
         imageFrame.addView(prevBtn, prevLp);
 
-        TextView nextBtn = new TextView(this); nextBtn.setText("›"); nextBtn.setTextColor(Color.WHITE); nextBtn.setTextSize(22);
-        nextBtn.setGravity(Gravity.CENTER);
+        ImageView nextBtn = new ImageView(this);
+        nextBtn.setImageBitmap(makeChevronIcon(Color.WHITE, arrowIconPx, true));
+        nextBtn.setScaleType(ImageView.ScaleType.CENTER);
         GradientDrawable nextBg = new GradientDrawable(); nextBg.setShape(GradientDrawable.OVAL); nextBg.setColor(Color.argb(140,10,18,30));
         nextBtn.setBackground(nextBg);
         android.widget.FrameLayout.LayoutParams nextLp = new android.widget.FrameLayout.LayoutParams(dp(36), dp(36));
@@ -843,7 +894,7 @@ public class MainActivity extends Activity {
             try {
                 java.io.InputStream is = getContentResolver().openInputStream(Uri.parse(d.images.get(idx[0])));
                 Bitmap full = BitmapFactory.decodeStream(is);
-                int cropTop=(int)(full.getHeight()*0.17f), cropBottom=(int)(full.getHeight()*0.14f);
+                int cropTop=(int)(full.getHeight()*0.19f), cropBottom=(int)(full.getHeight()*0.14f);
                 int newH=full.getHeight()-cropTop-cropBottom;
                 iv.setImageBitmap(newH>0 ? Bitmap.createBitmap(full,0,cropTop,full.getWidth(),newH) : full);
             } catch(Exception e) {
@@ -1250,6 +1301,15 @@ public class MainActivity extends Activity {
             txt(c, isUnknown?"Deck sconosciuto":name, 34,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
             float wr=(W+L)==0?0:100f*W/(W+L);
             txt(c,(W+L)+" partite",34,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
+            // Icona cestino per eliminare il deck (assente per "Deck sconosciuto": e' un aggregato, non un
+            // deck vero, non ha senso "eliminarlo"). Disegnata in un rettangolo di destinazione in unita'
+            // logiche (drawBitmap con dstRect), cosi' non serve manipolare la scala del canvas gia' attiva.
+            if (!isUnknown) {
+                Bitmap trash = makeTrashIcon(muted, 64);
+                float ts=16, tx=w-18-10-ts, ty=y+8;
+                android.graphics.Rect dst = new android.graphics.Rect((int)tx, (int)ty, (int)(tx+ts), (int)(ty+ts));
+                c.drawBitmap(trash, null, dst, null);
+            }
             // "Deck sconosciuto" e' un aggregato di sessioni senza un deck reale assegnato: la "serie di
             // vittorie" non ha senso concettualmente qui (mischia sessioni scollegate), quindi si omette.
             if (isUnknown) {
@@ -1358,8 +1418,9 @@ public class MainActivity extends Activity {
             // menu compare solo se almeno una di queste azioni e' applicabile alla sessione corrente.
             boolean showNewSessionItem = isLast && !x.untracked;
             boolean showDeckEditItem = !x.untracked;
+            boolean showEditUntrackedItem = x.untracked; // "Modifica sessione": prima era una matita/pallini dentro la card, ora unificata qui
             boolean showDeleteItem = isLast;
-            boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem;
+            boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem || showEditUntrackedItem;
             float centerY=36;
             drawLeftArrow(c,24,centeredBaseline(centerY,32),32,white);
             txt(c,x.name,60,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
@@ -1377,7 +1438,6 @@ public class MainActivity extends Activity {
                 txt(c,"SESSIONE NON TRACCIATA",32,80,11,muted,Paint.Align.LEFT);
                 txt(c,"Punti "+x.startPoints+" → "+x.endPoints,32,104,15,white,Paint.Align.LEFT);
                 txtRow(c,32,128,12,new String[]{x.untrackedWins+"W  ", ""+x.untrackedLosses+"L"},new int[]{green,red});
-                drawKebabIcon(c,w-32,80,blue);
                 netGainRow(c,18,146,220,w-18,x.endPoints-x.startPoints);
                 txt(c,"Crea una nuova sessione per continuare a giocare.",18,244,13,muted,Paint.Align.LEFT);
                 drawChart(c,18,260,w-18,260+260,x.matches,s);
@@ -1386,32 +1446,39 @@ public class MainActivity extends Activity {
                 box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
                 txt(c, "Unknown".equals(x.deck) ? "Deck sconosciuto — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
                 int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
-                // Punti attuali, Vittorie consecutive e Variazione ora tre card di uguale dimensione affiancate
-                // (prima Punti attuali era a tutta larghezza sopra, le altre due sotto).
-                float cardGap=8; float cardW=(w-36-2*cardGap)/3;
-                float c1L=18, c1R=18+cardW;
-                float c2L=c1R+cardGap, c2R=c2L+cardW;
-                float c3L=c2R+cardGap, c3R=w-18;
+                // Griglia 2x2: Punti attuali/Statistiche sopra, Vittorie consecutive/Variazione sotto
+                // (prima le 3 card affiancate avevano fatto sparire W/L/% della sessione corrente: ora c'e'
+                // una card dedicata "STATISTICHE" che le mostra di nuovo).
+                int[] sessWL = countWL(java.util.Collections.singletonList(x));
+                int sw=sessWL[0], sl=sessWL[1];
+                float swr = (sw+sl)==0 ? 0 : 100f*sw/(sw+sl);
+                float gap2=8; float colW=(w-36-gap2)/2;
+                float c1L=18, c1R=18+colW, c2L=c1R+gap2, c2R=w-18;
                 box(c,c1L,124,c1R,198,card);
-                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,8,muted,Paint.Align.CENTER);
-                txt(c,""+s.points,(c1L+c1R)/2,182,22,white,Paint.Align.CENTER);
-                netGainRow(c,c2L,124,198,c2R,gain);
-                box(c,c3L,124,c3R,198,card);
-                txt(c,"VITTORIE CONSECUTIVE",(c3L+c3R)/2,146,8,muted,Paint.Align.CENTER);
-                txt(c,""+s.streak,(c3L+c3R)/2,182,22,white,Paint.Align.CENTER);
+                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,9,muted,Paint.Align.CENTER);
+                txt(c,""+s.points,(c1L+c1R)/2,182,24,white,Paint.Align.CENTER);
+                box(c,c2L,124,c2R,198,card);
+                txt(c,"STATISTICHE",(c2L+c2R)/2,144,9,muted,Paint.Align.CENTER);
+                txtRowCentered(c,(c2L+c2R)/2,178,13,
+                    new String[]{sw+"W   ", sl+"L   ", String.format(Locale.US,"%.1f%%",swr)},
+                    new int[]{green,red,white});
+                box(c,c1L,206,c1R,280,card);
+                txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,228,9,muted,Paint.Align.CENTER);
+                txt(c,""+s.streak,(c1L+c1R)/2,264,24,white,Paint.Align.CENTER);
+                netGainRow(c,c2L,206,280,c2R,gain);
 
                 if(!isLast){
-                    box(c,18,206,w-18,252,card); txt(c,"Sessione conclusa",w/2,234,13,muted,Paint.Align.CENTER);
-                    drawChart(c,18,266,w-18,266+260,x.matches,s);
-                    lastContentBottom = 266+260+20;
+                    box(c,18,288,w-18,334,card); txt(c,"Sessione conclusa",w/2,316,13,muted,Paint.Align.CENTER);
+                    drawChart(c,18,348,w-18,348+260,x.matches,s);
+                    lastContentBottom = 348+260+20;
                 } else {
-                    box(c,18,206,w/2-8,252,green); box(c,w/2+8,206,w-18,252,red);
-                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,236,20,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L  (−10)",w*3/4,236,20,Color.WHITE,Paint.Align.CENTER);
-                    box(c,18,264,w/2-8,310,card); box(c,w/2+8,264,w-18,310,card);
-                    txt(c,"↶  ANNULLA",w/4,293,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,293,16,white,Paint.Align.CENTER);
-                    drawChart(c,18,322,w-18,322+260,x.matches,s);
-                    lastContentBottom = 322+260+20;
+                    box(c,18,288,w/2-8,334,green); box(c,w/2+8,288,w-18,334,red);
+                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,318,20,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L  (−10)",w*3/4,318,20,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,346,w/2-8,392,card); box(c,w/2+8,346,w-18,392,card);
+                    txt(c,"↶  ANNULLA",w/4,375,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,375,16,white,Paint.Align.CENTER);
+                    drawChart(c,18,404,w-18,404+260,x.matches,s);
+                    lastContentBottom = 404+260+20;
                 }
             }
             c.restore();
@@ -1478,6 +1545,14 @@ public class MainActivity extends Activity {
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s){
             box(c,l,t,rr,b,Color.rgb(10,18,30));
+            // Griglia leggera, colore vicino allo sfondo (appena piu' chiaro): solo un riferimento visivo,
+            // poche righe (3) per non risultare fastidiosa ne' troppo fitta.
+            p.setColor(Color.rgb(19,29,44)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
+            int gridLines=3;
+            for(int i=1;i<=gridLines;i++){
+                float gy = t+22 + i*(b-t-42)/(gridLines+1);
+                c.drawLine(l+8,gy,rr-8,gy,p);
+            }
             if(ms.isEmpty()){
                 txt(c,"Nessuna partita ancora",(l+rr)/2,(t+b)/2,13,muted,Paint.Align.CENTER);
                 return;
@@ -1567,8 +1642,9 @@ public class MainActivity extends Activity {
                 boolean canConvert = sess.matches.isEmpty() && !sess.untracked;
                 boolean showNewSessionItem = isLast && !sess.untracked;
                 boolean showDeckEditItem = !sess.untracked;
+                boolean showEditUntrackedItem = sess.untracked;
                 boolean showDeleteItem = isLast;
-                boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem;
+                boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem || showEditUntrackedItem;
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
                     if(x<60){ goBack(); return true; }
@@ -1583,20 +1659,13 @@ public class MainActivity extends Activity {
                 }
                 // Da qui in giu' siamo nel contenuto scrollabile: usa 'contentY'.
                 if(sess.untracked){
-                    if(contentY>=58 && contentY<=140 && x>=w-56){
-                        // Icona "⋮": stesso menu ancorato usato altrove, qui con la sola voce "Modifica sessione"
-                        // (prima era una matita diretta). 80-scrollY riporta l'icona alla sua posizione reale
-                        // sullo schermo in questo momento, tenendo conto dello scroll corrente.
-                        showAnchoredMenu(w-152, 80-scrollY+16, new String[]{"Modifica sessione"}, new int[]{Color.WHITE}, new Runnable[]{MainActivity.this::editUntrackedSession});
-                        return true;
-                    }
-                    return true;
+                    return true; // il tocco sul glifo "⋮" e' ora gestito dall'header (stessa posizione della sessione normale)
                 }
                 if(contentY>=58 && contentY<=118){
                     return true; // riga DECK: nessuna azione, per cambiare/rinominare usa il menu "⋮" in alto
                 }
-                if(isLast && contentY>=206 && contentY<=252){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && contentY>=264 && contentY<=310){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && contentY>=288 && contentY<=334){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=346 && contentY<=392){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
@@ -1616,6 +1685,7 @@ public class MainActivity extends Activity {
                 if(contentY>=48&&contentY<=76&&x>=w-150){ showDeckSortMenu(); return true; }
                 float yy=90;
                 for(Deck d: sortedDecks(s)){
+                    if(contentY>=yy&&contentY<=yy+40&&x>=w-56){ confirmDeleteDeck(s,d); return true; } // icona cestino: priorita' sul tap generico della card
                     if(contentY>=yy&&contentY<=yy+78){ openDeckImages(d); return true; }
                     yy+=90;
                 }
@@ -1626,6 +1696,7 @@ public class MainActivity extends Activity {
                 if(contentY>=262&&contentY<=290&&x>=w-150){ showDeckSortMenu(); return true; }
                 float dyy=304+11;
                 for(Deck d: sortedDecks(s)){
+                    if(contentY>=dyy&&contentY<=dyy+40&&x>=w-56){ confirmDeleteDeck(s,d); return true; }
                     if(contentY>=dyy&&contentY<=dyy+78){ openDeckImages(d); return true; }
                     dyy+=90;
                 }
