@@ -218,40 +218,35 @@ public class MainActivity extends Activity {
             }).show();
         });
 
-        // Sezione "nuovo deck" inline: nascosta finche' non richiesta, MAI un dialog separato sopra questo
-        // stesso dialog (impilare dialog era la causa sia del bug "deck non selezionabile" sia del brutto
-        // effetto visivo con il popup precedente che traspariva dietro).
-        LinearLayout newDeckSection = new LinearLayout(this); newDeckSection.setOrientation(LinearLayout.VERTICAL);
+        // Sezione "nuovo deck": invece di un pulsante che rivela sotto un campo + pulsante "Crea" (ridondante,
+        // visto che "Conferma" in fondo al dialog crea gia' il deck in sospeso), ora il pulsante "Nuovo Deck"
+        // si TRASFORMA in un campo di testo con una crocetta rotonda a destra per richiuderlo.
+        LinearLayout newDeckSection = new LinearLayout(this); newDeckSection.setOrientation(LinearLayout.HORIZONTAL);
+        newDeckSection.setGravity(Gravity.CENTER_VERTICAL);
         newDeckSection.setVisibility(View.GONE);
         LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sectionLp.topMargin = dp(14); newDeckSection.setLayoutParams(sectionLp);
         EditText newDeckName = field("Nome Deck");
-        TextView newDeckError = new TextView(this); newDeckError.setTextColor(red()); newDeckError.setTextSize(12); newDeckError.setVisibility(View.GONE); newDeckError.setPadding(0,dp(4),0,0);
-        Button createDeckBtn = new Button(this); createDeckBtn.setText("Crea"); styleSecondaryButton(createDeckBtn);
-        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        btnLp.topMargin = dp(8); createDeckBtn.setLayoutParams(btnLp);
+        newDeckName.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        TextView closeNewDeck = new TextView(this);
+        closeNewDeck.setText("✕"); closeNewDeck.setTextColor(Color.rgb(120,130,145)); closeNewDeck.setTextSize(15);
+        closeNewDeck.setGravity(Gravity.CENTER);
+        GradientDrawable closeBg = new GradientDrawable(); closeBg.setShape(GradientDrawable.OVAL); closeBg.setColor(Color.rgb(232,236,242));
+        closeNewDeck.setBackground(closeBg);
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(32), dp(32));
+        closeLp.leftMargin = dp(8); closeNewDeck.setLayoutParams(closeLp);
         newDeckSection.addView(newDeckName);
-        newDeckSection.addView(newDeckError);
-        newDeckSection.addView(createDeckBtn);
+        newDeckSection.addView(closeNewDeck);
         box.addView(newDeckSection);
+        TextView newDeckError = new TextView(this); newDeckError.setTextColor(red()); newDeckError.setTextSize(12); newDeckError.setVisibility(View.GONE); newDeckError.setPadding(0,dp(4),0,0);
+        box.addView(newDeckError);
 
         Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newDeckBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         newDeckBtnLp.topMargin = dp(14); newDeckBtn.setLayoutParams(newDeckBtnLp);
         box.addView(newDeckBtn);
-        newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); });
-        createDeckBtn.setOnClickListener(v -> {
-            String n = newDeckName.getText().toString().trim();
-            if (n.isEmpty() || deckNameTaken(s, n)) {
-                newDeckError.setText("Nome Deck non valido o già esistente.");
-                newDeckError.setVisibility(View.VISIBLE);
-                return;
-            }
-            s.decks.add(new Deck(n)); store.save();
-            selected[0] = n; refreshSelector[0].run();
-            newDeckName.setText(""); newDeckError.setVisibility(View.GONE);
-            newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE);
-        });
+        newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); newDeckName.requestFocus(); });
+        closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckError.setVisibility(View.GONE); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
 
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this).setTitle(first ? "Scegli il Deck iniziale" : "Nuova Sessione")
             .setView(box).setCancelable(!first)
@@ -278,6 +273,12 @@ public class MainActivity extends Activity {
 
     int blueColor(){ return Color.rgb(55,120,255); }
     int red(){ return Color.rgb(245,70,60); }
+    // Formato richiesto: dd/mm/yy hh:mm. Ritorna stringa vuota se il timestamp non e' disponibile (dati
+    // vecchi salvati prima dell'introduzione di questo campo).
+    String formatTimestamp(long ts){
+        if (ts<=0) return "";
+        return new java.text.SimpleDateFormat("dd/MM/yy HH:mm", Locale.ITALY).format(new java.util.Date(ts));
+    }
 
     void createSessionWithDeck(Season s, boolean first, String deck) {
         if (first) {
@@ -1227,20 +1228,22 @@ public class MainActivity extends Activity {
             for(int i=s.sessions.size()-1;i>=0;i--){
                 Session se=s.sessions.get(i);
                 boolean isLast = i==s.sessions.size()-1;
-                box(c,18,y,w-18,y+72,card);
+                box(c,18,y,w-18,y+86,card);
                 txt(c, se.name, 34,y+26,15,white,Paint.Align.LEFT);
                 txt(c, se.untracked ? "Sessione non tracciata" : deckDisplayShort(se.deck), 34,y+48,12,muted,Paint.Align.LEFT);
+                // Timestamp iniziale della sessione (quando e' stata creata), non l'ultimo aggiornamento.
+                txt(c, formatTimestamp(se.timestamp), 34,y+66,10,muted,Paint.Align.LEFT);
                 int sw,sl;
                 if(se.untracked){ sw=se.untrackedWins; sl=se.untrackedLosses; }
                 else { sw=0; sl=0; for(Match m:se.matches)if(!m.unknown){if(m.win)sw++;else sl++;} }
                 txtRowRight(c,w-34,y+30,13,new String[]{sw+"W ", ""+sl+"L"},new int[]{green,red});
                 if(isLast && !se.untracked) txt(c,"CONTINUA →",w-34,y+52,11,blue,Paint.Align.RIGHT);
-                sessionHits.add(new Hit(y,y+72,i));
-                y+=80;
+                sessionHits.add(new Hit(y,y+86,i));
+                y+=94;
             }
             y+=28; // spazio ben visibile prima del grafico, prima era troppo attaccato all'ultima card sessione
             txt(c,"GRAFICO TOTALE",18,y,12,muted,Paint.Align.LEFT);
-            drawChart(c,18,y+16,w-18,y+16+220,all,s);
+            drawChart(c,18,y+16,w-18,y+16+220,all,s,0);
             lastContentBottom = y+16+220+20;
         }
 
@@ -1440,7 +1443,7 @@ public class MainActivity extends Activity {
                 txtRow(c,32,128,12,new String[]{x.untrackedWins+"W  ", ""+x.untrackedLosses+"L"},new int[]{green,red});
                 netGainRow(c,18,146,220,w-18,x.endPoints-x.startPoints);
                 txt(c,"Crea una nuova sessione per continuare a giocare.",18,244,13,muted,Paint.Align.LEFT);
-                drawChart(c,18,260,w-18,260+260,x.matches,s);
+                drawChart(c,18,260,w-18,260+260,x.matches,s,x.timestamp);
                 lastContentBottom = 260+260+20;
             } else {
                 box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
@@ -1469,7 +1472,7 @@ public class MainActivity extends Activity {
 
                 if(!isLast){
                     box(c,18,288,w-18,334,card); txt(c,"Sessione conclusa",w/2,316,13,muted,Paint.Align.CENTER);
-                    drawChart(c,18,348,w-18,348+260,x.matches,s);
+                    drawChart(c,18,348,w-18,348+260,x.matches,s,x.timestamp);
                     lastContentBottom = 348+260+20;
                 } else {
                     box(c,18,288,w/2-8,334,green); box(c,w/2+8,288,w-18,334,red);
@@ -1477,7 +1480,7 @@ public class MainActivity extends Activity {
                     txt(c,"L  (−10)",w*3/4,318,20,Color.WHITE,Paint.Align.CENTER);
                     box(c,18,346,w/2-8,392,card); box(c,w/2+8,346,w-18,392,card);
                     txt(c,"↶  ANNULLA",w/4,375,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,375,16,white,Paint.Align.CENTER);
-                    drawChart(c,18,404,w-18,404+260,x.matches,s);
+                    drawChart(c,18,404,w-18,404+260,x.matches,s,x.timestamp);
                     lastContentBottom = 404+260+20;
                 }
             }
@@ -1543,7 +1546,7 @@ public class MainActivity extends Activity {
         // Riga NOTE separata dal box DECK: prima la nota condivideva lo spazio con lo screenshot del deck ed era
         // facile confonderla con "cambia deck". Ora e' una riga a se', con la sua etichetta, cosi' non c'e' ambiguita'.
 
-        void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s){
+        void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s,long sessionTimestamp){
             box(c,l,t,rr,b,Color.rgb(10,18,30));
             // Griglia leggera, colore vicino allo sfondo (appena piu' chiaro): solo un riferimento visivo,
             // poche righe (3) per non risultare fastidiosa ne' troppo fitta.
@@ -1553,6 +1556,9 @@ public class MainActivity extends Activity {
                 float gy = t+22 + i*(b-t-42)/(gridLines+1);
                 c.drawLine(l+8,gy,rr-8,gy,p);
             }
+            // Timestamp della sessione (quando e' stata creata): assente (0) per il grafico aggregato di
+            // piu' sessioni, dove non avrebbe senso un singolo orario.
+            if (sessionTimestamp>0) txt(c, formatTimestamp(sessionTimestamp), (l+rr)/2, t+16, 10, muted, Paint.Align.CENTER);
             if(ms.isEmpty()){
                 txt(c,"Nessuna partita ancora",(l+rr)/2,(t+b)/2,13,muted,Paint.Align.CENTER);
                 return;
@@ -1579,8 +1585,8 @@ public class MainActivity extends Activity {
             txt(c,""+Math.round(min),l+8,b-8,10,muted,Paint.Align.LEFT);
             txt(c,"PARTITE",rr-8,b-8,10,muted,Paint.Align.RIGHT);
             // Etichette ben visibili con il punteggio di partenza e quello attuale di questo grafico.
-            txt(c,"INIZIO: "+ms.get(0).before,l+10,t+18,12,white,Paint.Align.LEFT);
-            txt(c,"ORA: "+ms.get(ms.size()-1).after,rr-10,t+18,12,white,Paint.Align.RIGHT);
+            txt(c,"INIZIO: "+ms.get(0).before,l+10,t+34,12,white,Paint.Align.LEFT);
+            txt(c,"ORA: "+ms.get(ms.size()-1).after,rr-10,t+34,12,white,Paint.Align.RIGHT);
         }
 
         void detailNav(Canvas c,float w,float h){
@@ -1712,11 +1718,11 @@ public class MainActivity extends Activity {
         State(int p,int s,int i,Match m){points=p;streak=s;sessionIndex=i;match=m;}
     }
     static class Match {
-        boolean win,unknown;int before,after,streak;
-        Match(boolean w,int b,int a,int st){win=w;before=b;after=a;streak=st;}
+        boolean win,unknown;int before,after,streak;long timestamp;
+        Match(boolean w,int b,int a,int st){win=w;before=b;after=a;streak=st;timestamp=System.currentTimeMillis();}
         static Match untracked(int b,int a){Match m=new Match(a>=b,b,a,0);m.unknown=true;return m;}
-        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);return o;}
-        static Match from(JSONObject o)throws Exception{return new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0));}
+        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);o.put("ts",timestamp);return o;}
+        static Match from(JSONObject o)throws Exception{Match m=new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0));m.timestamp=o.optLong("ts",0);return m;}
     }
     static class Deck {
         String name; ArrayList<String> images=new ArrayList<>(); Deck(String n){name=n;}
@@ -1733,7 +1739,7 @@ public class MainActivity extends Activity {
             return d;
         }
     }
-    static class Session {String name,deck,notes;boolean untracked;int startPoints,endPoints,startStreak,endStreak,untrackedWins,untrackedLosses;ArrayList<Match> matches=new ArrayList<>();Session(String n,String d){name=n;deck=d;}JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("n",name);o.put("d",deck);o.put("u",untracked);o.put("sp",startPoints);o.put("ep",endPoints);o.put("ss",startStreak);o.put("es",endStreak);o.put("uw",untrackedWins);o.put("ul",untrackedLosses);if(notes!=null)o.put("notes",notes);JSONArray a=new JSONArray();for(Match m:matches)a.put(m.json());o.put("m",a);return o;}static Session from(JSONObject o)throws Exception{Session s=new Session(o.optString("n"),o.optString("d"));s.untracked=o.optBoolean("u");s.startPoints=o.optInt("sp");s.endPoints=o.optInt("ep");s.startStreak=o.optInt("ss");s.endStreak=o.optInt("es");s.untrackedWins=o.optInt("uw");s.untrackedLosses=o.optInt("ul");s.notes=o.optString("notes",null);JSONArray a=o.optJSONArray("m");if(a!=null)for(int i=0;i<a.length();i++)s.matches.add(Match.from(a.getJSONObject(i)));return s;}}
+    static class Session {String name,deck,notes;boolean untracked;int startPoints,endPoints,startStreak,endStreak,untrackedWins,untrackedLosses;long timestamp;ArrayList<Match> matches=new ArrayList<>();Session(String n,String d){name=n;deck=d;timestamp=System.currentTimeMillis();}JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("n",name);o.put("d",deck);o.put("u",untracked);o.put("sp",startPoints);o.put("ep",endPoints);o.put("ss",startStreak);o.put("es",endStreak);o.put("uw",untrackedWins);o.put("ul",untrackedLosses);o.put("ts",timestamp);if(notes!=null)o.put("notes",notes);JSONArray a=new JSONArray();for(Match m:matches)a.put(m.json());o.put("m",a);return o;}static Session from(JSONObject o)throws Exception{Session s=new Session(o.optString("n"),o.optString("d"));s.untracked=o.optBoolean("u");s.startPoints=o.optInt("sp");s.endPoints=o.optInt("ep");s.startStreak=o.optInt("ss");s.endStreak=o.optInt("es");s.untrackedWins=o.optInt("uw");s.untrackedLosses=o.optInt("ul");s.timestamp=o.optLong("ts",s.timestamp);s.notes=o.optString("notes",null);JSONArray a=o.optJSONArray("m");if(a!=null)for(int i=0;i<a.length();i++)s.matches.add(Match.from(a.getJSONObject(i)));return s;}}
     static class Season {
         String name;int baseline,initialStreak,points,streak,currentSession=0;ArrayList<Deck> decks=new ArrayList<>();ArrayList<Session> sessions=new ArrayList<>();Stack<State> undo=new Stack<>(),redo=new Stack<>();
         Season(String n){name=n;}
@@ -1745,6 +1751,20 @@ public class MainActivity extends Activity {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
         void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
-        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
+        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));if(migrateSessionNames())save();}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
+        // Migrazione: sessioni create con build precedenti alla traduzione italiana erano rimaste nominate
+        // "Session N" (inglese) invece di "Sessione di gioco N". Le rinomina automaticamente al primo
+        // caricamento dopo l'aggiornamento, cosi' l'utente non deve farlo a mano.
+        boolean migrateSessionNames(){
+            boolean changed=false;
+            java.util.regex.Pattern pat = java.util.regex.Pattern.compile("^Session (\\d+)$");
+            for(Season s: seasons){
+                for(Session se: s.sessions){
+                    java.util.regex.Matcher m = pat.matcher(se.name);
+                    if(m.matches()){ se.name = "Sessione di gioco "+m.group(1); changed=true; }
+                }
+            }
+            return changed;
+        }
     }
 }
