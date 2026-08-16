@@ -645,26 +645,68 @@ public class MainActivity extends Activity {
     void manageDeckScreenshots(Deck d){
         if (d==null) return;
         ArrayList<String> items = new ArrayList<>();
-        items.add("+ Aggiungi screenshot");
-        for (int i=0;i<d.images.size();i++){ items.add("Visualizza screenshot "+(i+1)); items.add("Rimuovi screenshot "+(i+1)); }
-        new AlertDialog.Builder(this).setTitle(d.name+" — Screenshot").setItems(items.toArray(new String[0]),(dlg,which)->{
+        items.add("+ Aggiungi immagine");
+        for (int i=0;i<d.images.size();i++){ items.add("Visualizza immagine "+(i+1)); items.add("Rimuovi immagine "+(i+1)); }
+        new AlertDialog.Builder(this).setTitle(d.name+" — Immagini").setItems(items.toArray(new String[0]),(dlg,which)->{
             if (which==0) { pickImageFor(d); return; }
             int idx=(which-1)/2, imgIdx=idx;
             boolean isView=(which-1)%2==0;
             if (imgIdx>=d.images.size()) return;
-            if (isView) openImageUri(d.images.get(imgIdx));
+            if (isView) showImageGallery(d, imgIdx);
             else { d.images.remove(imgIdx); store.save(); view.invalidate(); }
         }).show();
     }
 
-    void openImageUri(String uri){
-        try {
-            Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(Uri.parse(uri),"image/*");i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(i);
-        } catch (Exception e) {
-            Log.w(TAG, "Impossibile aprire lo screenshot", e);
-            Toast.makeText(this,"Impossibile aprire lo screenshot (file non più disponibile).",Toast.LENGTH_SHORT).show();
-        }
+    // Visualizzatore in stile galleria: a tutto schermo, con avanti/indietro tra le immagini del deck,
+    // invece di aprire ogni immagine singolarmente in un'app esterna.
+    void showImageGallery(Deck d, int startIndex){
+        if (d.images.isEmpty()) return;
+        final int[] idx = {Math.max(0, Math.min(startIndex, d.images.size()-1))};
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.BLACK);
+
+        ImageView iv = new ImageView(this);
+        iv.setAdjustViewBounds(true);
+        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        root.addView(iv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+
+        TextView counter = new TextView(this);
+        counter.setTextColor(Color.WHITE); counter.setGravity(Gravity.CENTER);
+        counter.setPadding(0,dp(12),0,dp(12));
+        root.addView(counter);
+
+        LinearLayout navRow = new LinearLayout(this); navRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button prevBtn = new Button(this); prevBtn.setText("< Prec"); styleSecondaryButton(prevBtn);
+        Button closeBtn = new Button(this); closeBtn.setText("Chiudi"); styleSecondaryButton(closeBtn);
+        Button nextBtn = new Button(this); nextBtn.setText("Succ >"); styleSecondaryButton(nextBtn);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        navRow.addView(prevBtn, btnLp); navRow.addView(closeBtn, btnLp); navRow.addView(nextBtn, btnLp);
+        LinearLayout.LayoutParams navLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        navLp.setMargins(dp(8),0,dp(8),dp(8));
+        root.addView(navRow, navLp);
+
+        Runnable[] load = new Runnable[1];
+        load[0] = () -> {
+            try {
+                java.io.InputStream is = getContentResolver().openInputStream(Uri.parse(d.images.get(idx[0])));
+                iv.setImageBitmap(BitmapFactory.decodeStream(is));
+            } catch(Exception e) {
+                iv.setImageBitmap(null);
+                Toast.makeText(this,"Impossibile caricare l'immagine (file non più disponibile).",Toast.LENGTH_SHORT).show();
+            }
+            counter.setText((idx[0]+1)+" / "+d.images.size());
+            prevBtn.setEnabled(idx[0]>0);
+            nextBtn.setEnabled(idx[0]<d.images.size()-1);
+        };
+        prevBtn.setOnClickListener(v -> { if(idx[0]>0){ idx[0]--; load[0].run(); } });
+        nextBtn.setOnClickListener(v -> { if(idx[0]<d.images.size()-1){ idx[0]++; load[0].run(); } });
+        closeBtn.setOnClickListener(v -> dialog.dismiss());
+        load[0].run();
+
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT);
+        dialog.show();
     }
 
     // Colori/stile condivisi per i widget nativi dei dialog (Season/Deck/Sessione), coerenti con la palette
@@ -782,7 +824,7 @@ public class MainActivity extends Activity {
 
         // Colore del win rate: verde se >50%, rosso se <50%, colore neutro (muted) se == 50% o 0 partite.
         int wrColor(float wr,int total){ return total==0?muted:(wr>50?green:(wr<50?red:muted)); }
-        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "Nessun deck" : deckName; }
+        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "Deck sconosciuto" : deckName; }
 
         float rowWidth(String[] parts,float size){ p.setTextSize(size); float w=0; for(String s:parts) w+=p.measureText(s); return w; }
         // Riga di testo composta da segmenti con colori diversi (es. "7W" verde + "3L" rosso + "70%" verde), allineata a sinistra.
@@ -838,17 +880,20 @@ public class MainActivity extends Activity {
             for(int i=0;i<store.seasons.size();i++){
                 Season s=store.seasons.get(i);
                 boolean isCurrent = i==store.current;
-                box(c,18,y,w-18,y+94, isCurrent?Color.rgb(20,44,80):card);
+                box(c,18,y,w-18,y+110, isCurrent?Color.rgb(20,44,80):card);
                 if(isCurrent) txt(c,"ATTUALE",w-34,y+22,10,blue,Paint.Align.RIGHT);
-                txt(c,s.name,34,y+30,18,white,Paint.Align.LEFT);
+                txt(c,s.name,34,y+28,18,white,Paint.Align.LEFT);
                 int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
                 float wr=(W+L)==0?0:100f*W/(W+L);
-                txtRow(c,34,y+58,12,
-                    new String[]{"PUNTI "+s.points+"   VC "+s.streak+"   ", W+"W ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
-                    new int[]{muted, green, red, wrColor(wr,W+L)});
-                txt(c,s.sessions.size()+" sessions",34,y+80,11,muted,Paint.Align.LEFT);
-                seasonHits.add(new Hit(y,y+94,i));
-                y+=104;
+                // Su due righe con un po' piu' di interlinea: "Vittorie consecutive" per esteso non ci
+                // starebbe su un'unica riga assieme al resto.
+                txt(c,"Punti "+s.points+"   Vittorie consecutive "+s.streak,34,y+52,12,muted,Paint.Align.LEFT);
+                txtRow(c,34,y+74,12,
+                    new String[]{W+"W   ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
+                    new int[]{green, red, wrColor(wr,W+L)});
+                txt(c,s.sessions.size()+" sessions",34,y+96,11,muted,Paint.Align.LEFT);
+                seasonHits.add(new Hit(y,y+110,i));
+                y+=120;
             }
             // Link discreto, ora parte del contenuto scrollabile (prima della prossima riga fissa): azione
             // distruttiva, quindi richiede sempre conferma esplicita (vedi resetAllData()).
@@ -877,7 +922,7 @@ public class MainActivity extends Activity {
             box(c,18,58,w/2-8,132,card);
             txt(c,"PUNTI",w/4,78,10,muted,Paint.Align.CENTER);
             txt(c,""+s.points,w/4,112,26,white,Paint.Align.CENTER);
-            txt(c,"VC "+s.streak,w/4,127,11,muted,Paint.Align.CENTER);
+            txt(c,"Vittorie consecutive "+s.streak,w/4,127,9,muted,Paint.Align.CENTER);
             // Partite totali: numero moderato, non piu' "urlato" quanto i punti — resta un dettaglio secondario.
             box(c,w/2+8,58,w-18,132,card);
             txt(c,"PARTITE TOTALI",w*3/4,80,10,muted,Paint.Align.CENTER);
@@ -974,7 +1019,6 @@ public class MainActivity extends Activity {
                 txtRow(c,34,y+64,12,
                     new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "MAX VC "+best},
                     new int[]{green, red, wrColor(wr,W+L), muted});
-                txt(c, "Screenshot ("+d.images.size()+")", w-34, y+43, 12, d.images.isEmpty()?muted:blue, Paint.Align.RIGHT);
                 y+=90;
             }
             // Sessioni senza un deck assegnato (create "al volo" con Salta): le statistiche restano comunque visibili
@@ -982,7 +1026,7 @@ public class MainActivity extends Activity {
             int[] nd = noDeckWL(s);
             if (nd[0]+nd[1] > 0) {
                 box(c,18,y,w-18,y+78,card);
-                txt(c,"Nessun deck",34,y+26,17,muted,Paint.Align.LEFT);
+                txt(c,"Deck sconosciuto",34,y+26,17,muted,Paint.Align.LEFT);
                 float ndwr=100f*nd[0]/(nd[0]+nd[1]);
                 int ndbest=longestStreakForDeck(s,"Unknown");
                 txt(c,(nd[0]+nd[1])+" partite",34,y+46,12,muted,Paint.Align.LEFT);
@@ -1058,7 +1102,7 @@ public class MainActivity extends Activity {
                 float ndwr=100f*nd[0]/(nd[0]+nd[1]);
                 int ndbest=longestStreakForDeck(s,"Unknown");
                 txtRow(c,18,yy,13,
-                    new String[]{"Nessun deck   ", (nd[0]+nd[1])+" partite   ", nd[0]+"W  ", nd[1]+"L  ", String.format(Locale.US,"%.1f%%",ndwr)+"  ", "MAX VC "+ndbest},
+                    new String[]{"Deck sconosciuto   ", (nd[0]+nd[1])+" partite   ", nd[0]+"W  ", nd[1]+"L  ", String.format(Locale.US,"%.1f%%",ndwr)+"  ", "MAX VC "+ndbest},
                     new int[]{muted, muted, green, red, wrColor(ndwr,nd[0]+nd[1]), muted});
                 yy+=20;
             }
@@ -1075,11 +1119,18 @@ public class MainActivity extends Activity {
             boolean canConvert = x.matches.isEmpty() && !x.untracked; // solo se la sessione non ha ancora partite
             txt(c,"←",24,38,26,white,Paint.Align.LEFT);
             txt(c,x.name,60,34,16,white,Paint.Align.LEFT);
-            if(isLast && !x.untracked){ box(c,w-58,16,w-18,52,blue); txt(c,"＋",w-38,40,20,white,Paint.Align.CENTER); }
+            if(isLast && !x.untracked){
+                // Pulsante testuale "Nuova sessione" (prima era solo un'icona "+" poco chiara), coerente con
+                // l'etichetta usata nella schermata della Season.
+                p.setTextSize(13); float tw=p.measureText("Nuova sessione");
+                float btnW=tw+28;
+                box(c,w-18-btnW,16,w-18,52,blue);
+                txt(c,"Nuova sessione",w-18-btnW/2,39,13,white,Paint.Align.CENTER);
+            }
 
             // Header fisso sopra, barra prev/next+elimina fissa sotto (bottomNav): solo il contenuto in mezzo
-            // scorre. Il grafico ora usa sempre la sua altezza naturale (non piu' "schiacciato" per stare nello
-            // spazio visibile): se non ci sta, semplicemente si scorre per vederlo tutto.
+            // scorre. Il grafico ha un'altezza fissa moderata (non 610: "schiacciato" dallo scroll era peggio,
+            // qui torna alle dimensioni compatte di prima, che andavano bene).
             bodyTop=58; bodyBottom=h-BOTTOM_UI_HEIGHT;
             resetScrollIfNeeded("play:"+store.current+":"+idx);
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
@@ -1090,34 +1141,39 @@ public class MainActivity extends Activity {
                 txt(c,"Punti "+x.startPoints+" → "+x.endPoints,32,104,15,white,Paint.Align.LEFT);
                 txtRow(c,32,128,12,new String[]{x.untrackedWins+"W  ", ""+x.untrackedLosses+"L"},new int[]{green,red});
                 txt(c,"✎",w-32,80,18,blue,Paint.Align.CENTER);
-                netGainRow(c,146,220,w,x.endPoints-x.startPoints);
+                netGainRow(c,18,146,220,w-18,x.endPoints-x.startPoints);
                 txt(c,"Crea una nuova sessione per continuare a giocare.",18,244,13,muted,Paint.Align.LEFT);
-                drawChart(c,18,260,w-18,260+430,x.matches,s);
-                lastContentBottom = 260+430+20;
+                drawChart(c,18,260,w-18,260+260,x.matches,s);
+                lastContentBottom = 260+260+20;
             } else {
                 box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
-                txt(c, "Unknown".equals(x.deck) ? "Nessun deck — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
+                txt(c, "Unknown".equals(x.deck) ? "Deck sconosciuto — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
                 Deck linkedDeck = findDeck(s, x.deck);
                 int shotCount = linkedDeck!=null ? linkedDeck.images.size() : 0;
-                txt(c, "Screenshot ("+shotCount+")", w-40, 94, 11, shotCount>0?blue:muted, Paint.Align.CENTER);
+                txt(c, "Immagini ("+shotCount+")", w-18, 94, 11, shotCount>0?blue:muted, Paint.Align.RIGHT);
                 int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
-                netGainRow(c,124,198,w,gain);
+                // Punti attuali a tutta larghezza (dato piu' importante), poi Vittorie consecutive e
+                // Guadagno netto fianco a fianco (stessa dimensione di card).
+                box(c,18,124,w-18,198,card);
+                txt(c,"PUNTI ATTUALI",w/2,146,10,muted,Paint.Align.CENTER);
+                txt(c,""+s.points,w/2,182,30,white,Paint.Align.CENTER);
+                box(c,18,204,w/2-8,278,card);
+                txt(c,"VITTORIE CONSECUTIVE",w/4,226,9,muted,Paint.Align.CENTER);
+                txt(c,""+s.streak,w/4,262,28,white,Paint.Align.CENTER);
+                netGainRow(c,w/2+8,204,278,w-18,gain);
 
                 if(!isLast){
-                    box(c,18,204,w-18,250,card); txt(c,"Sessione conclusa",w/2,232,13,muted,Paint.Align.CENTER);
-                    drawChart(c,18,264,w-18,264+610,x.matches,s);
-                    lastContentBottom = 264+610+20;
+                    box(c,18,286,w-18,332,card); txt(c,"Sessione conclusa",w/2,314,13,muted,Paint.Align.CENTER);
+                    drawChart(c,18,346,w-18,346+260,x.matches,s);
+                    lastContentBottom = 346+260+20;
                 } else {
-                    box(c,18,204,w/2-8,278,card); box(c,w/2+8,204,w-18,278,card);
-                    txt(c,"PUNTI ATTUALI",w/4,225,10,muted,Paint.Align.CENTER); txt(c,""+s.points,w/4,261,28,white,Paint.Align.CENTER);
-                    txt(c,"VITTORIE CONSECUTIVE",w*3/4,225,9,muted,Paint.Align.CENTER); txt(c,""+s.streak,w*3/4,261,28,white,Paint.Align.CENTER);
-                    box(c,18,290,w/2-8,366,green); box(c,w/2+8,290,w-18,366,red);
-                    txt(c,"W",w/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,352,14,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L",w*3/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,352,14,Color.WHITE,Paint.Align.CENTER);
-                    box(c,18,378,w/2-8,424,card); box(c,w/2+8,378,w-18,424,card);
-                    txt(c,"↶  ANNULLA",w/4,407,14,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,407,14,white,Paint.Align.CENTER);
-                    drawChart(c,18,436,w-18,436+610,x.matches,s);
-                    lastContentBottom = 436+610+20;
+                    box(c,18,286,w/2-8,362,green); box(c,w/2+8,286,w-18,362,red);
+                    txt(c,"W",w/4,322,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,348,14,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L",w*3/4,322,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,348,14,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,374,w/2-8,420,card); box(c,w/2+8,374,w-18,420,card);
+                    txt(c,"↶  ANNULLA",w/4,403,14,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,403,14,white,Paint.Align.CENTER);
+                    drawChart(c,18,432,w-18,432+260,x.matches,s);
+                    lastContentBottom = 432+260+20;
                 }
             }
             c.restore();
@@ -1128,11 +1184,14 @@ public class MainActivity extends Activity {
         // Riga con il guadagno netto della sessione (ultimo punteggio - punteggio di partenza di QUESTA sessione).
         // Ora centrata verticalmente (etichetta sopra, numero grande sotto), come le altre card "punti attuali"
         // e "vittorie consecutive" — non piu' una riga orizzontale con etichetta piccola a sinistra.
-        void netGainRow(Canvas c, float top, float bottom, float w, int gain){
-            box(c,18,top,w-18,bottom,card);
-            txt(c,"GUADAGNO NETTO",w/2,top+22,11,muted,Paint.Align.CENTER);
+        // 'left'/'right' espliciti invece di assumere sempre tutta larghezza: serve sia a tutta larghezza
+        // (sessione non tracciata) sia in una singola colonna (fianco a fianco con Vittorie consecutive).
+        void netGainRow(Canvas c, float left, float top, float bottom, float right, int gain){
+            box(c,left,top,right,bottom,card);
+            float cx=(left+right)/2;
+            txt(c,"GUADAGNO NETTO",cx,top+22,10,muted,Paint.Align.CENTER);
             int col = gain>0?green:(gain<0?red:white);
-            txt(c, (gain>0?"+":"")+gain, w/2, top+58, 28, col, Paint.Align.CENTER);
+            txt(c, (gain>0?"+":"")+gain, cx, top+58, 26, col, Paint.Align.CENTER);
         }
 
         // Pulsanti Precedente/Successivo per scorrere le sessioni della Season senza dover tornare alla lista.
@@ -1255,7 +1314,7 @@ public class MainActivity extends Activity {
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
                     if(x<60){ goBack(); return true; }
-                    if(isLast && !sess.untracked && x>w-70){ showNewSession(); return true; }
+                    if(isLast && !sess.untracked && x>w-190){ showNewSession(); return true; } // zona larga: il pulsante "Nuova sessione" e' dimensionato sul testo
                     return true;
                 }
                 // bottomNav (prev/next + segna non tracciata/elimina) e' fisso, non scrolla: usa 'y' grezza.
@@ -1278,8 +1337,8 @@ public class MainActivity extends Activity {
                     if(x>=w-100){ manageDeckScreenshots(findDeck(s, sess.deck)); return true; } // zona screenshot: sempre attiva
                     chooseDeck(); return true; // zona nome deck: modificabile anche su sessioni passate (skip -> assegnazione retroattiva)
                 }
-                if(isLast && contentY>=290 && contentY<=366){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && contentY>=378 && contentY<=424){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && contentY>=286 && contentY<=362){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=374 && contentY<=420){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
