@@ -323,29 +323,26 @@ public class MainActivity extends Activity {
     // (prima erano pulsanti sempre visibili in fondo, ora appaiono solo quando applicabili). Ordine: azione
     // piu' frequente (Nuova sessione) in cima, poi Modifica deck, poi il caso raro (Segna come non tracciata),
     // e per ultima — isolata e in rosso — quella distruttiva (Elimina sessione).
-    void sessionOptionsMenu(Session sess, boolean isLast, boolean canConvert){
+    void sessionOptionsMenu(Session sess, boolean isLast, boolean canConvert, float anchorX, float anchorY){
         boolean showNewSessionItem = isLast && !sess.untracked;
         boolean showDeckEditItem = !sess.untracked;
         boolean showDeleteItem = isLast;
 
-        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(4),dp(8),dp(4),dp(8));
-        AlertDialog dialog = new AlertDialog.Builder(this).setView(box).create();
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Integer> colors = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        if (showNewSessionItem) { labels.add("Nuova sessione"); colors.add(Color.WHITE); actions.add(this::showNewSession); }
+        if (showDeckEditItem) { labels.add("Modifica deck"); colors.add(Color.WHITE); actions.add(() -> deckOptionsMenu(sess)); }
+        if (canConvert) { labels.add("Segna come non tracciata"); colors.add(Color.WHITE); actions.add(this::convertToUntracked); }
+        if (showDeleteItem) { labels.add("Elimina sessione"); colors.add(red()); actions.add(this::deleteCurrentSession); }
 
-        if (showNewSessionItem) box.addView(sessionMenuRow("Nuova sessione", Color.WHITE, dialog, this::showNewSession));
-        if (showDeckEditItem) box.addView(sessionMenuRow("Modifica deck", Color.WHITE, dialog, () -> deckOptionsMenu(sess)));
-        if (canConvert) box.addView(sessionMenuRow("Segna come non tracciata", Color.WHITE, dialog, this::convertToUntracked));
-        if (showDeleteItem) box.addView(sessionMenuRow("Elimina sessione", red(), dialog, this::deleteCurrentSession));
-
-        dialog.show();
+        view.showAnchoredMenu(anchorX, anchorY, labels.toArray(new String[0]), toIntArray(colors), actions.toArray(new Runnable[0]));
     }
 
-    TextView sessionMenuRow(String text, int color, AlertDialog dialog, Runnable action){
-        TextView t = new TextView(this);
-        t.setText(text); t.setTextColor(color); t.setTextSize(15);
-        t.setPadding(dp(20),dp(14),dp(20),dp(14));
-        t.setOnClickListener(v -> { dialog.dismiss(); action.run(); });
-        return t;
+    int[] toIntArray(ArrayList<Integer> list){
+        int[] a = new int[list.size()];
+        for (int i=0;i<a.length;i++) a[i]=list.get(i);
+        return a;
     }
 
     void deckOptionsMenu(Session sess){
@@ -993,6 +990,31 @@ public class MainActivity extends Activity {
             c.drawCircle(cx,cy,r,p);
             c.drawCircle(cx,cy+gap,r,p);
         }
+        // Mostra un menu "a tendina" ancorato esattamente sotto un punto del canvas (logicalX/logicalY sono
+        // nello stesso sistema di coordinate usato per disegnare, gia' al netto dello scroll se applicabile),
+        // invece di un AlertDialog centrato al centro dello schermo. Converte le coordinate logiche in pixel
+        // reali di schermo (via density + padding + posizione della view) per usare PopupWindow.showAtLocation.
+        void showAnchoredMenu(float logicalX, float logicalY, String[] labels, int[] colors, Runnable[] actions){
+            LinearLayout box = new LinearLayout(getContext()); box.setOrientation(LinearLayout.VERTICAL);
+            box.setBackground(pill(Color.rgb(14,24,38), Color.rgb(40,55,75)));
+            box.setPadding(dp(4),dp(4),dp(4),dp(4));
+            final PopupWindow[] popupRef = new PopupWindow[1];
+            for(int i=0;i<labels.length;i++){
+                final int idx=i;
+                TextView t = new TextView(getContext());
+                t.setText(labels[i]); t.setTextColor(colors[i]); t.setTextSize(15);
+                t.setPadding(dp(20),dp(14),dp(20),dp(14));
+                t.setOnClickListener(v -> { popupRef[0].dismiss(); actions[idx].run(); });
+                box.addView(t);
+            }
+            PopupWindow popup = new PopupWindow(box, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, true);
+            popupRef[0]=popup;
+            popup.setElevation(dp(8));
+            int[] loc = new int[2]; getLocationOnScreen(loc);
+            int screenX = loc[0] + getPaddingLeft() + (int)(logicalX*density);
+            int screenY = loc[1] + getPaddingTop() + (int)(logicalY*density);
+            popup.showAtLocation(this, Gravity.NO_GRAVITY, screenX, screenY);
+        }
         float centeredBaseline(float centerY, float size){
             p.setTextSize(size);
             Paint.FontMetrics fm = p.getFontMetrics();
@@ -1355,7 +1377,7 @@ public class MainActivity extends Activity {
                 txt(c,"SESSIONE NON TRACCIATA",32,80,11,muted,Paint.Align.LEFT);
                 txt(c,"Punti "+x.startPoints+" → "+x.endPoints,32,104,15,white,Paint.Align.LEFT);
                 txtRow(c,32,128,12,new String[]{x.untrackedWins+"W  ", ""+x.untrackedLosses+"L"},new int[]{green,red});
-                drawEditIcon(c,w-32,80,18,blue);
+                drawKebabIcon(c,w-32,80,blue);
                 netGainRow(c,18,146,220,w-18,x.endPoints-x.startPoints);
                 txt(c,"Crea una nuova sessione per continuare a giocare.",18,244,13,muted,Paint.Align.LEFT);
                 drawChart(c,18,260,w-18,260+260,x.matches,s);
@@ -1550,7 +1572,7 @@ public class MainActivity extends Activity {
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
                     if(x<60){ goBack(); return true; }
-                    if(showKebab && x>w-56){ sessionOptionsMenu(sess, isLast, canConvert); return true; } // icona "⋮"
+                    if(showKebab && x>w-56){ sessionOptionsMenu(sess, isLast, canConvert, w-144, 52); return true; } // icona "⋮": menu ancorato subito sotto l'icona, non centrato
                     return true;
                 }
                 // bottomNav (solo prev/next ora) e' fisso, non scrolla: usa 'y' grezza.
@@ -1561,7 +1583,13 @@ public class MainActivity extends Activity {
                 }
                 // Da qui in giu' siamo nel contenuto scrollabile: usa 'contentY'.
                 if(sess.untracked){
-                    if(contentY>=58 && contentY<=140 && x>=w-56){ editUntrackedSession(); return true; } // icona ✎: modificabile su qualunque sessione non tracciata
+                    if(contentY>=58 && contentY<=140 && x>=w-56){
+                        // Icona "⋮": stesso menu ancorato usato altrove, qui con la sola voce "Modifica sessione"
+                        // (prima era una matita diretta). 80-scrollY riporta l'icona alla sua posizione reale
+                        // sullo schermo in questo momento, tenendo conto dello scroll corrente.
+                        showAnchoredMenu(w-152, 80-scrollY+16, new String[]{"Modifica sessione"}, new int[]{Color.WHITE}, new Runnable[]{MainActivity.this::editUntrackedSession});
+                        return true;
+                    }
                     return true;
                 }
                 if(contentY>=58 && contentY<=118){
