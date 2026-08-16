@@ -2,20 +2,26 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Carta TCG: corpo blu pieno, bordo bianco (stile piu' colorato/curato rispetto alla vecchia carta bianca piatta) -->
-    <path android:fillColor="#3778FF" android:strokeColor="#FFFFFF" android:strokeWidth="3"
-        android:pathData="M40,20 L68,20 A10,10 0 0 1 78,30 L78,78 A10,10 0 0 1 68,88 L40,88 A10,10 0 0 1 30,78 L30,30 A10,10 0 0 1 40,20 Z"/>
-    <!-- Riquadro "foto" chiaro in alto -->
-    <path android:fillColor="#DBE6FF"
-        android:pathData="M42,27 L66,27 A5,5 0 0 1 71,32 L71,46 A5,5 0 0 1 66,51 L42,51 A5,5 0 0 1 37,46 L37,32 A5,5 0 0 1 42,27 Z"/>
-    <!-- Linea di trend ascendente (stesso linguaggio visivo dei grafici in-app), bianca per contrasto sul blu -->
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="4.5"
-        android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M38,78 L45,68 L53,74 L61,58 L69,64"/>
-    <!-- Pallino sul punto piu' recente, come nei grafici dell'app -->
-    <path android:fillColor="#FFFFFF" android:pathData="M69,64 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"/>
-    <!-- Scoppio d'accento (richiamo astratto al PvP/scontro, NON l'icona ufficiale del gioco): disegnato per
-         ultimo, quindi e' il layer piu' in alto, sopra carta/riquadro/grafico dove si sovrappone. -->
-    <path android:fillColor="#FF8A3D"
-        android:pathData="M12,50 L22,44 L18,34 L30,38 L34,26 L40,36 L52,32 L46,44 L56,50 L44,52 L48,64 L36,58 L32,70 L28,58 L16,62 L20,50 Z"/>
+    <!-- Tutto il contenuto ridotto (0.85x) e spostato leggermente in basso, per non riempire troppo l'icona -->
+    <group android:scaleX="0.85" android:scaleY="0.85" android:pivotX="54" android:pivotY="54" android:translateY="4">
+        <!-- Ombra della carta: stessa forma, leggermente spostata e piu' grande, semitrasparente (i vector
+             drawable non supportano blur/drop-shadow reali, quindi la si approssima cosi'). -->
+        <path android:fillColor="#33000000"
+            android:pathData="M41,24 L69,24 A11,11 0 0 1 80,35 L80,83 A11,11 0 0 1 69,94 L41,94 A11,11 0 0 1 30,83 L30,35 A11,11 0 0 1 41,24 Z"/>
+        <!-- Carta TCG: corpo blu pieno, bordo bianco -->
+        <path android:fillColor="#3778FF" android:strokeColor="#FFFFFF" android:strokeWidth="3"
+            android:pathData="M40,20 L68,20 A10,10 0 0 1 78,30 L78,78 A10,10 0 0 1 68,88 L40,88 A10,10 0 0 1 30,78 L30,30 A10,10 0 0 1 40,20 Z"/>
+        <!-- Riquadro "foto" chiaro in alto -->
+        <path android:fillColor="#DBE6FF"
+            android:pathData="M42,27 L66,27 A5,5 0 0 1 71,32 L71,46 A5,5 0 0 1 66,51 L42,51 A5,5 0 0 1 37,46 L37,32 A5,5 0 0 1 42,27 Z"/>
+        <!-- Linea di trend ascendente, bianca per contrasto sul blu -->
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="4.5"
+            android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M38,78 L45,68 L53,74 L61,58 L69,64"/>
+        <!-- Pallino sul punto piu' recente -->
+        <path android:fillColor="#FFFFFF" android:pathData="M69,64 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"/>
+        <!-- Scoppio d'accento (astratto, non l'icona ufficiale del gioco): layer piu' in alto di tutti. -->
+        <path android:fillColor="#FF8A3D"
+            android:pathData="M12,50 L22,44 L18,34 L30,38 L34,26 L40,36 L52,32 L46,44 L56,50 L44,52 L48,64 L36,58 L32,70 L28,58 L16,62 L20,50 Z"/>
+    </group>
 </vector>
