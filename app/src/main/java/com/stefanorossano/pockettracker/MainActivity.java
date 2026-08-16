@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         store = new Store(this);
         if (store.seasons.isEmpty()) {
-            showNewSeason(true);
+            wizardStep1(true, null);
         } else {
             view = new TrackerView(this);
             setContentView(view);
@@ -92,44 +92,87 @@ public class MainActivity extends Activity {
         });
     }
 
-    void showNewSeason(boolean first) {
+    // ===== Wizard di creazione Season, a step: Nome -> Hai già giocato prima del tracker? -> (Sì: punteggio
+    // attuale -> sessione non tracciata) oppure (No: scelta deck -> Session 1). Ogni step e' un dialog a se',
+    // mai impilato sopra un altro: si passa da uno step al successivo chiudendo quello corrente, cosi'
+    // "Back" puo' sempre tornare allo step precedente senza restare mai "intrappolati" in un dialog.
+
+    void wizardStep1(boolean first, String prefillName){
         LinearLayout box = formBox();
-        EditText name = field("Season " + (store.seasons.size()+1));
-        EditText points = numberField("Starting points", true);
-        points.setText(String.valueOf(DEFAULT_BASELINE)); // Default: una Season parte normalmente da 810 punti
-        EditText streak = numberField("Initial win streak", true);
-        streak.setText("0"); // Default: di norma lo streak iniziale è 0
-        box.addView(label("Season name")); box.addView(name);
-        box.addView(label("Starting points")); box.addView(points);
-        box.addView(label("Initial win streak")); box.addView(streak);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(first ? "Create your first Season" : "New Season")
+        String defaultName = first ? "Season 1" : ("Season " + (store.seasons.size()+1));
+        box.addView(label("Season name"));
+        EditText name = field(defaultName);
+        if (prefillName != null) name.setText(prefillName);
+        box.addView(name);
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? "Create your first Season" : "New Season")
+            .setView(box).setCancelable(!first)
+            .setPositiveButton("Next", (d,w) -> {
+                String n = name.getText().toString().trim();
+                wizardStep2(first, n.isEmpty() ? defaultName : n);
+            });
+        if (!first) b.setNegativeButton("Cancel", null); // solo se NON e' la primissima Season: qui c'e' gia' una lista a cui tornare
+        b.show();
+    }
+
+    void wizardStep2(boolean first, String name){
+        new AlertDialog.Builder(this).setTitle(name)
+            .setMessage("Have you already been playing this Season before using the tracker?")
+            .setCancelable(false)
+            .setNeutralButton("Back", (d,w) -> wizardStep1(first, name))
+            .setPositiveButton("Yes", (d,w) -> wizardStep3Yes(first, name))
+            .setNegativeButton("No", (d,w) -> wizardStep3No(first, name))
+            .show();
+    }
+
+    // "Sì": chiede solo lo stato ATTUALE (il baseline resta lo standard 810/streak 0) e registra la
+    // differenza come un'unica sessione non tracciata, esattamente come una correzione manuale di punteggio.
+    void wizardStep3Yes(boolean first, String name){
+        LinearLayout box = formBox();
+        EditText points = numberField("Current points", true);
+        EditText streak = numberField("Current win streak", true);
+        box.addView(label("Current points")); box.addView(points);
+        box.addView(label("Current win streak")); box.addView(streak);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(name)
             .setView(box).setCancelable(false)
-            .setPositiveButton("Create", null)
+            .setPositiveButton("Create Season", null)
+            .setNeutralButton("Back", (d,w) -> wizardStep2(first, name))
             .create();
         showNonDismissing(dialog, () -> {
             try {
-                int p = Integer.parseInt(points.getText().toString());
-                int st = Integer.parseInt(streak.getText().toString());
-                if (st < 0) return false;
-                String n = name.getText().toString().trim();
-                if (n.isEmpty()) n = "Season " + (store.seasons.size()+1);
-                Season s = new Season(n);
-                s.points = p; s.baseline = p;
-                s.streak = st; s.initialStreak = st;
-                s.sessions.add(new Session("Session 1", "Unknown"));
+                int np = Integer.parseInt(points.getText().toString());
+                int ns = Integer.parseInt(streak.getText().toString());
+                if (ns < 0) return false;
+                Season s = new Season(name);
+                s.points = DEFAULT_BASELINE; s.baseline = DEFAULT_BASELINE;
+                s.streak = 0; s.initialStreak = 0;
+                Session sess = new Session("Session 1", "Unknown");
+                sess.untracked = true;
+                sess.startPoints = s.points; sess.endPoints = np;
+                sess.startStreak = s.streak; sess.endStreak = ns;
+                sess.matches.add(Match.untracked(s.points, np));
+                s.sessions.add(sess); s.currentSession = 0;
+                s.points = np; s.streak = ns;
                 store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
                 if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
-                showDeckForFirstSession(s);
+                screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Enter valid starting points and win streak (whole numbers, streak >= 0).");
+        }, "Enter valid current points and win streak (streak >= 0).");
         dialog.show();
     }
 
-    void showDeckForFirstSession(Season s) {
-        // First session requires a real deck; the initial empty session is replaced.
+    // "No": niente da chiedere sul punteggio (parte dallo standard 810/streak 0), si passa dritti alla
+    // scelta del deck per la prima sessione (con "Skip" per andare veloci, come al solito).
+    void wizardStep3No(boolean first, String name){
+        Season s = new Season(name);
+        s.points = DEFAULT_BASELINE; s.baseline = DEFAULT_BASELINE;
+        s.streak = 0; s.initialStreak = 0;
+        s.sessions.add(new Session("Session 1", "Unknown")); // placeholder: showNewDeckAndSession(true) la sostituisce
+        store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
+        if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
         showNewDeckAndSession(true);
     }
+
 
     boolean deckNameTaken(Season s, String n) {
         if ("Unknown".equalsIgnoreCase(n)) return true;
@@ -140,38 +183,79 @@ public class MainActivity extends Activity {
     void showNewDeckAndSession(boolean first) {
         final Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
-        final ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, deckNames(s));
-        Spinner spinner = new Spinner(this);
-        spinner.setAdapter(adapter);
-        box.addView(label("Deck (or tap \"Skip\" to go fast)")); box.addView(spinner);
-        Button newDeck = new Button(this); newDeck.setText("+ New Deck"); styleSecondaryButton(newDeck);
-        box.addView(newDeck);
-        newDeck.setOnClickListener(v -> {
-            EditText e = field("Deck name");
-            AlertDialog nd = new AlertDialog.Builder(this).setTitle("New Deck").setView(e)
-                .setPositiveButton("Create", null).setNegativeButton("Cancel", null).create();
-            showNonDismissing(nd, () -> {
-                String n = e.getText().toString().trim();
-                if (n.isEmpty() || deckNameTaken(s, n)) return false;
-                s.decks.add(new Deck(n)); store.save();
-                // Aggiorniamo lo spinner DI QUESTO STESSO dialog al volo, invece di aprirne uno nuovo sopra:
-                // impilare un secondo dialog qui era il bug che lasciava un vecchio dialog (con lista deck non
-                // aggiornata) ancora attivo sotto, portando a salvare "Unknown" anche dopo aver scelto un deck.
-                adapter.clear(); adapter.addAll(deckNames(s)); adapter.notifyDataSetChanged();
-                spinner.setSelection(adapter.getPosition(n));
-                return true;
-            }, "Invalid or already existing deck name.");
-            nd.show();
+        box.addView(label("Deck (tap to select, or \"Skip\" to go fast)"));
+
+        // Lista di righe selezionabili al posto dello Spinner nativo: lo Spinner, senza uno stile esplicito
+        // sul tema scuro dell'app, risultava praticamente invisibile (solo una freccina fluttuante) e con
+        // un'area di tocco poco chiara. Una riga per deck e' molto piu' affidabile su mobile.
+        LinearLayout deckList = new LinearLayout(this); deckList.setOrientation(LinearLayout.VERTICAL);
+        box.addView(deckList);
+        final String[] selected = {s.decks.isEmpty() ? null : s.decks.get(0).name};
+        final Runnable[] refreshRef = new Runnable[1];
+        Runnable refresh = () -> {
+            deckList.removeAllViews();
+            for (Deck d : s.decks) {
+                TextView row = new TextView(this);
+                row.setText(d.name);
+                row.setTextColor(Color.WHITE);
+                row.setPadding(dp(14),dp(10),dp(14),dp(10));
+                boolean isSel = d.name.equals(selected[0]);
+                row.setBackground(pill(isSel?Color.rgb(28,48,78):FIELD_BG, isSel?blueColor():FIELD_BORDER));
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                lp.topMargin = dp(6);
+                row.setLayoutParams(lp);
+                row.setOnClickListener(v -> { selected[0]=d.name; refreshRef[0].run(); });
+                deckList.addView(row);
+            }
+        };
+        refreshRef[0] = refresh;
+        refresh.run();
+
+        // Sezione "nuovo deck" inline: nascosta finche' non richiesta, MAI un dialog separato sopra questo
+        // stesso dialog (impilare dialog era la causa sia del bug "deck non selezionabile" sia del brutto
+        // effetto visivo con il popup precedente che traspariva dietro).
+        LinearLayout newDeckSection = new LinearLayout(this); newDeckSection.setOrientation(LinearLayout.VERTICAL);
+        newDeckSection.setVisibility(View.GONE);
+        EditText newDeckName = field("Deck name");
+        TextView newDeckError = new TextView(this); newDeckError.setTextColor(red()); newDeckError.setTextSize(12); newDeckError.setVisibility(View.GONE); newDeckError.setPadding(0,dp(4),0,0);
+        Button createDeckBtn = new Button(this); createDeckBtn.setText("Create"); styleSecondaryButton(createDeckBtn);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = dp(8); createDeckBtn.setLayoutParams(btnLp);
+        newDeckSection.addView(newDeckName);
+        newDeckSection.addView(newDeckError);
+        newDeckSection.addView(createDeckBtn);
+        box.addView(newDeckSection);
+
+        Button newDeckBtn = new Button(this); newDeckBtn.setText("New Deck"); styleSecondaryButton(newDeckBtn);
+        LinearLayout.LayoutParams newDeckBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        newDeckBtnLp.topMargin = dp(10); newDeckBtn.setLayoutParams(newDeckBtnLp);
+        box.addView(newDeckBtn);
+        newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); });
+        createDeckBtn.setOnClickListener(v -> {
+            String n = newDeckName.getText().toString().trim();
+            if (n.isEmpty() || deckNameTaken(s, n)) {
+                newDeckError.setText("Invalid or already existing deck name.");
+                newDeckError.setVisibility(View.VISIBLE);
+                return;
+            }
+            s.decks.add(new Deck(n)); store.save();
+            selected[0] = n; refresh.run();
+            newDeckName.setText(""); newDeckError.setVisibility(View.GONE);
+            newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE);
         });
-        new AlertDialog.Builder(this).setTitle(first ? "Choose starting Deck" : "New Session")
+
+        new AlertDialog.Builder(MainActivity.this).setTitle(first ? "Choose starting Deck" : "New Session")
             .setView(box).setCancelable(false)
             .setPositiveButton("Confirm", (d,w)->{
-                String deck = adapter.getCount()==0 ? "Unknown" : spinner.getSelectedItem().toString();
+                String deck = selected[0] != null ? selected[0] : (s.decks.isEmpty() ? "Unknown" : s.decks.get(0).name);
                 createSessionWithDeck(s, first, deck);
             })
             .setNeutralButton("Skip", (d,w)-> createSessionWithDeck(s, first, "Unknown"))
             .show();
     }
+
+    int blueColor(){ return Color.rgb(55,120,255); }
+    int red(){ return Color.rgb(245,70,60); }
 
     void createSessionWithDeck(Season s, boolean first, String deck) {
         if (first) {
@@ -320,7 +404,38 @@ public class MainActivity extends Activity {
             .show();
     }
 
-    void newSeason(){showNewSeason(false);}
+    // Converte la sessione CORRENTE (qualunque essa sia) in una sessione non tracciata, sostituendo il suo
+    // stato con una correzione manuale punti/streak. Permesso solo se non ha ancora partite: altrimenti
+    // si perderebbero silenziosamente delle partite gia' giocate.
+    void convertToUntracked(){
+        Season s=store.seasons.get(store.current);
+        Session sess=s.sessions.get(s.currentSession);
+        if(!sess.matches.isEmpty()){ Toast.makeText(this,"Only a session with no games yet can be marked as untracked.",Toast.LENGTH_SHORT).show(); return; }
+        LinearLayout box=formBox();
+        EditText p=numberField("Current points", true);
+        EditText st=numberField("Current win streak", true);
+        box.addView(label("Current points")); box.addView(p);
+        box.addView(label("Current win streak")); box.addView(st);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Mark as untracked")
+            .setMessage("This session has no games yet, so it can be safely turned into an untracked score correction.")
+            .setView(box).setPositiveButton("Confirm", null).setNegativeButton("Cancel", null).create();
+        showNonDismissing(dialog, () -> {
+            try {
+                int np=Integer.parseInt(p.getText().toString()), ns=Integer.parseInt(st.getText().toString());
+                if (ns < 0) return false;
+                sess.untracked = true; sess.deck = null;
+                sess.startPoints = s.points; sess.endPoints = np; sess.startStreak = s.streak; sess.endStreak = ns;
+                sess.matches.clear();
+                sess.matches.add(Match.untracked(s.points, np));
+                s.points = np; s.streak = ns;
+                store.save(); view.invalidate();
+                return true;
+            } catch(Exception e) { return false; }
+        }, "Invalid values (streak >= 0).");
+        dialog.show();
+    }
+
+    void newSeason(){ wizardStep1(false, null); }
     void renameSeason(){
         Season s=store.seasons.get(store.current); EditText e=field(s.name);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rename Season").setView(e)
@@ -565,7 +680,7 @@ public class MainActivity extends Activity {
 
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear();
-            txt(c,"Pokémon Pocket",24,40,22,white,Paint.Align.LEFT);
+            txt(c,"Pokémon Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
             box(c,w-150,20,w-18,58,blue); txt(c,"+ Season",w-84,44,13,white,Paint.Align.CENTER);
             txt(c,"SEASONS",24,74,12,muted,Paint.Align.LEFT);
             float y=92;
@@ -762,13 +877,14 @@ public class MainActivity extends Activity {
             }
         }
 
-        static final float BOTTOM_UI_HEIGHT = 108; // spazio riservato in fondo per i pulsanti prev/next + elimina sessione
+        static final float BOTTOM_UI_HEIGHT = 150; // spazio riservato in fondo per prev/next + eventuali link testuali sotto
 
         void sessionPlay(Canvas c, Season s, float w, float h){
             Session x=s.sessions.get(s.currentSession);
             int idx=s.currentSession;
             boolean isLast = idx==s.sessions.size()-1;
             boolean hasPrev = idx>0, hasNext = idx<s.sessions.size()-1;
+            boolean canConvert = x.matches.isEmpty() && !x.untracked; // solo se la sessione non ha ancora partite
             txt(c,"←",24,38,26,white,Paint.Align.LEFT);
             txt(c,x.name,60,34,16,white,Paint.Align.LEFT);
             if(isLast && !x.untracked){ box(c,w-58,16,w-18,52,blue); txt(c,"＋",w-38,40,20,white,Paint.Align.CENTER); }
@@ -783,7 +899,7 @@ public class MainActivity extends Activity {
                 netGainRow(c,172,214,w,x.endPoints-x.startPoints);
                 txt(c,"Start a new session to keep playing.",18,238,13,muted,Paint.Align.LEFT);
                 drawChart(c,18,254,w-18,Math.min(254+430,chartBottom),x.matches,s);
-                bottomNav(c,w,h,hasPrev,hasNext,isLast, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
+                bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
                 return;
             }
 
@@ -799,7 +915,7 @@ public class MainActivity extends Activity {
             if(!isLast){
                 box(c,18,222,w-18,268,card); txt(c,"Session ended",w/2,250,13,muted,Paint.Align.CENTER);
                 drawChart(c,18,282,w-18,Math.min(282+610,chartBottom),x.matches,s);
-                bottomNav(c,w,h,hasPrev,hasNext,isLast, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
+                bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
                 return;
             }
 
@@ -812,7 +928,7 @@ public class MainActivity extends Activity {
             box(c,18,396,w/2-8,442,card); box(c,w/2+8,396,w-18,442,card);
             txt(c,"↶  UNDO",w/4,425,14,white,Paint.Align.CENTER); txt(c,"↷  REDO",w*3/4,425,14,white,Paint.Align.CENTER);
             drawChart(c,18,454,w-18,Math.min(454+610,chartBottom),x.matches,s);
-            bottomNav(c,w,h,hasPrev,hasNext,isLast, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
+            bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
         }
 
         // Riga con il guadagno netto della sessione (ultimo punteggio - punteggio di partenza di QUESTA sessione).
@@ -824,11 +940,13 @@ public class MainActivity extends Activity {
         }
 
         // Pulsanti Precedente/Successivo per scorrere le sessioni della Season senza dover tornare alla lista.
-        void bottomNav(Canvas c, float w, float h, boolean hasPrev, boolean hasNext, boolean isLast, String prevName, String nextName){
+        void bottomNav(Canvas c, float w, float h, boolean hasPrev, boolean hasNext, boolean isLast, boolean canConvert, String prevName, String nextName){
             float navY = h-BOTTOM_UI_HEIGHT+8;
             if(hasPrev){ box(c,18,navY,w/2-8,navY+40,card); txtRow(c,32,navY+26,13,new String[]{"← ", prevName},new int[]{muted,white}); }
             if(hasNext){ box(c,w/2+8,navY,w-18,navY+40,card); txtRowRight(c,w-32,navY+26,13,new String[]{nextName, " →"},new int[]{white,muted}); }
-            if(isLast){ txt(c,"Delete session",w/2,navY+68,13,red,Paint.Align.CENTER); }
+            float ty = navY+68;
+            if(canConvert){ txt(c,"Mark as untracked",w/2,ty,13,muted,Paint.Align.CENTER); ty+=34; }
+            if(isLast){ txt(c,"Delete session",w/2,ty,13,red,Paint.Align.CENTER); }
         }
 
         // Riga NOTE separata dal box DECK: prima la nota condivideva lo spazio con lo screenshot del deck ed era
@@ -896,6 +1014,7 @@ public class MainActivity extends Activity {
                 int idx = s.currentSession;
                 boolean isLast = idx==s.sessions.size()-1;
                 boolean hasPrev = idx>0, hasNext = idx<s.sessions.size()-1;
+                boolean canConvert = sess.matches.isEmpty() && !sess.untracked;
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
                     if(x<60){ goBack(); return true; }
@@ -907,7 +1026,11 @@ public class MainActivity extends Activity {
                     if(hasNext && x>=w/2){ s.currentSession=idx+1; view.invalidate(); return true; }
                     return true;
                 }
-                if(isLast && y>=navY+50 && y<=navY+86){ deleteCurrentSession(); return true; }
+                { // stessa logica di accumulo verticale usata in bottomNav(), per restare allineati al disegno
+                    float ty = navY+68;
+                    if(canConvert){ if(y>=ty-16 && y<=ty+16){ convertToUntracked(); return true; } ty+=34; }
+                    if(isLast){ if(y>=ty-16 && y<=ty+16){ deleteCurrentSession(); return true; } }
+                }
                 if(y>=124 && y<=166){ editSessionNotes(sess); return true; } // riga NOTE: sempre attiva, sessione tracciata o no
                 if(sess.untracked){
                     return true;
