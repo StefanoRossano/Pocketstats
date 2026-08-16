@@ -585,7 +585,7 @@ public class MainActivity extends Activity {
             };
             int[] modes = {0,0,1,1,2,2,3,3};
             boolean[] ascs = {false,true,false,true,false,true,true,false};
-            new AlertDialog.Builder(this).setTitle("Sort decks by").setItems(items,(d,which)->{
+            new AlertDialog.Builder(MainActivity.this).setTitle("Sort decks by").setItems(items,(d,which)->{
                 deckSortMode = modes[which]; deckSortAsc = ascs[which];
                 view.invalidate();
             }).show();
