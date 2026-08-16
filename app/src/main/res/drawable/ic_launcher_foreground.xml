@@ -2,10 +2,15 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M54,18 A36,36 0,1 0,54 90 A36,36 0,1 0,54 18"/>
-    <path android:fillColor="#1E6CFF" android:pathData="M54,18 A36,36 0,0 1,90 54 L18,54 A36,36 0,0 1,54,18"/>
-    <path android:fillColor="#FF4A43" android:pathData="M18,54 L90,54 L90,58 L18,58 Z"/>
-    <path android:fillColor="#07101D" android:pathData="M49,18 L59,18 L59,90 L49,90 Z"/>
-    <path android:fillColor="#07101D" android:pathData="M54,42 A12,12 0,1 0,54 66 A12,12 0,1 0,54 42"/>
-    <path android:fillColor="#FFFFFF" android:pathData="M54,48 A6,6 0,1 0,54 60 A6,6 0,1 0,54 48"/>
+    <!-- Silhouette di una carta TCG -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M40,22 L68,22 A8,8 0 0 1 76,30 L76,78 A8,8 0 0 1 68,86 L40,86 A8,8 0 0 1 32,78 L32,30 A8,8 0 0 1 40,22 Z"/>
+    <!-- Piccola fascia "nome carta" in alto -->
+    <path android:fillColor="#0E1826" android:pathData="M40,31 L68,31 L68,36 L40,36 Z"/>
+    <!-- Linea di trend ascendente (stesso linguaggio visivo dei grafici in-app) -->
+    <path android:fillColor="#00000000" android:strokeColor="#3778FF" android:strokeWidth="4.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M40,73 L47,63 L55,69 L63,53 L71,59"/>
+    <!-- Pallino sul punto piu' recente, come nei grafici dell'app -->
+    <path android:fillColor="#3778FF" android:pathData="M71,59 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"/>
 </vector>
