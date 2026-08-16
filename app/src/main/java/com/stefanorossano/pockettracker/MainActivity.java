@@ -220,23 +220,24 @@ public class MainActivity extends Activity {
 
         // Sezione "nuovo deck": invece di un pulsante che rivela sotto un campo + pulsante "Crea" (ridondante,
         // visto che "Conferma" in fondo al dialog crea gia' il deck in sospeso), ora il pulsante "Nuovo Deck"
-        // si TRASFORMA in un campo di testo con una crocetta rotonda a destra per richiuderlo.
-        LinearLayout newDeckSection = new LinearLayout(this); newDeckSection.setOrientation(LinearLayout.HORIZONTAL);
-        newDeckSection.setGravity(Gravity.CENTER_VERTICAL);
+        // si TRASFORMA in un campo di testo con una crocetta DENTRO al campo (non affiancata fuori), allineata
+        // a destra con un po' di padding, per richiuderlo. Stile scuro coerente con il tema dell'app (prima
+        // era chiara, ricalcata per errore su uno screenshot di riferimento a tema chiaro).
+        android.widget.FrameLayout newDeckSection = new android.widget.FrameLayout(this);
         newDeckSection.setVisibility(View.GONE);
         LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sectionLp.topMargin = dp(14); newDeckSection.setLayoutParams(sectionLp);
         EditText newDeckName = field("Nome Deck");
-        newDeckName.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        newDeckName.setPadding(dp(14),dp(12),dp(44),dp(12)); // padding destro maggiore: lascia spazio alla crocetta sovrapposta, il testo non ci finisce sotto
+        newDeckSection.addView(newDeckName, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT));
         TextView closeNewDeck = new TextView(this);
-        closeNewDeck.setText("✕"); closeNewDeck.setTextColor(Color.rgb(120,130,145)); closeNewDeck.setTextSize(15);
+        closeNewDeck.setText("✕"); closeNewDeck.setTextColor(MUTED_TXT); closeNewDeck.setTextSize(15);
         closeNewDeck.setGravity(Gravity.CENTER);
-        GradientDrawable closeBg = new GradientDrawable(); closeBg.setShape(GradientDrawable.OVAL); closeBg.setColor(Color.rgb(232,236,242));
+        GradientDrawable closeBg = new GradientDrawable(); closeBg.setShape(GradientDrawable.OVAL); closeBg.setColor(Color.rgb(24,36,52));
         closeNewDeck.setBackground(closeBg);
-        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        closeLp.leftMargin = dp(8); closeNewDeck.setLayoutParams(closeLp);
-        newDeckSection.addView(newDeckName);
-        newDeckSection.addView(closeNewDeck);
+        android.widget.FrameLayout.LayoutParams closeLp = new android.widget.FrameLayout.LayoutParams(dp(28), dp(28));
+        closeLp.gravity = Gravity.END|Gravity.CENTER_VERTICAL; closeLp.rightMargin = dp(8);
+        newDeckSection.addView(closeNewDeck, closeLp);
         box.addView(newDeckSection);
         TextView newDeckError = new TextView(this); newDeckError.setTextColor(red()); newDeckError.setTextSize(12); newDeckError.setVisibility(View.GONE); newDeckError.setPadding(0,dp(4),0,0);
         box.addView(newDeckError);
@@ -1206,6 +1207,13 @@ public class MainActivity extends Activity {
         void sessionsList(Canvas c, Season s, float w, float h){
             sessionHits.clear();
             ArrayList<Match> all=s.allMatches();
+            // Se la prima sessione della Season e' non tracciata (tipicamente la correzione iniziale del
+            // wizard "avevo gia' giocato prima"), non ha senso mostrarla nel grafico aggregato: e' un salto
+            // artificiale dal baseline standard, non una serie di partite reali.
+            if (!s.sessions.isEmpty() && s.sessions.get(0).untracked) {
+                all = new ArrayList<>(all);
+                all.removeAll(s.sessions.get(0).matches);
+            }
             int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
             // Punti attuali + Vittorie consecutive: stessa card, i due dati piu' importanti a colpo d'occhio.
@@ -1458,16 +1466,16 @@ public class MainActivity extends Activity {
                 float gap2=8; float colW=(w-36-gap2)/2;
                 float c1L=18, c1R=18+colW, c2L=c1R+gap2, c2R=w-18;
                 box(c,c1L,124,c1R,198,card);
-                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,9,muted,Paint.Align.CENTER);
-                txt(c,""+s.points,(c1L+c1R)/2,182,24,white,Paint.Align.CENTER);
+                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,11,muted,Paint.Align.CENTER);
+                txt(c,""+s.points,(c1L+c1R)/2,182,26,white,Paint.Align.CENTER);
                 box(c,c2L,124,c2R,198,card);
-                txt(c,"STATISTICHE",(c2L+c2R)/2,144,9,muted,Paint.Align.CENTER);
-                txtRowCentered(c,(c2L+c2R)/2,178,13,
+                txt(c,"STATISTICHE",(c2L+c2R)/2,144,11,muted,Paint.Align.CENTER);
+                txtRowCentered(c,(c2L+c2R)/2,178,14,
                     new String[]{sw+"W   ", sl+"L   ", String.format(Locale.US,"%.1f%%",swr)},
                     new int[]{green,red,white});
                 box(c,c1L,206,c1R,280,card);
-                txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,228,9,muted,Paint.Align.CENTER);
-                txt(c,""+s.streak,(c1L+c1R)/2,264,24,white,Paint.Align.CENTER);
+                txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,228,11,muted,Paint.Align.CENTER);
+                txt(c,""+s.streak,(c1L+c1R)/2,264,26,white,Paint.Align.CENTER);
                 netGainRow(c,c2L,206,280,c2R,gain);
 
                 if(!isLast){
@@ -1497,9 +1505,9 @@ public class MainActivity extends Activity {
         void netGainRow(Canvas c, float left, float top, float bottom, float right, int gain){
             box(c,left,top,right,bottom,card);
             float cx=(left+right)/2;
-            txt(c,"VARIAZIONE",cx,top+22,8,muted,Paint.Align.CENTER);
+            txt(c,"VARIAZIONE",cx,top+22,11,muted,Paint.Align.CENTER);
             int col = gain>0?green:(gain<0?red:white);
-            txt(c, (gain>0?"+":"")+gain, cx, top+58, 22, col, Paint.Align.CENTER);
+            txt(c, (gain>0?"+":"")+gain, cx, top+58, 26, col, Paint.Align.CENTER);
         }
 
         // Pulsanti Precedente/Successivo per scorrere le sessioni della Season senza dover tornare alla lista.
@@ -1548,9 +1556,10 @@ public class MainActivity extends Activity {
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s,long sessionTimestamp){
             box(c,l,t,rr,b,Color.rgb(10,18,30));
-            // Griglia leggera, colore vicino allo sfondo (appena piu' chiaro): solo un riferimento visivo,
-            // poche righe (3) per non risultare fastidiosa ne' troppo fitta.
-            p.setColor(Color.rgb(19,29,44)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
+            // Griglia orizzontale, colore vicino allo sfondo (schiarito un pelo rispetto a prima): solo un
+            // riferimento visivo, poche righe (3) per non risultare fastidiosa ne' troppo fitta.
+            int gridColor = Color.rgb(26,38,56);
+            p.setColor(gridColor); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
             int gridLines=3;
             for(int i=1;i<=gridLines;i++){
                 float gy = t+22 + i*(b-t-42)/(gridLines+1);
@@ -1565,6 +1574,28 @@ public class MainActivity extends Activity {
             }
             float min=ms.get(0).before,max=ms.get(0).before;for(Match m:ms){min=Math.min(min,m.after);max=Math.max(max,m.after);}
             min-=20;max+=20;if(max==min)max=min+1;
+            int n=ms.size();
+
+            // Colonne della griglia, in corrispondenza di alcune partite scelte (fino a 4, distribuite lungo
+            // l'asse x), con il rispettivo timestamp sotto: disegnate PRIMA della linea/pallini del grafico,
+            // cosi' il plot resta sempre sopra e ben leggibile, ma le colonne "tagliano" comunque i pallini
+            // dietro di essi.
+            ArrayList<Integer> labelIdx = new ArrayList<>();
+            int count = Math.min(4, n);
+            for(int k=0;k<count;k++){
+                int idx = count==1 ? 0 : Math.round(k*(n-1)/(float)(count-1));
+                if(!labelIdx.contains(idx)) labelIdx.add(idx);
+            }
+            p.setColor(gridColor); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
+            for(int idx: labelIdx){
+                float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
+                c.drawLine(gx,t+8,gx,b-22,p);
+                if(ms.get(idx).timestamp>0){
+                    String d = new java.text.SimpleDateFormat("dd/MM", Locale.ITALY).format(new java.util.Date(ms.get(idx).timestamp));
+                    txt(c,d,gx,b-20,8,muted,Paint.Align.CENTER);
+                }
+            }
+
             p.setStrokeWidth(2);
             float prevX=l+12, prevY=b-20-(ms.get(0).before-min)/(max-min)*(b-t-36);
             float startX=prevX, startY=prevY;
