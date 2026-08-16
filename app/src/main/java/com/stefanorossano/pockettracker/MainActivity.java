@@ -255,13 +255,25 @@ public class MainActivity extends Activity {
 
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this).setTitle(first ? "Scegli il Deck iniziale" : "Nuova Sessione")
             .setView(box).setCancelable(!first)
-            .setPositiveButton("Conferma", (d,w)->{
-                String deck = selected[0] != null ? selected[0] : "Unknown";
-                createSessionWithDeck(s, first, deck);
-            })
+            .setPositiveButton("Conferma", null)
             .setNeutralButton("Salta", (d,w)-> createSessionWithDeck(s, first, "Unknown"));
         if (!first) builder.setNegativeButton("Annulla", null);
-        builder.show();
+        AlertDialog dialog = builder.create();
+        // Bug corretto: se l'utente apre la sezione "Nuovo Deck", digita un nome ma preme "Conferma" invece
+        // di "Crea", il nome digitato veniva silenziosamente ignorato e la sessione partiva con un deck
+        // diverso (quello di default). Ora "Conferma" crea automaticamente il deck in sospeso, se presente.
+        showNonDismissing(dialog, () -> {
+            String pendingName = newDeckName.getText().toString().trim();
+            if (newDeckSection.getVisibility() == View.VISIBLE && !pendingName.isEmpty()) {
+                if (deckNameTaken(s, pendingName)) return false;
+                s.decks.add(new Deck(pendingName)); store.save();
+                selected[0] = pendingName;
+            }
+            String deck = selected[0] != null ? selected[0] : "Unknown";
+            createSessionWithDeck(s, first, deck);
+            return true;
+        }, "Nome Deck non valido o già esistente.");
+        dialog.show();
     }
 
     int blueColor(){ return Color.rgb(55,120,255); }
@@ -755,7 +767,7 @@ public class MainActivity extends Activity {
             try {
                 java.io.InputStream is = getContentResolver().openInputStream(Uri.parse(d.images.get(idx[0])));
                 Bitmap full = BitmapFactory.decodeStream(is);
-                int cropTop=(int)(full.getHeight()*0.15f), cropBottom=(int)(full.getHeight()*0.13f);
+                int cropTop=(int)(full.getHeight()*0.17f), cropBottom=(int)(full.getHeight()*0.14f);
                 int newH=full.getHeight()-cropTop-cropBottom;
                 iv.setImageBitmap(newH>0 ? Bitmap.createBitmap(full,0,cropTop,full.getWidth(),newH) : full);
             } catch(Exception e) {
@@ -963,7 +975,7 @@ public class MainActivity extends Activity {
 
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear();
-            txt(c,"Pokémon Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
+            txt(c,"Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
             txt(c,"SEASONS",24,74,12,muted,Paint.Align.LEFT);
             bodyTop=84; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
@@ -1106,9 +1118,17 @@ public class MainActivity extends Activity {
             txt(c, isUnknown?"Deck sconosciuto":name, 34,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
             float wr=(W+L)==0?0:100f*W/(W+L);
             txt(c,(W+L)+" partite",34,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
-            txtRow(c,34,y+64,11,
-                new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "Max vittorie consecutive "+best},
-                new int[]{green, red, wrColor(wr,W+L), muted});
+            // "Deck sconosciuto" e' un aggregato di sessioni senza un deck reale assegnato: la "serie di
+            // vittorie" non ha senso concettualmente qui (mischia sessioni scollegate), quindi si omette.
+            if (isUnknown) {
+                txtRow(c,34,y+64,11,
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)},
+                    new int[]{green, red, wrColor(wr,W+L)});
+            } else {
+                txtRow(c,34,y+64,11,
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "Max vittorie consecutive "+best},
+                    new int[]{green, red, wrColor(wr,W+L), muted});
+            }
             return y+90;
         }
 
@@ -1224,19 +1244,30 @@ public class MainActivity extends Activity {
             } else {
                 box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
                 txt(c, "Unknown".equals(x.deck) ? "Deck sconosciuto — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
-                // Matita: apre un piccolo menu per cambiare deck oppure rinominare quello attualmente assegnato
-                // (prima qui c'era solo "Immagini (N)", rimosso: la gestione immagini vive nel tab Deck).
-                drawEditIcon(c,w-30,88,16,blue);
+                // Matita: apre un piccolo menu per cambiare deck oppure rinominare quello attualmente assegnato.
+                // Dimensionata e posizionata in modo che il margine (in pixel) verso il bordo superiore, inferiore
+                // e destro del box DECK sia lo stesso sui 3 lati (prima l'icona era piccola e sbilanciata).
+                {
+                    float boxTop=58, boxBottom=118, boxRight=w-18, margin=16;
+                    float half=(boxBottom-boxTop)/2 - margin; // meta' "ingombro" dell'icona
+                    float size=half/0.36f; // fattore empirico tra mezza-diagonale della matita ruotata e 'size'
+                    float cx=boxRight-margin-half, cy=(boxTop+boxBottom)/2;
+                    drawEditIcon(c,cx,cy,size,blue);
+                }
                 int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
-                // Punti attuali a tutta larghezza (dato piu' importante), poi Vittorie consecutive e
-                // Guadagno netto fianco a fianco (stessa dimensione di card).
-                box(c,18,124,w-18,198,card);
-                txt(c,"PUNTI ATTUALI",w/2,146,10,muted,Paint.Align.CENTER);
-                txt(c,""+s.points,w/2,182,30,white,Paint.Align.CENTER);
-                box(c,18,204,w/2-8,278,card);
-                txt(c,"VITTORIE CONSECUTIVE",w/4,226,9,muted,Paint.Align.CENTER);
-                txt(c,""+s.streak,w/4,262,28,white,Paint.Align.CENTER);
-                netGainRow(c,w/2+8,204,278,w-18,gain);
+                // Punti attuali, Vittorie consecutive e Variazione ora tre card di uguale dimensione affiancate
+                // (prima Punti attuali era a tutta larghezza sopra, le altre due sotto).
+                float cardGap=8; float cardW=(w-36-2*cardGap)/3;
+                float c1L=18, c1R=18+cardW;
+                float c2L=c1R+cardGap, c2R=c2L+cardW;
+                float c3L=c2R+cardGap, c3R=w-18;
+                box(c,c1L,124,c1R,198,card);
+                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,8,muted,Paint.Align.CENTER);
+                txt(c,""+s.points,(c1L+c1R)/2,182,22,white,Paint.Align.CENTER);
+                netGainRow(c,c2L,124,198,c2R,gain);
+                box(c,c3L,124,c3R,198,card);
+                txt(c,"VITTORIE CONSECUTIVE",(c3L+c3R)/2,146,8,muted,Paint.Align.CENTER);
+                txt(c,""+s.streak,(c3L+c3R)/2,182,22,white,Paint.Align.CENTER);
 
                 if(!isLast){
                     box(c,18,286,w-18,332,card); txt(c,"Sessione conclusa",w/2,314,13,muted,Paint.Align.CENTER);
@@ -1265,16 +1296,16 @@ public class MainActivity extends Activity {
         void netGainRow(Canvas c, float left, float top, float bottom, float right, int gain){
             box(c,left,top,right,bottom,card);
             float cx=(left+right)/2;
-            txt(c,"GUADAGNO NETTO",cx,top+22,10,muted,Paint.Align.CENTER);
+            txt(c,"VARIAZIONE",cx,top+22,8,muted,Paint.Align.CENTER);
             int col = gain>0?green:(gain<0?red:white);
-            txt(c, (gain>0?"+":"")+gain, cx, top+58, 26, col, Paint.Align.CENTER);
+            txt(c, (gain>0?"+":"")+gain, cx, top+58, 22, col, Paint.Align.CENTER);
         }
 
         // Pulsanti Precedente/Successivo per scorrere le sessioni della Season senza dover tornare alla lista.
         // Larghezza del pulsante prev/next commisurata al testo (nome sessione + freccia), invece di meta'
         // schermo fisso: usata sia per disegnare sia per il touch handler, cosi' restano sempre allineati.
         float navButtonWidth(String name){
-            p.setTextSize(24); float arrowW=p.measureText("←");
+            p.setTextSize(28); float arrowW=p.measureText("←");
             p.setTextSize(13); float nameW=p.measureText(name);
             return 32+6+arrowW+nameW; // padding(16*2) + gap(6) + freccia + nome
         }
@@ -1291,9 +1322,9 @@ public class MainActivity extends Activity {
                 float boxW = navButtonWidth(prevName);
                 box(c,18,navY,18+boxW,navY+40,card);
                 // La freccia "←" con questo font risulta visivamente piu' piccola di "→" alla stessa dimensione,
-                // quindi qui usiamo una dimensione leggermente maggiore per farle apparire equivalenti.
-                txt(c,"←",34,navY+27,24,muted,Paint.Align.LEFT);
-                p.setTextSize(24); float arrowW=p.measureText("←");
+                // quindi qui usiamo una dimensione maggiore per farle apparire equivalenti (24 non bastava ancora).
+                txt(c,"←",34,navY+27,28,muted,Paint.Align.LEFT);
+                p.setTextSize(28); float arrowW=p.measureText("←");
                 txt(c,prevName,34+arrowW+6,navY+26,13,white,Paint.Align.LEFT);
             }
             if(hasNext){
@@ -1337,7 +1368,11 @@ public class MainActivity extends Activity {
         // facile confonderla con "cambia deck". Ora e' una riga a se', con la sua etichetta, cosi' non c'e' ambiguita'.
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,Season s){
-            box(c,l,t,rr,b,Color.rgb(10,18,30)); if(ms.isEmpty())return;
+            box(c,l,t,rr,b,Color.rgb(10,18,30));
+            if(ms.isEmpty()){
+                txt(c,"Nessuna partita ancora",(l+rr)/2,(t+b)/2,13,muted,Paint.Align.CENTER);
+                return;
+            }
             float min=ms.get(0).before,max=ms.get(0).before;for(Match m:ms){min=Math.min(min,m.after);max=Math.max(max,m.after);}
             min-=20;max+=20;if(max==min)max=min+1;
             p.setStrokeWidth(2);
@@ -1463,7 +1498,7 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 if(contentY>=58 && contentY<=118){
-                    if(x>=w-56){ deckOptionsMenu(sess); return true; } // icona matita: cambia deck o rinomina quello attuale
+                    if(x>=w-72){ deckOptionsMenu(sess); return true; } // icona matita: cambia deck o rinomina quello attuale (zona allargata, icona ora piu' grande)
                     return true; // riga nome deck: nessuna azione, per cambiare/rinominare usa la matita
                 }
                 if(isLast && contentY>=286 && contentY<=332){ if(x<w/2) win(); else loss(); return true; }
