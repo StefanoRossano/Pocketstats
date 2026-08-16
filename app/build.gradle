@@ -11,11 +11,32 @@ android {
         minSdk 26
         targetSdk 35
         versionCode 1
-        versionName '0.1'
+        versionName '0.2'
+    }
+
+    // Chiave di firma debug FISSA (commitata nel repo, in keystore/debug.keystore).
+    // Senza questo, ogni build su GitHub Actions genererebbe una chiave debug diversa
+    // (macchina nuova ogni volta), rendendo impossibile aggiornare l'app senza disinstallarla
+    // prima (con perdita dei dati locali). Con una chiave fissa, gli aggiornamenti futuri
+    // si installano sopra la versione precedente senza problemi.
+    signingConfigs {
+        debug {
+            storeFile file("../keystore/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
     }
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core:1.13.1'
     implementation 'com.google.android.material:material:1.12.0'
 }
