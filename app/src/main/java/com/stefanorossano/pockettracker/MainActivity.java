@@ -319,6 +319,35 @@ public class MainActivity extends Activity {
     // per deck sono sempre calcolate al volo dal nome del deck, quindi si aggiornano da sole).
     // Menu con due opzioni per il deck della sessione corrente: cambiarlo (scegliere un deck diverso o
     // "Nessun deck"), oppure rinominare quello attualmente assegnato (propagato a tutte le sessioni che lo usano).
+    // Menu unificato "⋮" nell'header di session play: raccoglie tutte le azioni secondarie della sessione
+    // (prima erano pulsanti sempre visibili in fondo, ora appaiono solo quando applicabili). Ordine: azione
+    // piu' frequente (Nuova sessione) in cima, poi Modifica deck, poi il caso raro (Segna come non tracciata),
+    // e per ultima — isolata e in rosso — quella distruttiva (Elimina sessione).
+    void sessionOptionsMenu(Session sess, boolean isLast, boolean canConvert){
+        boolean showNewSessionItem = isLast && !sess.untracked;
+        boolean showDeckEditItem = !sess.untracked;
+        boolean showDeleteItem = isLast;
+
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(4),dp(8),dp(4),dp(8));
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box).create();
+
+        if (showNewSessionItem) box.addView(sessionMenuRow("Nuova sessione", Color.WHITE, dialog, this::showNewSession));
+        if (showDeckEditItem) box.addView(sessionMenuRow("Modifica deck", Color.WHITE, dialog, () -> deckOptionsMenu(sess)));
+        if (canConvert) box.addView(sessionMenuRow("Segna come non tracciata", Color.WHITE, dialog, this::convertToUntracked));
+        if (showDeleteItem) box.addView(sessionMenuRow("Elimina sessione", red(), dialog, this::deleteCurrentSession));
+
+        dialog.show();
+    }
+
+    TextView sessionMenuRow(String text, int color, AlertDialog dialog, Runnable action){
+        TextView t = new TextView(this);
+        t.setText(text); t.setTextColor(color); t.setTextSize(15);
+        t.setPadding(dp(20),dp(14),dp(20),dp(14));
+        t.setOnClickListener(v -> { dialog.dismiss(); action.run(); });
+        return t;
+    }
+
     void deckOptionsMenu(Session sess){
         Season s = store.seasons.get(store.current);
         boolean hasRealDeck = !"Unknown".equals(sess.deck);
@@ -656,8 +685,15 @@ public class MainActivity extends Activity {
 
     void addDeck(){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
-        EditText e=field("Nome Deck"); box.addView(label("Nome Deck")); box.addView(e);
-        Button img=new Button(this); img.setText("Aggiungi screenshot (opzionale)"); styleSecondaryButton(img); box.addView(img);
+        // Tolta l'etichetta "Nome Deck" sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
+        // ha comunque il placeholder "Nome Deck" — prima la scritta compariva 3 volte, troppa ripetizione.
+        EditText e=field("Nome Deck"); box.addView(e);
+        Button img=new Button(this); img.setText("Aggiungi screenshot (opzionale)"); styleSecondaryButton(img);
+        // Margine e larghezza piena come negli altri dialog (prima il pulsante era attaccato al campo sopra,
+        // senza respiro, e piu' stretto del contenuto — risultava piu' "povero" rispetto al dialog Nuova Sessione.
+        LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        imgLp.topMargin = dp(14); img.setLayoutParams(imgLp);
+        box.addView(img);
         img.setOnClickListener(v-> pickImageFor(null)); // null = immagine "in sospeso", verra' assegnata al Deck solo se il salvataggio va a buon fine
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(box)
             .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
@@ -717,10 +753,34 @@ public class MainActivity extends Activity {
         else showImageGallery(d, 0);
     }
 
-    // Visualizzatore in stile galleria: a tutto schermo, con avanti/indietro tra le immagini del deck, e
-    // controlli di aggiunta/rimozione integrati (invece di aprire ogni immagine singolarmente in un'app
-    // esterna, o di dover passare da un menu separato per gestirle).
-    // Ritaglia automaticamente il 25% dall'alto e il 18% dal basso: gli screenshot del gioco hanno spesso
+    // Icona cestino disegnata su un piccolo Bitmap (per usarla in ImageView nei dialog nativi, dove non
+    // possiamo disegnare direttamente su Canvas come nella UI principale dell'app).
+    Bitmap makeTrashIcon(int color, int sizePx){
+        Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas cc = new Canvas(bmp);
+        Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float s = sizePx;
+        pp.setColor(color); pp.setStyle(Paint.Style.FILL);
+        cc.drawRect(s*0.28f, s*0.16f, s*0.72f, s*0.26f, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(Math.max(1.5f, s*0.07f));
+        android.graphics.Path body = new android.graphics.Path();
+        body.moveTo(s*0.20f, s*0.28f);
+        body.lineTo(s*0.27f, s*0.86f);
+        body.quadTo(s*0.27f, s*0.90f, s*0.32f, s*0.90f);
+        body.lineTo(s*0.68f, s*0.90f);
+        body.quadTo(s*0.73f, s*0.90f, s*0.73f, s*0.86f);
+        body.lineTo(s*0.80f, s*0.28f);
+        cc.drawPath(body, pp);
+        cc.drawLine(s*0.40f, s*0.40f, s*0.40f, s*0.78f, pp);
+        cc.drawLine(s*0.60f, s*0.40f, s*0.60f, s*0.78f, pp);
+        return bmp;
+    }
+
+    // Visualizzatore in stile galleria: header in alto (chiudi/titolo/aggiungi), frecce di navigazione come
+    // piccoli cerchi semi-trasparenti sovrapposti ai lati dell'immagine, ed "elimina" (cestino) accanto al
+    // contatore "N / M" sotto — cosi' e' chiaro che si riferisce ALLO SCREENSHOT visualizzato in quel momento,
+    // non a un'azione generica. Prima erano 5 pulsanti testuali impilati sotto l'immagine, senza alcun header.
+    // Ritaglia automaticamente il 17% dall'alto e il 14% dal basso: gli screenshot del gioco hanno spesso
     // intestazioni/pulsanti di sistema poco utili in quelle zone, cosi' il contenuto rilevante riempie meglio lo schermo.
     void showImageGallery(Deck d, int startIndex){
         if (d.images.isEmpty()) return;
@@ -729,38 +789,57 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
 
+        LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(6),dp(6),dp(6),dp(6));
+        TextView closeBtn = new TextView(this); closeBtn.setText("✕"); closeBtn.setTextColor(Color.WHITE); closeBtn.setTextSize(20);
+        closeBtn.setPadding(dp(12),dp(6),dp(12),dp(6));
+        TextView title = new TextView(this); title.setText(d.name); title.setTextColor(Color.WHITE); title.setTextSize(14); title.setGravity(Gravity.CENTER);
+        title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        TextView addBtn = new TextView(this); addBtn.setText("+"); addBtn.setTextColor(blueColor()); addBtn.setTextSize(24);
+        addBtn.setPadding(dp(12),dp(2),dp(12),dp(2));
+        header.addView(closeBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        header.addView(addBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(header);
+
+        android.widget.FrameLayout imageFrame = new android.widget.FrameLayout(this);
         ImageView iv = new ImageView(this);
         iv.setAdjustViewBounds(true);
         iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        root.addView(iv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        imageFrame.addView(iv, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
 
-        TextView counter = new TextView(this);
-        counter.setTextColor(Color.WHITE); counter.setGravity(Gravity.CENTER);
-        counter.setPadding(0,dp(12),0,dp(12));
-        root.addView(counter);
+        TextView prevBtn = new TextView(this); prevBtn.setText("‹"); prevBtn.setTextColor(Color.WHITE); prevBtn.setTextSize(22);
+        prevBtn.setGravity(Gravity.CENTER);
+        GradientDrawable prevBg = new GradientDrawable(); prevBg.setShape(GradientDrawable.OVAL); prevBg.setColor(Color.argb(140,10,18,30));
+        prevBtn.setBackground(prevBg);
+        android.widget.FrameLayout.LayoutParams prevLp = new android.widget.FrameLayout.LayoutParams(dp(36), dp(36));
+        prevLp.gravity = Gravity.START|Gravity.CENTER_VERTICAL; prevLp.leftMargin=dp(10);
+        imageFrame.addView(prevBtn, prevLp);
 
-        LinearLayout manageRow = new LinearLayout(this); manageRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button addBtn = new Button(this); addBtn.setText("+ Aggiungi"); styleSecondaryButton(addBtn);
-        Button removeBtn = new Button(this); removeBtn.setText("Rimuovi questa"); styleSecondaryButton(removeBtn);
-        LinearLayout.LayoutParams mLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); mLp1.setMargins(0,0,dp(4),0);
-        LinearLayout.LayoutParams mLp2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); mLp2.setMargins(dp(4),0,0,0);
-        manageRow.addView(addBtn, mLp1); manageRow.addView(removeBtn, mLp2);
-        LinearLayout.LayoutParams manageLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        manageLp.setMargins(dp(8),0,dp(8),dp(6));
-        root.addView(manageRow, manageLp);
+        TextView nextBtn = new TextView(this); nextBtn.setText("›"); nextBtn.setTextColor(Color.WHITE); nextBtn.setTextSize(22);
+        nextBtn.setGravity(Gravity.CENTER);
+        GradientDrawable nextBg = new GradientDrawable(); nextBg.setShape(GradientDrawable.OVAL); nextBg.setColor(Color.argb(140,10,18,30));
+        nextBtn.setBackground(nextBg);
+        android.widget.FrameLayout.LayoutParams nextLp = new android.widget.FrameLayout.LayoutParams(dp(36), dp(36));
+        nextLp.gravity = Gravity.END|Gravity.CENTER_VERTICAL; nextLp.rightMargin=dp(10);
+        imageFrame.addView(nextBtn, nextLp);
 
-        LinearLayout navRow = new LinearLayout(this); navRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button prevBtn = new Button(this); prevBtn.setText("< Prec"); styleSecondaryButton(prevBtn);
-        Button closeBtn = new Button(this); closeBtn.setText("Chiudi"); styleSecondaryButton(closeBtn);
-        Button nextBtn = new Button(this); nextBtn.setText("Succ >"); styleSecondaryButton(nextBtn);
-        // Margini tra i tre pulsanti: prima erano attaccati l'uno all'altro senza alcuno spazio.
-        LinearLayout.LayoutParams btnLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); btnLp1.setMargins(0,0,dp(4),0);
-        LinearLayout.LayoutParams btnLp2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); btnLp2.setMargins(dp(4),0,dp(4),0);
-        LinearLayout.LayoutParams btnLp3 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); btnLp3.setMargins(dp(4),0,0,0);
-        navRow.addView(prevBtn, btnLp1); navRow.addView(closeBtn, btnLp2); navRow.addView(nextBtn, btnLp3);
-        LinearLayout.LayoutParams navLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        navLp.setMargins(dp(8),0,dp(8),dp(8));
-        root.addView(navRow, navLp);
+        root.addView(imageFrame, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+
+        // Contatore + cestino nella STESSA riga: cosi' e' inequivocabile che "elimina" si riferisce a
+        // QUESTO screenshot (N/M), non a un'azione generica sul deck.
+        LinearLayout bottomRow = new LinearLayout(this); bottomRow.setOrientation(LinearLayout.HORIZONTAL);
+        bottomRow.setGravity(Gravity.CENTER_VERTICAL);
+        bottomRow.setPadding(dp(18),dp(8),dp(14),dp(12));
+        TextView counter = new TextView(this); counter.setTextColor(Color.WHITE); counter.setTextSize(13);
+        ImageView deleteIcon = new ImageView(this);
+        int iconSizePx = dp(20);
+        deleteIcon.setImageBitmap(makeTrashIcon(red(), iconSizePx));
+        deleteIcon.setPadding(dp(10),dp(6),dp(10),dp(6));
+        bottomRow.addView(counter, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        bottomRow.addView(deleteIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(bottomRow);
 
         Runnable[] load = new Runnable[1];
         load[0] = () -> {
@@ -775,14 +854,14 @@ public class MainActivity extends Activity {
                 Toast.makeText(this,"Impossibile caricare l'immagine (file non più disponibile).",Toast.LENGTH_SHORT).show();
             }
             counter.setText((idx[0]+1)+" / "+d.images.size());
-            prevBtn.setEnabled(idx[0]>0);
-            nextBtn.setEnabled(idx[0]<d.images.size()-1);
+            prevBtn.setVisibility(idx[0]>0 ? View.VISIBLE : View.INVISIBLE);
+            nextBtn.setVisibility(idx[0]<d.images.size()-1 ? View.VISIBLE : View.INVISIBLE);
         };
         prevBtn.setOnClickListener(v -> { if(idx[0]>0){ idx[0]--; load[0].run(); } });
         nextBtn.setOnClickListener(v -> { if(idx[0]<d.images.size()-1){ idx[0]++; load[0].run(); } });
         closeBtn.setOnClickListener(v -> dialog.dismiss());
         addBtn.setOnClickListener(v -> { dialog.dismiss(); pickImageFor(d); });
-        removeBtn.setOnClickListener(v -> {
+        deleteIcon.setOnClickListener(v -> {
             d.images.remove(idx[0]); store.save();
             if (d.images.isEmpty()) { dialog.dismiss(); view.invalidate(); return; }
             if (idx[0] >= d.images.size()) idx[0] = d.images.size()-1;
@@ -888,6 +967,36 @@ public class MainActivity extends Activity {
             maxScrollY = Math.max(0, lastContentBottom-(bodyBottom-bodyTop));
             if(scrollY>maxScrollY) scrollY=maxScrollY;
             if(scrollY<0) scrollY=0;
+        }
+        // Calcola la baseline necessaria per centrare verticalmente un testo di questa dimensione su una
+        // riga di centro comune (usa le metriche reali del font, non un offset indovinato): cosi' elementi
+        // di dimensioni diverse (es. la freccia "←" e il titolo) restano allineati sulla stessa linea centrale.
+        // Disegna una freccia sinistra specchiando il glifo "→" invece di usare "←": sono due caratteri
+        // Unicode DIVERSI, che con lo stesso font risultano di peso/dimensione visiva differenti (bug scoperto
+        // dopo vari tentativi di "compensare" con size diverse). Specchiando lo stesso identico glifo lo stile
+        // e' garantito identico in entrambe le direzioni. Allineata a sinistra: il bordo sinistro resta a 'leftX'.
+        void drawLeftArrow(Canvas c, float leftX, float baselineY, float size, int color){
+            p.setTextSize(size); float aw=p.measureText("→");
+            float cx=leftX+aw/2;
+            c.save();
+            c.scale(-1,1,cx,baselineY);
+            txt(c,"→",cx,baselineY,size,color,Paint.Align.CENTER);
+            c.restore();
+        }
+        // Icona "altre opzioni" (tre puntini verticali), disegnata a mano invece che con il glifo Unicode "⋮":
+        // stessa lezione delle frecce "←"/"→" — meglio disegnare da soli che affidarsi a un carattere il cui
+        // rendering puo' variare da font a font.
+        void drawKebabIcon(Canvas c, float cx, float cy, int color){
+            p.setColor(color); p.setStyle(Paint.Style.FILL);
+            float r=2.4f, gap=7.5f;
+            c.drawCircle(cx,cy-gap,r,p);
+            c.drawCircle(cx,cy,r,p);
+            c.drawCircle(cx,cy+gap,r,p);
+        }
+        float centeredBaseline(float centerY, float size){
+            p.setTextSize(size);
+            Paint.FontMetrics fm = p.getFontMetrics();
+            return centerY - (fm.ascent+fm.descent)/2;
         }
         // Icona "modifica" disegnata a mano (invece del glifo Unicode ✎, che su alcuni font ha troppi tratti
         // sottili ed è poco leggibile piccolo): una semplice matita diagonale, come nelle icone standard.
@@ -1014,8 +1123,9 @@ public class MainActivity extends Activity {
         }
 
         void detailHeader(Canvas c, Season s, float w){
-            txt(c,"←",24,40,32,white,Paint.Align.LEFT);
-            txt(c,s.name,60,34,20,white,Paint.Align.LEFT);
+            float centerY=36;
+            drawLeftArrow(c,24,centeredBaseline(centerY,32),32,white);
+            txt(c,s.name,60,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
             drawEditIcon(c,w-24,32,18,muted);
         }
 
@@ -1200,7 +1310,7 @@ public class MainActivity extends Activity {
             for(String z:rest){txt(c,z,34,yy,14,white,Paint.Align.LEFT);yy+=16;}
             box(c,w-150,262,w-18,290,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-84,281,11,white,Paint.Align.CENTER);
             txt(c,"PER DECK",18,278,14,muted,Paint.Align.LEFT);
-            float dyy=304+22; // margine extra sotto "PER DECK", prima le card iniziavano subito attaccate
+            float dyy=304+11; // margine sotto "PER DECK" (ridotto del 50% rispetto a prima: 22->11)
             for(Deck d: sortedDecks(s)){
                 int[] dwl=deckWL(s,d.name); int dbest=longestStreakForDeck(s,d.name);
                 dyy = deckCard(c, d.name, false, dwl[0], dwl[1], dbest, dyy, w);
@@ -1213,7 +1323,7 @@ public class MainActivity extends Activity {
             lastContentBottom = dyy+16;
         }
 
-        static final float BOTTOM_UI_HEIGHT = 210; // spazio riservato in fondo: prev/next + eventuali link/pulsanti sotto (ora fino a 3: segna non tracciata, nuova sessione, elimina)
+        static final float BOTTOM_UI_HEIGHT = 90; // spazio riservato in fondo: solo prev/next (le altre azioni sono ora nel menu "⋮" in alto)
 
         void sessionPlay(Canvas c, Season s, float w, float h){
             Session x=s.sessions.get(s.currentSession);
@@ -1221,10 +1331,19 @@ public class MainActivity extends Activity {
             boolean isLast = idx==s.sessions.size()-1;
             boolean hasPrev = idx>0, hasNext = idx<s.sessions.size()-1;
             boolean canConvert = x.matches.isEmpty() && !x.untracked; // solo se la sessione non ha ancora partite
-            txt(c,"←",24,40,32,white,Paint.Align.LEFT);
-            txt(c,x.name,60,34,16,white,Paint.Align.LEFT);
+            // Le azioni secondarie (Nuova sessione, Modifica deck, Segna come non tracciata, Elimina sessione)
+            // sono ora tutte raccolte nel menu "⋮", invece di essere pulsanti sempre visibili in fondo: il
+            // menu compare solo se almeno una di queste azioni e' applicabile alla sessione corrente.
+            boolean showNewSessionItem = isLast && !x.untracked;
+            boolean showDeckEditItem = !x.untracked;
+            boolean showDeleteItem = isLast;
+            boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem;
+            float centerY=36;
+            drawLeftArrow(c,24,centeredBaseline(centerY,32),32,white);
+            txt(c,x.name,60,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
+            if(showKebab) drawKebabIcon(c,w-24,centerY,muted);
 
-            // Header fisso sopra, barra prev/next+elimina fissa sotto (bottomNav): solo il contenuto in mezzo
+            // Header fisso sopra, barra prev/next fissa sotto (bottomNav): solo il contenuto in mezzo
             // scorre. Il grafico ha un'altezza fissa moderata (non 610: "schiacciato" dallo scroll era peggio,
             // qui torna alle dimensioni compatte di prima, che andavano bene).
             bodyTop=58; bodyBottom=h-BOTTOM_UI_HEIGHT;
@@ -1244,16 +1363,6 @@ public class MainActivity extends Activity {
             } else {
                 box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
                 txt(c, "Unknown".equals(x.deck) ? "Deck sconosciuto — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
-                // Matita: apre un piccolo menu per cambiare deck oppure rinominare quello attualmente assegnato.
-                // Dimensionata e posizionata in modo che il margine (in pixel) verso il bordo superiore, inferiore
-                // e destro del box DECK sia lo stesso sui 3 lati (prima l'icona era piccola e sbilanciata).
-                {
-                    float boxTop=58, boxBottom=118, boxRight=w-18, margin=16;
-                    float half=(boxBottom-boxTop)/2 - margin; // meta' "ingombro" dell'icona
-                    float size=half/0.36f; // fattore empirico tra mezza-diagonale della matita ruotata e 'size'
-                    float cx=boxRight-margin-half, cy=(boxTop+boxBottom)/2;
-                    drawEditIcon(c,cx,cy,size,blue);
-                }
                 int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
                 // Punti attuali, Vittorie consecutive e Variazione ora tre card di uguale dimensione affiancate
                 // (prima Punti attuali era a tutta larghezza sopra, le altre due sotto).
@@ -1270,22 +1379,22 @@ public class MainActivity extends Activity {
                 txt(c,""+s.streak,(c3L+c3R)/2,182,22,white,Paint.Align.CENTER);
 
                 if(!isLast){
-                    box(c,18,286,w-18,332,card); txt(c,"Sessione conclusa",w/2,314,13,muted,Paint.Align.CENTER);
-                    drawChart(c,18,346,w-18,346+260,x.matches,s);
-                    lastContentBottom = 346+260+20;
+                    box(c,18,206,w-18,252,card); txt(c,"Sessione conclusa",w/2,234,13,muted,Paint.Align.CENTER);
+                    drawChart(c,18,266,w-18,266+260,x.matches,s);
+                    lastContentBottom = 266+260+20;
                 } else {
-                    box(c,18,286,w/2-8,332,green); box(c,w/2+8,286,w-18,332,red);
-                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,316,20,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L  (−10)",w*3/4,316,20,Color.WHITE,Paint.Align.CENTER);
-                    box(c,18,344,w/2-8,390,card); box(c,w/2+8,344,w-18,390,card);
-                    txt(c,"↶  ANNULLA",w/4,373,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,373,16,white,Paint.Align.CENTER);
-                    drawChart(c,18,402,w-18,402+260,x.matches,s);
-                    lastContentBottom = 402+260+20;
+                    box(c,18,206,w/2-8,252,green); box(c,w/2+8,206,w-18,252,red);
+                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,236,20,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L  (−10)",w*3/4,236,20,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,264,w/2-8,310,card); box(c,w/2+8,264,w-18,310,card);
+                    txt(c,"↶  ANNULLA",w/4,293,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,293,16,white,Paint.Align.CENTER);
+                    drawChart(c,18,322,w-18,322+260,x.matches,s);
+                    lastContentBottom = 322+260+20;
                 }
             }
             c.restore();
             finishScroll(); drawScrollbar(c,w);
-            bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, isLast && !x.untracked, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
+            bottomNav(c,w,h,hasPrev,hasNext, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
         }
 
         // Riga con il guadagno netto della sessione (ultimo punteggio - punteggio di partenza di QUESTA sessione).
@@ -1305,7 +1414,7 @@ public class MainActivity extends Activity {
         // Larghezza del pulsante prev/next commisurata al testo (nome sessione + freccia), invece di meta'
         // schermo fisso: usata sia per disegnare sia per il touch handler, cosi' restano sempre allineati.
         float navButtonWidth(String name){
-            p.setTextSize(28); float arrowW=p.measureText("←");
+            p.setTextSize(20); float arrowW=p.measureText("→");
             p.setTextSize(13); float nameW=p.measureText(name);
             return 32+6+arrowW+nameW; // padding(16*2) + gap(6) + freccia + nome
         }
@@ -1316,51 +1425,29 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.FILL);
         }
 
-        void bottomNav(Canvas c, float w, float h, boolean hasPrev, boolean hasNext, boolean isLast, boolean canConvert, boolean showNewSession, String prevName, String nextName){
+        void bottomNav(Canvas c, float w, float h, boolean hasPrev, boolean hasNext, String prevName, String nextName){
             float navY = h-BOTTOM_UI_HEIGHT+8;
             if(hasPrev){
                 float boxW = navButtonWidth(prevName);
-                box(c,18,navY,18+boxW,navY+40,card);
-                // La freccia "←" con questo font risulta visivamente piu' piccola di "→" alla stessa dimensione,
-                // quindi qui usiamo una dimensione maggiore per farle apparire equivalenti (24 non bastava ancora).
-                txt(c,"←",34,navY+27,28,muted,Paint.Align.LEFT);
-                p.setTextSize(28); float arrowW=p.measureText("←");
-                txt(c,prevName,34+arrowW+6,navY+26,13,white,Paint.Align.LEFT);
+                float boxL=18, boxR=18+boxW;
+                box(c,boxL,navY,boxR,navY+40,card);
+                // Freccia + nome centrati come UN UNICO blocco, sia orizzontalmente che verticalmente, nel
+                // pulsante (prima erano posizionati con offset fissi indovinati, non sempre allineati bene).
+                p.setTextSize(20); float arrowW=p.measureText("→");
+                p.setTextSize(13); float nameW=p.measureText(prevName);
+                float groupW=arrowW+6+nameW, groupL=boxL+(boxW-groupW)/2, centerY=navY+20;
+                drawLeftArrow(c,groupL,centeredBaseline(centerY,20),20,muted);
+                txt(c,prevName,groupL+arrowW+6,centeredBaseline(centerY,13),13,white,Paint.Align.LEFT);
             }
             if(hasNext){
                 float boxW = navButtonWidth(nextName);
-                box(c,w-18-boxW,navY,w-18,navY+40,card);
-                txt(c,"→",w-34,navY+27,20,muted,Paint.Align.RIGHT);
+                float boxL=w-18-boxW, boxR=w-18;
+                box(c,boxL,navY,boxR,navY+40,card);
                 p.setTextSize(20); float arrowW=p.measureText("→");
-                txt(c,nextName,w-34-arrowW-6,navY+26,13,white,Paint.Align.RIGHT);
-            }
-            float ty = navY+68;
-            if(canConvert){
-                // Bordo aggiunto: prima era solo testo "fluttuante", ora ha un contorno come un pulsante vero.
-                p.setTextSize(13); float tw=p.measureText("Segna come non tracciata");
-                strokeBox(c,w/2-(tw+32)/2,ty-20,w/2+(tw+32)/2,ty+12,muted);
-                txt(c,"Segna come non tracciata",w/2,ty,13,muted,Paint.Align.CENTER);
-                ty+=44;
-            }
-            boolean showDelete = isLast;
-            if(showNewSession && showDelete){
-                // Affiancati (prima uno sopra l'altro): Nuova sessione a sinistra, Elimina sessione a destra.
-                float btnTop=ty-6, btnBottom=btnTop+36;
-                box(c,18,btnTop,w/2-8,btnBottom,blue);
-                txt(c,"Nuova sessione",(18+w/2-8)/2,btnBottom-11,13,white,Paint.Align.CENTER);
-                strokeBox(c,w/2+8,btnTop,w-18,btnBottom,red);
-                txt(c,"Elimina sessione",(w/2+8+w-18)/2,btnBottom-11,13,red,Paint.Align.CENTER);
-            } else if(showNewSession){
-                float btnTop=ty-6, btnBottom=btnTop+36;
-                p.setTextSize(14); float tw=p.measureText("Nuova sessione");
-                float btnW=tw+36;
-                box(c,w/2-btnW/2,btnTop,w/2+btnW/2,btnBottom,blue);
-                txt(c,"Nuova sessione",w/2,btnBottom-11,14,white,Paint.Align.CENTER);
-            } else if(showDelete){
-                // Bordo aggiunto (stesso trattamento di "Segna come non tracciata").
-                p.setTextSize(13); float tw=p.measureText("Elimina sessione");
-                strokeBox(c,w/2-(tw+32)/2,ty-20,w/2+(tw+32)/2,ty+12,red);
-                txt(c,"Elimina sessione",w/2,ty,13,red,Paint.Align.CENTER);
+                p.setTextSize(13); float nameW=p.measureText(nextName);
+                float groupW=arrowW+6+nameW, groupL=boxL+(boxW-groupW)/2, centerY=navY+20;
+                txt(c,nextName,groupL,centeredBaseline(centerY,13),13,white,Paint.Align.LEFT);
+                txt(c,"→",groupL+nameW+6,centeredBaseline(centerY,20),20,muted,Paint.Align.LEFT);
             }
         }
 
@@ -1401,7 +1488,7 @@ public class MainActivity extends Activity {
 
         void detailNav(Canvas c,float w,float h){
             float y=h-58; p.setColor(Color.rgb(9,15,25));p.setStyle(Paint.Style.FILL);c.drawRect(0,y,w,h,p);
-            String[] n={"Sessioni","Deck","Stats"};
+            String[] n={"SESSIONI","DECK","STATS"};
             for(int i=0;i<3;i++){int col=i==detailTab?blue:muted; txt(c,n[i],w*(i+.5f)/3,y+36,14,col,Paint.Align.CENTER);}
         }
 
@@ -1456,41 +1543,21 @@ public class MainActivity extends Activity {
                 boolean isLast = idx==s.sessions.size()-1;
                 boolean hasPrev = idx>0, hasNext = idx<s.sessions.size()-1;
                 boolean canConvert = sess.matches.isEmpty() && !sess.untracked;
+                boolean showNewSessionItem = isLast && !sess.untracked;
+                boolean showDeckEditItem = !sess.untracked;
+                boolean showDeleteItem = isLast;
+                boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem;
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
                     if(x<60){ goBack(); return true; }
+                    if(showKebab && x>w-56){ sessionOptionsMenu(sess, isLast, canConvert); return true; } // icona "⋮"
                     return true;
                 }
-                // bottomNav (prev/next + segna non tracciata/elimina) e' fisso, non scrolla: usa 'y' grezza.
+                // bottomNav (solo prev/next ora) e' fisso, non scrolla: usa 'y' grezza.
                 if(y>=navY && y<=navY+40){
                     if(hasPrev && x<=18+navButtonWidth(s.sessions.get(idx-1).name)){ s.currentSession=idx-1; view.invalidate(); return true; }
                     if(hasNext && x>=w-18-navButtonWidth(s.sessions.get(idx+1).name)){ s.currentSession=idx+1; view.invalidate(); return true; }
                     return true;
-                }
-                { // stessa logica di accumulo verticale/orizzontale usata in bottomNav(), per restare allineati al disegno
-                    boolean showNewSessionBtn = isLast && !sess.untracked;
-                    boolean showDeleteBtn = isLast;
-                    float ty = navY+68;
-                    if(canConvert){
-                        p.setTextSize(13); float tw=p.measureText("Segna come non tracciata");
-                        if(y>=ty-20 && y<=ty+12 && x>=w/2-(tw+32)/2 && x<=w/2+(tw+32)/2){ convertToUntracked(); return true; }
-                        ty+=44;
-                    }
-                    if(showNewSessionBtn && showDeleteBtn){
-                        float btnTop=ty-6, btnBottom=btnTop+36;
-                        if(y>=btnTop && y<=btnBottom){
-                            if(x>=18 && x<=w/2-8){ showNewSession(); return true; }
-                            if(x>=w/2+8 && x<=w-18){ deleteCurrentSession(); return true; }
-                        }
-                    } else if(showNewSessionBtn){
-                        float btnTop=ty-6, btnBottom=btnTop+36;
-                        p.setTextSize(14); float tw=p.measureText("Nuova sessione");
-                        float btnW=tw+36;
-                        if(y>=btnTop && y<=btnBottom && x>=w/2-btnW/2 && x<=w/2+btnW/2){ showNewSession(); return true; }
-                    } else if(showDeleteBtn){
-                        p.setTextSize(13); float tw=p.measureText("Elimina sessione");
-                        if(y>=ty-20 && y<=ty+12 && x>=w/2-(tw+32)/2 && x<=w/2+(tw+32)/2){ deleteCurrentSession(); return true; }
-                    }
                 }
                 // Da qui in giu' siamo nel contenuto scrollabile: usa 'contentY'.
                 if(sess.untracked){
@@ -1498,11 +1565,10 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 if(contentY>=58 && contentY<=118){
-                    if(x>=w-72){ deckOptionsMenu(sess); return true; } // icona matita: cambia deck o rinomina quello attuale (zona allargata, icona ora piu' grande)
-                    return true; // riga nome deck: nessuna azione, per cambiare/rinominare usa la matita
+                    return true; // riga DECK: nessuna azione, per cambiare/rinominare usa il menu "⋮" in alto
                 }
-                if(isLast && contentY>=286 && contentY<=332){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && contentY>=344 && contentY<=390){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && contentY>=206 && contentY<=252){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=264 && contentY<=310){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
@@ -1530,7 +1596,7 @@ public class MainActivity extends Activity {
                 if(contentY>=yy&&contentY<=yy+58){ addDeck(); return true; }
             } else if(detailTab==2){
                 if(contentY>=262&&contentY<=290&&x>=w-150){ showDeckSortMenu(); return true; }
-                float dyy=304+22;
+                float dyy=304+11;
                 for(Deck d: sortedDecks(s)){
                     if(contentY>=dyy&&contentY<=dyy+78){ openDeckImages(d); return true; }
                     dyy+=90;
