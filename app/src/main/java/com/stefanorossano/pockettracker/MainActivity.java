@@ -4,12 +4,16 @@ import android.app.*;
 import android.os.Bundle;
 import android.content.*;
 import android.graphics.*;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.util.Log;
 import android.view.*;
 import android.widget.*;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import org.json.*;
 import java.util.*;
 
@@ -35,8 +39,20 @@ public class MainActivity extends Activity {
         } else {
             view = new TrackerView(this);
             setContentView(view);
+            attachInsets(view);
             screen = SCREEN_SEASON_LIST;
         }
+    }
+
+    // Applica gli inset di sistema (status bar in alto, barra di navigazione in basso) come padding sulla
+    // View: da Android 15 (targetSdk 35) il layout edge-to-edge e' attivo di default, quindi senza questo
+    // il contenuto verrebbe disegnato dietro l'orologio/status bar e dietro i pulsanti di navigazione.
+    void attachInsets(TrackerView v){
+        ViewCompat.setOnApplyWindowInsetsListener(v, (view, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return insets;
+        });
     }
 
     @Override protected void onPause() {
@@ -102,7 +118,7 @@ public class MainActivity extends Activity {
                 s.streak = st; s.initialStreak = st;
                 s.sessions.add(new Session("Session 1", "Unknown"));
                 store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
-                if (view == null) { view = new TrackerView(this); setContentView(view); }
+                if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
                 showDeckForFirstSession(s);
                 return true;
             } catch (Exception e) { return false; }
@@ -128,7 +144,7 @@ public class MainActivity extends Activity {
         Spinner spinner = new Spinner(this);
         spinner.setAdapter(adapter);
         box.addView(label("Deck (or tap \"Skip\" to go fast)")); box.addView(spinner);
-        Button newDeck = new Button(this); newDeck.setText("+ New Deck");
+        Button newDeck = new Button(this); newDeck.setText("+ New Deck"); styleSecondaryButton(newDeck);
         box.addView(newDeck);
         newDeck.setOnClickListener(v -> {
             EditText e = field("Deck name");
@@ -321,7 +337,7 @@ public class MainActivity extends Activity {
     void addDeck(){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
         EditText e=field("Deck name"); box.addView(label("Deck name")); box.addView(e);
-        Button img=new Button(this); img.setText("Add screenshot (optional)"); box.addView(img);
+        Button img=new Button(this); img.setText("Add screenshot (optional)"); styleSecondaryButton(img); box.addView(img);
         img.setOnClickListener(v-> pickImageFor(null)); // null = immagine "in sospeso", verra' assegnata al Deck solo se il salvataggio va a buon fine
         EditText notes=multilineField("Notes (optional)", null); box.addView(label("Notes")); box.addView(notes);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("New Deck").setView(box)
@@ -426,15 +442,40 @@ public class MainActivity extends Activity {
         }
     }
 
-    LinearLayout formBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(40,10,40,0);return l;}
-    TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(Color.LTGRAY);t.setPadding(0,12,0,4);return t;}
-    EditText field(String hint){EditText e=new EditText(this);e.setHint(hint);e.setSingleLine();return e;}
+    // Colori/stile condivisi per i widget nativi dei dialog (Season/Deck/Sessione), coerenti con la palette
+    // scura del resto dell'app invece dei widget Android di default (che stonavano visivamente).
+    static final int FIELD_BG = Color.rgb(10,18,30), FIELD_BORDER = Color.rgb(32,48,68), MUTED_TXT = Color.rgb(150,160,178);
+    int dp(float v){ return Math.round(v * getResources().getDisplayMetrics().density); }
+    GradientDrawable pill(int fill, Integer stroke){
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(fill);
+        d.setCornerRadius(dp(14));
+        if (stroke != null) d.setStroke(dp(1), stroke);
+        return d;
+    }
+    void styleField(EditText e){
+        e.setTextColor(Color.WHITE);
+        e.setHintTextColor(MUTED_TXT);
+        e.setBackground(pill(FIELD_BG, FIELD_BORDER));
+        e.setPadding(dp(14),dp(12),dp(14),dp(12));
+    }
+    void styleSecondaryButton(Button b){
+        b.setTextColor(Color.WHITE);
+        b.setBackground(pill(Color.rgb(20,32,48), FIELD_BORDER));
+        b.setPadding(dp(14),dp(10),dp(14),dp(10));
+        b.setAllCaps(false);
+    }
+
+    LinearLayout formBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(6),dp(20),0);return l;}
+    TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(MUTED_TXT);t.setTextSize(12);t.setPadding(0,dp(10),0,dp(4));return t;}
+    EditText field(String hint){EditText e=new EditText(this);e.setHint(hint);e.setSingleLine();styleField(e);return e;}
     EditText multilineField(String hint, String initial){
         EditText e=new EditText(this);
         e.setHint(hint);
         e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         e.setMinLines(3);
         e.setGravity(Gravity.TOP | Gravity.START);
+        styleField(e);
         if (initial != null) e.setText(initial);
         return e;
     }
@@ -466,7 +507,16 @@ public class MainActivity extends Activity {
         int bg=Color.rgb(7,11,18), card=Color.rgb(14,24,38), white=Color.WHITE, muted=Color.rgb(165,175,190), blue=Color.rgb(55,120,255), green=Color.rgb(70,205,75), red=Color.rgb(245,70,60);
         ArrayList<Hit> seasonHits=new ArrayList<>();
         ArrayList<Hit> sessionHits=new ArrayList<>();
-        TrackerView(Context c){super(c);p.setTypeface(Typeface.create("sans",Typeface.NORMAL));setBackgroundColor(bg);}
+        // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
+        // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
+        // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
+        final float density;
+        TrackerView(Context c){
+            super(c);
+            p.setTypeface(Typeface.create("sans",Typeface.NORMAL));
+            setBackgroundColor(bg);
+            density = c.getResources().getDisplayMetrics().density;
+        }
 
         void txt(Canvas c,String s,float x,float y,float size,int col,Paint.Align align){p.setTextSize(size);p.setColor(col);p.setTextAlign(align);p.setStyle(Paint.Style.FILL);c.drawText(s,x,y,p);}
         void box(Canvas c,float l,float t,float rr,float b,int col){p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawRoundRect(l,t,rr,b,18,18,p);}
@@ -493,16 +543,24 @@ public class MainActivity extends Activity {
 
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
-            float w=getWidth(), h=getHeight();
-            if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); return; }
+            // Scala tutto il canvas secondo la densita' dello schermo (vedi commento sul campo 'density'),
+            // e sposta l'origine sotto la status bar (il padding e' impostato in onCreate in base agli
+            // inset di sistema, cosi' il contenuto non finisce mai dietro l'orologio/status bar).
+            c.save();
+            c.scale(density, density);
+            c.translate(getPaddingLeft()/density, getPaddingTop()/density);
+            float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
+            float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
+            if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             Season s = store.seasons.get(store.current);
-            if (screen == SCREEN_SESSION_PLAY) { sessionPlay(c,s,w,h); return; }
+            if (screen == SCREEN_SESSION_PLAY) { sessionPlay(c,s,w,h); c.restore(); return; }
             // SCREEN_SEASON_DETAIL
             detailHeader(c,s,w);
             if (detailTab==0) sessionsList(c,s,w,h);
             else if (detailTab==1) decks(c,s,w,h);
             else stats(c,s,w,h);
             detailNav(c,w,h);
+            c.restore();
         }
 
         void seasonList(Canvas c, float w, float h){
@@ -818,7 +876,12 @@ public class MainActivity extends Activity {
 
         @Override public boolean onTouchEvent(android.view.MotionEvent e){
             if(e.getAction()!=MotionEvent.ACTION_UP)return true;
-            float x=e.getX(),y=e.getY(),w=getWidth(),h=getHeight();
+            // Le coordinate del tocco arrivano in pixel reali dell'intera View: le convertiamo nello stesso
+            // sistema "dp con origine sotto la status bar" usato in onDraw, altrimenti i tap non
+            // corrisponderebbero piu' a quello che e' disegnato sullo schermo.
+            float x=(e.getX()-getPaddingLeft())/density, y=(e.getY()-getPaddingTop())/density;
+            float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
+            float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
 
             if(screen==SCREEN_SEASON_LIST){
                 if(y<58 && x>w-150){ newSeason(); return true; }
