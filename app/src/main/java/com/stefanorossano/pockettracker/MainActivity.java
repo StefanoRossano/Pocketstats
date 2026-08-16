@@ -204,7 +204,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         selLp.topMargin = dp(6); deckSelector.setLayoutParams(selLp);
         final Runnable[] refreshSelector = new Runnable[1];
-        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : "Tocca per scegliere un deck");
+        refreshSelector[0] = () -> deckSelector.setText((selected[0] != null ? selected[0] : "Tocca per scegliere un deck") + "  ▾");
         refreshSelector[0].run();
         box.addView(deckSelector);
         deckSelector.setOnClickListener(v -> {
@@ -341,15 +341,36 @@ public class MainActivity extends Activity {
 
     void chooseDeck() {
         Season s=store.seasons.get(store.current);
-        String[] names=deckNames(s);
-        if(names.length==0){ createDeckAndAssign(s); return; }
-        String[] items = Arrays.copyOf(names, names.length+1);
-        items[names.length] = "+ Nuovo Deck...";
-        new AlertDialog.Builder(this).setTitle("Cambia Deck")
-            .setItems(items,(d,which)->{
-                if (which==names.length) createDeckAndAssign(s);
-                else { s.sessions.get(s.currentSession).deck=names[which]; store.save(); view.invalidate(); }
+        Session sess = s.sessions.get(s.currentSession);
+        ArrayList<String> names=new ArrayList<>();
+        for (Deck d : s.decks) names.add(d.name);
+        Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+        if(names.isEmpty()){ createDeckAndAssign(s); return; }
+
+        // Selettore compatto (come nella scelta iniziale del deck): mostra solo un pulsante che apre un menu
+        // a tendina, invece di elencare tutti i deck gia' srotolati nel dialog principale.
+        LinearLayout box = formBox();
+        box.addView(label("Deck"));
+        Button deckSelector = new Button(this); styleSecondaryButton(deckSelector);
+        deckSelector.setText("Tocca per scegliere un deck  ▾");
+        LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        selLp.topMargin = dp(6); deckSelector.setLayoutParams(selLp);
+        box.addView(deckSelector);
+
+        Button newDeckBtn = new Button(this); newDeckBtn.setText("+ Nuovo Deck..."); styleSecondaryButton(newDeckBtn);
+        LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        newBtnLp.topMargin = dp(10); newDeckBtn.setLayoutParams(newBtnLp);
+        box.addView(newDeckBtn);
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Cambia Deck").setView(box)
+            .setNegativeButton("Annulla", null).create();
+        deckSelector.setOnClickListener(v -> {
+            new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
+                sess.deck = names.get(which); store.save(); view.invalidate(); dialog.dismiss();
             }).show();
+        });
+        newDeckBtn.setOnClickListener(v -> { dialog.dismiss(); createDeckAndAssign(s); });
+        dialog.show();
     }
 
     void showNewSession() { showNewDeckAndSession(false); }
@@ -734,7 +755,7 @@ public class MainActivity extends Activity {
             try {
                 java.io.InputStream is = getContentResolver().openInputStream(Uri.parse(d.images.get(idx[0])));
                 Bitmap full = BitmapFactory.decodeStream(is);
-                int cropTop=(int)(full.getHeight()*0.25f), cropBottom=(int)(full.getHeight()*0.18f);
+                int cropTop=(int)(full.getHeight()*0.15f), cropBottom=(int)(full.getHeight()*0.13f);
                 int newH=full.getHeight()-cropTop-cropBottom;
                 iv.setImageBitmap(newH>0 ? Bitmap.createBitmap(full,0,cropTop,full.getWidth(),newH) : full);
             } catch(Exception e) {
@@ -968,6 +989,8 @@ public class MainActivity extends Activity {
             }
             // Link discreto, ora parte del contenuto scrollabile (prima della prossima riga fissa): azione
             // distruttiva, quindi richiede sempre conferma esplicita (vedi resetAllData()).
+            p.setTextSize(12); float resetTw=p.measureText("Cancella tutti i dati");
+            strokeBox(c,w/2-(resetTw+32)/2,y+4,w/2+(resetTw+32)/2,y+36,Color.rgb(200,90,85));
             txt(c,"Cancella tutti i dati",w/2,y+24,12,Color.rgb(200,90,85),Paint.Align.CENTER);
             resetLinkY = y+24;
             lastContentBottom = y+60;
@@ -979,7 +1002,7 @@ public class MainActivity extends Activity {
         }
 
         void detailHeader(Canvas c, Season s, float w){
-            txt(c,"←",24,38,26,white,Paint.Align.LEFT);
+            txt(c,"←",24,40,32,white,Paint.Align.LEFT);
             txt(c,s.name,60,34,20,white,Paint.Align.LEFT);
             drawEditIcon(c,w-24,32,18,muted);
         }
@@ -1178,7 +1201,7 @@ public class MainActivity extends Activity {
             boolean isLast = idx==s.sessions.size()-1;
             boolean hasPrev = idx>0, hasNext = idx<s.sessions.size()-1;
             boolean canConvert = x.matches.isEmpty() && !x.untracked; // solo se la sessione non ha ancora partite
-            txt(c,"←",24,38,26,white,Paint.Align.LEFT);
+            txt(c,"←",24,40,32,white,Paint.Align.LEFT);
             txt(c,x.name,60,34,16,white,Paint.Align.LEFT);
 
             // Header fisso sopra, barra prev/next+elimina fissa sotto (bottomNav): solo il contenuto in mezzo
@@ -1220,13 +1243,13 @@ public class MainActivity extends Activity {
                     drawChart(c,18,346,w-18,346+260,x.matches,s);
                     lastContentBottom = 346+260+20;
                 } else {
-                    box(c,18,286,w/2-8,362,green); box(c,w/2+8,286,w-18,362,red);
-                    txt(c,"W",w/4,322,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,348,14,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L",w*3/4,322,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,348,14,Color.WHITE,Paint.Align.CENTER);
-                    box(c,18,374,w/2-8,420,card); box(c,w/2+8,374,w-18,420,card);
-                    txt(c,"↶  ANNULLA",w/4,403,14,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,403,14,white,Paint.Align.CENTER);
-                    drawChart(c,18,432,w-18,432+260,x.matches,s);
-                    lastContentBottom = 432+260+20;
+                    box(c,18,286,w/2-8,332,green); box(c,w/2+8,286,w-18,332,red);
+                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,316,20,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L  (−10)",w*3/4,316,20,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,344,w/2-8,390,card); box(c,w/2+8,344,w-18,390,card);
+                    txt(c,"↶  ANNULLA",w/4,373,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,373,16,white,Paint.Align.CENTER);
+                    drawChart(c,18,402,w-18,402+260,x.matches,s);
+                    lastContentBottom = 402+260+20;
                 }
             }
             c.restore();
@@ -1251,7 +1274,7 @@ public class MainActivity extends Activity {
         // Larghezza del pulsante prev/next commisurata al testo (nome sessione + freccia), invece di meta'
         // schermo fisso: usata sia per disegnare sia per il touch handler, cosi' restano sempre allineati.
         float navButtonWidth(String name){
-            p.setTextSize(20); float arrowW=p.measureText("←");
+            p.setTextSize(24); float arrowW=p.measureText("←");
             p.setTextSize(13); float nameW=p.measureText(name);
             return 32+6+arrowW+nameW; // padding(16*2) + gap(6) + freccia + nome
         }
@@ -1267,8 +1290,10 @@ public class MainActivity extends Activity {
             if(hasPrev){
                 float boxW = navButtonWidth(prevName);
                 box(c,18,navY,18+boxW,navY+40,card);
-                txt(c,"←",34,navY+27,20,muted,Paint.Align.LEFT);
-                p.setTextSize(20); float arrowW=p.measureText("←");
+                // La freccia "←" con questo font risulta visivamente piu' piccola di "→" alla stessa dimensione,
+                // quindi qui usiamo una dimensione leggermente maggiore per farle apparire equivalenti.
+                txt(c,"←",34,navY+27,24,muted,Paint.Align.LEFT);
+                p.setTextSize(24); float arrowW=p.measureText("←");
                 txt(c,prevName,34+arrowW+6,navY+26,13,white,Paint.Align.LEFT);
             }
             if(hasNext){
@@ -1286,17 +1311,21 @@ public class MainActivity extends Activity {
                 txt(c,"Segna come non tracciata",w/2,ty,13,muted,Paint.Align.CENTER);
                 ty+=44;
             }
-            if(showNewSession){
-                // Spostato qui (sopra "Elimina sessione") invece che in alto nell'header: prima era isolato
-                // in cima, ora sta assieme alle altre azioni di gestione della sessione.
+            boolean showDelete = isLast;
+            if(showNewSession && showDelete){
+                // Affiancati (prima uno sopra l'altro): Nuova sessione a sinistra, Elimina sessione a destra.
+                float btnTop=ty-6, btnBottom=btnTop+36;
+                box(c,18,btnTop,w/2-8,btnBottom,blue);
+                txt(c,"Nuova sessione",(18+w/2-8)/2,btnBottom-11,13,white,Paint.Align.CENTER);
+                strokeBox(c,w/2+8,btnTop,w-18,btnBottom,red);
+                txt(c,"Elimina sessione",(w/2+8+w-18)/2,btnBottom-11,13,red,Paint.Align.CENTER);
+            } else if(showNewSession){
                 float btnTop=ty-6, btnBottom=btnTop+36;
                 p.setTextSize(14); float tw=p.measureText("Nuova sessione");
                 float btnW=tw+36;
                 box(c,w/2-btnW/2,btnTop,w/2+btnW/2,btnBottom,blue);
                 txt(c,"Nuova sessione",w/2,btnBottom-11,14,white,Paint.Align.CENTER);
-                ty=btnBottom+30;
-            }
-            if(isLast){
+            } else if(showDelete){
                 // Bordo aggiunto (stesso trattamento di "Segna come non tracciata").
                 p.setTextSize(13); float tw=p.measureText("Elimina sessione");
                 strokeBox(c,w/2-(tw+32)/2,ty-20,w/2+(tw+32)/2,ty+12,red);
@@ -1378,7 +1407,8 @@ public class MainActivity extends Activity {
 
             if(screen==SCREEN_SEASON_LIST){
                 if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; } // pulsante fisso, non scrolla
-                if(contentY>=resetLinkY-16 && contentY<=resetLinkY+16){ resetAllData(); return true; }
+                p.setTextSize(12); float resetTw=p.measureText("Cancella tutti i dati");
+                if(contentY>=resetLinkY-16 && contentY<=resetLinkY+16 && x>=w/2-(resetTw+32)/2 && x<=w/2+(resetTw+32)/2){ resetAllData(); return true; }
                 for(Hit hit: seasonHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
                 return true;
             }
@@ -1402,16 +1432,30 @@ public class MainActivity extends Activity {
                     if(hasNext && x>=w-18-navButtonWidth(s.sessions.get(idx+1).name)){ s.currentSession=idx+1; view.invalidate(); return true; }
                     return true;
                 }
-                { // stessa logica di accumulo verticale usata in bottomNav(), per restare allineati al disegno
+                { // stessa logica di accumulo verticale/orizzontale usata in bottomNav(), per restare allineati al disegno
                     boolean showNewSessionBtn = isLast && !sess.untracked;
+                    boolean showDeleteBtn = isLast;
                     float ty = navY+68;
-                    if(canConvert){ if(y>=ty-16 && y<=ty+16){ convertToUntracked(); return true; } ty+=44; }
-                    if(showNewSessionBtn){
-                        float btnTop=ty-6, btnBottom=btnTop+36;
-                        if(y>=btnTop && y<=btnBottom){ showNewSession(); return true; }
-                        ty=btnBottom+30;
+                    if(canConvert){
+                        p.setTextSize(13); float tw=p.measureText("Segna come non tracciata");
+                        if(y>=ty-20 && y<=ty+12 && x>=w/2-(tw+32)/2 && x<=w/2+(tw+32)/2){ convertToUntracked(); return true; }
+                        ty+=44;
                     }
-                    if(isLast){ if(y>=ty-16 && y<=ty+16){ deleteCurrentSession(); return true; } }
+                    if(showNewSessionBtn && showDeleteBtn){
+                        float btnTop=ty-6, btnBottom=btnTop+36;
+                        if(y>=btnTop && y<=btnBottom){
+                            if(x>=18 && x<=w/2-8){ showNewSession(); return true; }
+                            if(x>=w/2+8 && x<=w-18){ deleteCurrentSession(); return true; }
+                        }
+                    } else if(showNewSessionBtn){
+                        float btnTop=ty-6, btnBottom=btnTop+36;
+                        p.setTextSize(14); float tw=p.measureText("Nuova sessione");
+                        float btnW=tw+36;
+                        if(y>=btnTop && y<=btnBottom && x>=w/2-btnW/2 && x<=w/2+btnW/2){ showNewSession(); return true; }
+                    } else if(showDeleteBtn){
+                        p.setTextSize(13); float tw=p.measureText("Elimina sessione");
+                        if(y>=ty-20 && y<=ty+12 && x>=w/2-(tw+32)/2 && x<=w/2+(tw+32)/2){ deleteCurrentSession(); return true; }
+                    }
                 }
                 // Da qui in giu' siamo nel contenuto scrollabile: usa 'contentY'.
                 if(sess.untracked){
@@ -1420,10 +1464,10 @@ public class MainActivity extends Activity {
                 }
                 if(contentY>=58 && contentY<=118){
                     if(x>=w-56){ deckOptionsMenu(sess); return true; } // icona matita: cambia deck o rinomina quello attuale
-                    chooseDeck(); return true; // zona nome deck: modificabile anche su sessioni passate (skip -> assegnazione retroattiva)
+                    return true; // riga nome deck: nessuna azione, per cambiare/rinominare usa la matita
                 }
-                if(isLast && contentY>=286 && contentY<=362){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && contentY>=374 && contentY<=420){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && contentY>=286 && contentY<=332){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=344 && contentY<=390){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
