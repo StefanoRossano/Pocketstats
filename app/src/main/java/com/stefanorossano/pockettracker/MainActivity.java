@@ -749,6 +749,27 @@ public class MainActivity extends Activity {
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
         // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
         final float density;
+        // Scroll verticale: ogni schermata ha un header (e talvolta un footer) fissi, con il contenuto in
+        // mezzo che scorre se supera l'altezza disponibile. bodyTop/bodyBottom delimitano la zona scrollabile
+        // per la schermata corrente; lastContentBottom e' impostato da ciascun metodo di disegno a fine
+        // contenuto, per calcolare quanto si puo' scorrere.
+        float scrollY=0, maxScrollY=0, bodyTop=0, bodyBottom=0, lastContentBottom=0, resetLinkY=0;
+        String scrollKey="";
+        void resetScrollIfNeeded(String key){ if(!key.equals(scrollKey)){ scrollY=0; scrollKey=key; } }
+        void finishScroll(){
+            maxScrollY = Math.max(0, lastContentBottom-(bodyBottom-bodyTop));
+            if(scrollY>maxScrollY) scrollY=maxScrollY;
+            if(scrollY<0) scrollY=0;
+        }
+        void drawScrollbar(Canvas c, float w){
+            if(maxScrollY<=1) return;
+            float trackH=bodyBottom-bodyTop;
+            float thumbH=Math.max(30, trackH*trackH/(trackH+maxScrollY));
+            float thumbY=bodyTop+(trackH-thumbH)*(scrollY/maxScrollY);
+            p.setColor(Color.rgb(70,85,105)); p.setStyle(Paint.Style.FILL);
+            c.drawRoundRect(w-7,thumbY,w-3,thumbY+thumbH,2,2,p);
+        }
+
         TrackerView(Context c){
             super(c);
             p.setTypeface(Typeface.create("sans",Typeface.NORMAL));
@@ -792,11 +813,16 @@ public class MainActivity extends Activity {
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             Season s = store.seasons.get(store.current);
             if (screen == SCREEN_SESSION_PLAY) { sessionPlay(c,s,w,h); c.restore(); return; }
-            // SCREEN_SEASON_DETAIL
+            // SCREEN_SEASON_DETAIL: header e barra tab in basso restano fissi, il contenuto in mezzo scorre.
             detailHeader(c,s,w);
+            bodyTop=44; bodyBottom=h-58; // 44 e non 58: nel tab Deck la pillola "Ordina" parte da y=48
+            resetScrollIfNeeded("detail:"+detailTab+":"+store.current);
+            c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
             if (detailTab==0) sessionsList(c,s,w,h);
             else if (detailTab==1) decks(c,s,w,h);
             else stats(c,s,w,h);
+            c.restore();
+            finishScroll(); drawScrollbar(c,w);
             detailNav(c,w,h);
             c.restore();
         }
@@ -805,6 +831,9 @@ public class MainActivity extends Activity {
             seasonHits.clear();
             txt(c,"Pokémon Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
             txt(c,"SEASONS",24,74,12,muted,Paint.Align.LEFT);
+            bodyTop=84; bodyBottom=h;
+            resetScrollIfNeeded("seasonlist");
+            c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
             float y=92;
             for(int i=0;i<store.seasons.size();i++){
                 Season s=store.seasons.get(i);
@@ -821,10 +850,15 @@ public class MainActivity extends Activity {
                 seasonHits.add(new Hit(y,y+94,i));
                 y+=104;
             }
-            // Link discreto in fondo, non invasivo ma sempre raggiungibile: azione distruttiva, quindi
-            // richiede sempre conferma esplicita (vedi resetAllData()).
-            txt(c,"Cancella tutti i dati",w/2,h-18,12,Color.rgb(200,90,85),Paint.Align.CENTER);
-            // Pulsante "Nuova Season" in basso a destra (floating action button), sempre raggiungibile col pollice.
+            // Link discreto, ora parte del contenuto scrollabile (prima della prossima riga fissa): azione
+            // distruttiva, quindi richiede sempre conferma esplicita (vedi resetAllData()).
+            txt(c,"Cancella tutti i dati",w/2,y+24,12,Color.rgb(200,90,85),Paint.Align.CENTER);
+            resetLinkY = y+24;
+            lastContentBottom = y+60;
+            c.restore();
+            finishScroll(); drawScrollbar(c,w);
+            // Pulsante "Nuova Season" in basso a destra (floating action button, sempre fisso): sempre
+            // raggiungibile col pollice, non scorre via col resto del contenuto.
             box(c,w-166,h-104,w-18,h-54,blue); txt(c,"Nuova Season",w-92,h-73,14,white,Paint.Align.CENTER);
         }
 
@@ -839,28 +873,23 @@ public class MainActivity extends Activity {
             ArrayList<Match> all=s.allMatches();
             int[] wl=countWL(s.sessions); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
-            // Punti attuali: il dato piu' importante della schermata, quindi in grande e ben visibile,
-            // in un riquadro dedicato invece che infilato in una riga di testo piccolo.
+            // Punti attuali + Vittorie consecutive: stessa card, i due dati piu' importanti a colpo d'occhio.
             box(c,18,58,w/2-8,132,card);
-            txt(c,"PUNTI ATTUALI",w/4,80,10,muted,Paint.Align.CENTER);
-            txt(c,""+s.points,w/4,120,30,white,Paint.Align.CENTER);
-            // Partite totali: stesso trattamento, numero grande in evidenza, con W/L/% come dettaglio sotto.
+            txt(c,"PUNTI",w/4,78,10,muted,Paint.Align.CENTER);
+            txt(c,""+s.points,w/4,112,26,white,Paint.Align.CENTER);
+            txt(c,"VC "+s.streak,w/4,127,11,muted,Paint.Align.CENTER);
+            // Partite totali: numero moderato, non piu' "urlato" quanto i punti — resta un dettaglio secondario.
             box(c,w/2+8,58,w-18,132,card);
-            txt(c,"PARTITE TOTALI",w*3/4,78,10,muted,Paint.Align.CENTER);
-            txt(c,""+(W+L),w*3/4,110,24,white,Paint.Align.CENTER);
+            txt(c,"PARTITE TOTALI",w*3/4,80,10,muted,Paint.Align.CENTER);
+            txt(c,""+(W+L),w*3/4,106,18,white,Paint.Align.CENTER);
             txtRowCentered(c,w*3/4,127,11,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
-            // Vittorie consecutive: prima era un dettaglio piccolo infilato altrove; ora e' una card a se',
-            // visibile come le altre due statistiche principali.
-            box(c,18,140,w-18,184,card);
-            txt(c,"VITTORIE CONSECUTIVE",w/2,159,10,muted,Paint.Align.CENTER);
-            txt(c,""+s.streak,w/2,180,26,white,Paint.Align.CENTER);
-            box(c,18,194,w-18,236,blue);
-            txt(c,"NUOVA SESSIONE",w/2,220,14,white,Paint.Align.CENTER);
-            box(c,18,242,w-18,272,card);
-            txt(c,"Aggiungi sessione non tracciata",w/2,261,12,muted,Paint.Align.CENTER);
-            float y=280;
+            box(c,18,140,w-18,182,blue);
+            txt(c,"NUOVA SESSIONE",w/2,166,14,white,Paint.Align.CENTER);
+            box(c,18,188,w-18,218,card);
+            txt(c,"Aggiungi sessione non tracciata",w/2,207,12,muted,Paint.Align.CENTER);
+            float y=226;
             for(int i=s.sessions.size()-1;i>=0;i--){
                 Session se=s.sessions.get(i);
                 boolean isLast = i==s.sessions.size()-1;
@@ -878,6 +907,7 @@ public class MainActivity extends Activity {
             y+=28; // spazio ben visibile prima del grafico, prima era troppo attaccato all'ultima card sessione
             txt(c,"GRAFICO TOTALE",18,y,12,muted,Paint.Align.LEFT);
             drawChart(c,18,y+16,w-18,y+16+220,all,s);
+            lastContentBottom = y+16+220+20;
         }
 
         int deckSortMode = 0; // 0=Win rate, 1=Games, 2=Best streak, 3=Name — condiviso tra tab Deck e Statistiche
@@ -962,6 +992,7 @@ public class MainActivity extends Activity {
                 y+=90;
             }
             box(c,18,y,w-18,y+58,blue);txt(c,"AGGIUNGI DECK",w/2,y+37,14,white,Paint.Align.CENTER);
+            lastContentBottom = y+58+20;
         }
 
         // Statistiche aggregate (W/L) delle sessioni senza un deck assegnato in questa Season.
@@ -1031,6 +1062,7 @@ public class MainActivity extends Activity {
                     new int[]{muted, muted, green, red, wrColor(ndwr,nd[0]+nd[1]), muted});
                 yy+=20;
             }
+            lastContentBottom = yy+16;
         }
 
         static final float BOTTOM_UI_HEIGHT = 150; // spazio riservato in fondo per prev/next + eventuali link testuali sotto
@@ -1045,7 +1077,12 @@ public class MainActivity extends Activity {
             txt(c,x.name,60,34,16,white,Paint.Align.LEFT);
             if(isLast && !x.untracked){ box(c,w-58,16,w-18,52,blue); txt(c,"＋",w-38,40,20,white,Paint.Align.CENTER); }
 
-            float chartBottom = h-BOTTOM_UI_HEIGHT;
+            // Header fisso sopra, barra prev/next+elimina fissa sotto (bottomNav): solo il contenuto in mezzo
+            // scorre. Il grafico ora usa sempre la sua altezza naturale (non piu' "schiacciato" per stare nello
+            // spazio visibile): se non ci sta, semplicemente si scorre per vederlo tutto.
+            bodyTop=58; bodyBottom=h-BOTTOM_UI_HEIGHT;
+            resetScrollIfNeeded("play:"+store.current+":"+idx);
+            c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
 
             if(x.untracked){
                 box(c,18,58,w-18,140,card);
@@ -1055,35 +1092,36 @@ public class MainActivity extends Activity {
                 txt(c,"✎",w-32,80,18,blue,Paint.Align.CENTER);
                 netGainRow(c,146,220,w,x.endPoints-x.startPoints);
                 txt(c,"Crea una nuova sessione per continuare a giocare.",18,244,13,muted,Paint.Align.LEFT);
-                drawChart(c,18,260,w-18,Math.min(260+430,chartBottom),x.matches,s);
-                bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
-                return;
+                drawChart(c,18,260,w-18,260+430,x.matches,s);
+                lastContentBottom = 260+430+20;
+            } else {
+                box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
+                txt(c, "Unknown".equals(x.deck) ? "Nessun deck — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
+                Deck linkedDeck = findDeck(s, x.deck);
+                int shotCount = linkedDeck!=null ? linkedDeck.images.size() : 0;
+                txt(c, "Screenshot ("+shotCount+")", w-40, 94, 11, shotCount>0?blue:muted, Paint.Align.CENTER);
+                int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
+                netGainRow(c,124,198,w,gain);
+
+                if(!isLast){
+                    box(c,18,204,w-18,250,card); txt(c,"Sessione conclusa",w/2,232,13,muted,Paint.Align.CENTER);
+                    drawChart(c,18,264,w-18,264+610,x.matches,s);
+                    lastContentBottom = 264+610+20;
+                } else {
+                    box(c,18,204,w/2-8,278,card); box(c,w/2+8,204,w-18,278,card);
+                    txt(c,"PUNTI ATTUALI",w/4,225,10,muted,Paint.Align.CENTER); txt(c,""+s.points,w/4,261,28,white,Paint.Align.CENTER);
+                    txt(c,"VITTORIE CONSECUTIVE",w*3/4,225,9,muted,Paint.Align.CENTER); txt(c,""+s.streak,w*3/4,261,28,white,Paint.Align.CENTER);
+                    box(c,18,290,w/2-8,366,green); box(c,w/2+8,290,w-18,366,red);
+                    txt(c,"W",w/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,352,14,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L",w*3/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,352,14,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,378,w/2-8,424,card); box(c,w/2+8,378,w-18,424,card);
+                    txt(c,"↶  ANNULLA",w/4,407,14,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,407,14,white,Paint.Align.CENTER);
+                    drawChart(c,18,436,w-18,436+610,x.matches,s);
+                    lastContentBottom = 436+610+20;
+                }
             }
-
-            box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
-            txt(c, "Unknown".equals(x.deck) ? "Nessun deck — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
-            Deck linkedDeck = findDeck(s, x.deck);
-            int shotCount = linkedDeck!=null ? linkedDeck.images.size() : 0;
-            txt(c, "Screenshot ("+shotCount+")", w-40, 94, 11, shotCount>0?blue:muted, Paint.Align.CENTER);
-            int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
-            netGainRow(c,124,198,w,gain);
-
-            if(!isLast){
-                box(c,18,204,w-18,250,card); txt(c,"Sessione conclusa",w/2,232,13,muted,Paint.Align.CENTER);
-                drawChart(c,18,264,w-18,Math.min(264+610,chartBottom),x.matches,s);
-                bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
-                return;
-            }
-
-            box(c,18,204,w/2-8,278,card); box(c,w/2+8,204,w-18,278,card);
-            txt(c,"PUNTI ATTUALI",w/4,225,10,muted,Paint.Align.CENTER); txt(c,""+s.points,w/4,261,28,white,Paint.Align.CENTER);
-            txt(c,"VITTORIE CONSECUTIVE",w*3/4,225,9,muted,Paint.Align.CENTER); txt(c,""+s.streak,w*3/4,261,28,white,Paint.Align.CENTER);
-            box(c,18,290,w/2-8,366,green); box(c,w/2+8,290,w-18,366,red);
-            txt(c,"W",w/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"+"+reward(s.streak+1),w/4,352,14,Color.WHITE,Paint.Align.CENTER);
-            txt(c,"L",w*3/4,326,26,Color.WHITE,Paint.Align.CENTER); txt(c,"−10",w*3/4,352,14,Color.WHITE,Paint.Align.CENTER);
-            box(c,18,378,w/2-8,424,card); box(c,w/2+8,378,w-18,424,card);
-            txt(c,"↶  ANNULLA",w/4,407,14,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,407,14,white,Paint.Align.CENTER);
-            drawChart(c,18,436,w-18,Math.min(436+610,chartBottom),x.matches,s);
+            c.restore();
+            finishScroll(); drawScrollbar(c,w);
             bottomNav(c,w,h,hasPrev,hasNext,isLast,canConvert, idx>0?s.sessions.get(idx-1).name:null, idx<s.sessions.size()-1?s.sessions.get(idx+1).name:null);
         }
 
@@ -1164,8 +1202,9 @@ public class MainActivity extends Activity {
             for(int i=0;i<3;i++){int col=i==detailTab?blue:muted; txt(c,n[i],w*(i+.5f)/3,y+36,14,col,Paint.Align.CENTER);}
         }
 
+        float touchDownX=0, touchDownY=0, touchStartScrollY=0; boolean isDragging=false;
+
         @Override public boolean onTouchEvent(android.view.MotionEvent e){
-            if(e.getAction()!=MotionEvent.ACTION_UP)return true;
             // Le coordinate del tocco arrivano in pixel reali dell'intera View: le convertiamo nello stesso
             // sistema "dp con origine sotto la status bar" usato in onDraw, altrimenti i tap non
             // corrisponderebbero piu' a quello che e' disegnato sullo schermo.
@@ -1173,10 +1212,35 @@ public class MainActivity extends Activity {
             float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
 
+            // Drag verticale per lo scroll: solo se il dito parte dentro la zona di contenuto scrollabile
+            // (bodyTop/bodyBottom, calcolati dall'ultimo onDraw). Se il movimento supera una piccola soglia,
+            // il gesto diventa uno scroll e NON viene piu' interpretato come tap al rilascio.
+            if(e.getAction()==MotionEvent.ACTION_DOWN){
+                touchDownX=x; touchDownY=y; touchStartScrollY=scrollY; isDragging=false;
+                return true;
+            }
+            if(e.getAction()==MotionEvent.ACTION_MOVE){
+                float dy = touchDownY - y;
+                if(Math.abs(dy)>8 && touchDownY>=bodyTop && touchDownY<=bodyBottom) isDragging=true;
+                if(isDragging){
+                    scrollY = touchStartScrollY + dy;
+                    if(scrollY<0) scrollY=0; if(scrollY>maxScrollY) scrollY=maxScrollY;
+                    invalidate();
+                }
+                return true;
+            }
+            if(e.getAction()!=MotionEvent.ACTION_UP) return true;
+            if(isDragging){ isDragging=false; return true; } // era uno scroll: nessuna azione di tap
+
+            // Se il tocco cade nella zona di contenuto scrollabile, la convertiamo in coordinate "di
+            // contenuto" (aggiungendo lo scroll corrente), perche' i box disegnati li' sono stati spostati
+            // in alto di scrollY. Fuori da quella zona (header, barre fisse) restano le coordinate dello schermo.
+            float contentY = (y>=bodyTop && y<=bodyBottom) ? y+scrollY : y;
+
             if(screen==SCREEN_SEASON_LIST){
-                if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
-                if(y>=h-34 && y<=h-4){ resetAllData(); return true; }
-                for(Hit hit: seasonHits){ if(y>=hit.top&&y<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
+                if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; } // pulsante fisso, non scrolla
+                if(contentY>=resetLinkY-16 && contentY<=resetLinkY+16){ resetAllData(); return true; }
+                for(Hit hit: seasonHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
                 return true;
             }
 
@@ -1194,6 +1258,7 @@ public class MainActivity extends Activity {
                     if(isLast && !sess.untracked && x>w-70){ showNewSession(); return true; }
                     return true;
                 }
+                // bottomNav (prev/next + segna non tracciata/elimina) e' fisso, non scrolla: usa 'y' grezza.
                 if(y>=navY && y<=navY+40){
                     if(hasPrev && x<=18+navButtonWidth(s.sessions.get(idx-1).name)){ s.currentSession=idx-1; view.invalidate(); return true; }
                     if(hasNext && x>=w-18-navButtonWidth(s.sessions.get(idx+1).name)){ s.currentSession=idx+1; view.invalidate(); return true; }
@@ -1204,20 +1269,22 @@ public class MainActivity extends Activity {
                     if(canConvert){ if(y>=ty-16 && y<=ty+16){ convertToUntracked(); return true; } ty+=34; }
                     if(isLast){ ty+=22; if(y>=ty-16 && y<=ty+16){ deleteCurrentSession(); return true; } }
                 }
+                // Da qui in giu' siamo nel contenuto scrollabile: usa 'contentY'.
                 if(sess.untracked){
-                    if(y>=58 && y<=140 && x>=w-56){ editUntrackedSession(); return true; } // icona ✎: modificabile su qualunque sessione non tracciata
+                    if(contentY>=58 && contentY<=140 && x>=w-56){ editUntrackedSession(); return true; } // icona ✎: modificabile su qualunque sessione non tracciata
                     return true;
                 }
-                if(y>=58 && y<=118){
+                if(contentY>=58 && contentY<=118){
                     if(x>=w-100){ manageDeckScreenshots(findDeck(s, sess.deck)); return true; } // zona screenshot: sempre attiva
                     chooseDeck(); return true; // zona nome deck: modificabile anche su sessioni passate (skip -> assegnazione retroattiva)
                 }
-                if(isLast && y>=290 && y<=366){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && y>=378 && y<=424){ if(x<w/2) undo(); else redo(); return true; }
+                if(isLast && contentY>=290 && contentY<=366){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=378 && contentY<=424){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
-            // SCREEN_SEASON_DETAIL
+            // SCREEN_SEASON_DETAIL: header (y<52) e barra tab in basso (y>h-58) sono fissi, usa 'y' grezza;
+            // tutto il resto e' contenuto scrollabile, usa 'contentY'.
             if(y<52){
                 if(x<60){ goBack(); return true; }
                 if(x>w-60){ renameSeason(); return true; }
@@ -1225,19 +1292,19 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(y>=194&&y<=236){ showNewSession(); return true; }
-                if(y>=242&&y<=272){ showUntracked(); return true; }
-                for(Hit hit: sessionHits){ if(y>=hit.top&&y<=hit.bottom){ s.currentSession=hit.index; screen=SCREEN_SESSION_PLAY; invalidate(); return true; } }
+                if(contentY>=140&&contentY<=182){ showNewSession(); return true; }
+                if(contentY>=188&&contentY<=218){ showUntracked(); return true; }
+                for(Hit hit: sessionHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ s.currentSession=hit.index; screen=SCREEN_SESSION_PLAY; invalidate(); return true; } }
             } else if(detailTab==1){
-                if(y>=48&&y<=76&&x>=w-150){ showDeckSortMenu(); return true; }
+                if(contentY>=48&&contentY<=76&&x>=w-150){ showDeckSortMenu(); return true; }
                 float yy=90;
                 for(Deck d: sortedDecks(s)){
-                    if(y>=yy&&y<=yy+78){ manageDeckScreenshots(d); return true; }
+                    if(contentY>=yy&&contentY<=yy+78){ manageDeckScreenshots(d); return true; }
                     yy+=90;
                 }
-                if(y>=yy&&y<=yy+58){ addDeck(); return true; }
+                if(contentY>=yy&&contentY<=yy+58){ addDeck(); return true; }
             } else if(detailTab==2){
-                if(y>=262&&y<=290&&x>=w-150){ showDeckSortMenu(); return true; }
+                if(contentY>=262&&contentY<=290&&x>=w-150){ showDeckSortMenu(); return true; }
             }
             return true;
         }
