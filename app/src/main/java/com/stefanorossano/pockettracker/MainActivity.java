@@ -40,8 +40,27 @@ public class MainActivity extends Activity {
             view = new TrackerView(this);
             setContentView(view);
             attachInsets(view);
-            screen = SCREEN_SEASON_LIST;
+            // Ripristina la schermata su cui si trovava l'utente, se questa Activity e' stata ricreata dal
+            // sistema (es. processo terminato in background per liberare memoria, cosa che capita spesso
+            // cambiando app): senza questo, si tornava sempre alla lista Stagioni, perdendo il contesto.
+            if (b != null) {
+                int savedCurrent = b.getInt("seasonCurrent", 0);
+                if (savedCurrent>=0 && savedCurrent<store.seasons.size()) store.current = savedCurrent;
+                view.detailTab = b.getInt("detailTab", 0);
+                view.partiteTab = b.getInt("partiteTab", 0);
+                screen = b.getInt("screen", SCREEN_SEASON_LIST);
+                if (screen==SCREEN_SEASON_DETAIL && store.seasons.isEmpty()) screen = SCREEN_SEASON_LIST;
+            } else {
+                screen = SCREEN_SEASON_LIST;
+            }
         }
+    }
+
+    @Override protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt("screen", screen);
+        outState.putInt("seasonCurrent", store!=null ? store.current : 0);
+        if (view != null) { outState.putInt("detailTab", view.detailTab); outState.putInt("partiteTab", view.partiteTab); }
     }
 
     // Applica gli inset di sistema (status bar in alto, barra di navigazione in basso) come padding sulla
@@ -1763,6 +1782,7 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
+                if(contentY>=198&&contentY<=278&&x>=34&&x<=98){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
                 if(contentY>=164&&contentY<=288){ chooseCurrentDeck(); return true; }
                 if(contentY>=302&&contentY<=366){ if(x<w/2) win(); else loss(); return true; }
                 if(contentY>=380&&contentY<=426){ confirmUndo(); return true; }
@@ -1784,9 +1804,10 @@ public class MainActivity extends Activity {
                 if(contentY>=90&&contentY<=138){ addDeck(); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
-                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-32,yy+36-scrollY); return true; }
-                    // Il tap sulla card non apre piu' la selezione immagine: ora c'e' la voce "Aggiungi
-                    // immagine" nel menu "⋮" per questo, la card in se' non ha piu' un'azione al tocco.
+                    if(contentY>=yy+6&&contentY<=yy+86&&x>=40&&x<=104){ if(!d.images.isEmpty()) showImageGallery(d,0); return true; }
+                    else if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-32,yy+36-scrollY); return true; }
+                    // Il tap sulla card (fuori dalla miniatura e dal cestino) non fa nulla: "Aggiungi
+                    // immagine" resta nel menu "⋮" per i deck senza screenshot ancora.
                     yy+=104;
                 }
             }
