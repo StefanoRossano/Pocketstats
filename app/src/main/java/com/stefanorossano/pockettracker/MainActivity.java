@@ -131,8 +131,12 @@ public class MainActivity extends Activity {
         LinearLayout box = formBox();
         EditText points = numberField("Punti attuali", true);
         EditText streak = numberField("Vittorie consecutive attuali", true);
+        EditText wins = numberField("Vittorie totali", false);
+        EditText losses = numberField("Sconfitte totali", false);
         box.addView(label("Punti attuali")); box.addView(points);
         box.addView(label("Vittorie consecutive attuali")); box.addView(streak);
+        box.addView(label("Vittorie totali")); box.addView(wins);
+        box.addView(label("Sconfitte totali")); box.addView(losses);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle(name)
             .setView(box).setCancelable(false)
             .setPositiveButton("Crea Stagione", null)
@@ -142,18 +146,22 @@ public class MainActivity extends Activity {
             try {
                 int np = Integer.parseInt(points.getText().toString());
                 int ns = Integer.parseInt(streak.getText().toString());
-                if (ns < 0) return false;
+                int nw = Integer.parseInt(wins.getText().toString());
+                int nl = Integer.parseInt(losses.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
                 Season s = new Season(name);
                 s.baseline = DEFAULT_BASELINE; s.initialStreak = 0;
                 s.currentDeck = "Unknown";
-                s.matches.add(Match.correction(DEFAULT_BASELINE, np, "Unknown"));
+                Match m0 = Match.correction(DEFAULT_BASELINE, np, "Unknown");
+                m0.correctionWins = nw; m0.correctionLosses = nl;
+                s.matches.add(m0);
                 s.points = np; s.streak = ns;
                 store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
                 if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
                 screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Inserisci punti attuali e vittorie consecutive validi (streak >= 0).");
+        }, "Inserisci valori validi (streak/vittorie/sconfitte >= 0).");
         dialog.show();
     }
 
@@ -294,14 +302,63 @@ public class MainActivity extends Activity {
     void win() { play(true); }
     void loss() { play(false); }
 
+    // Messaggi motivazionali a scomparsa dopo ogni partita registrata: vittoria con streak basso (1-2),
+    // vittoria con streak alto (3+, "inarrestabile"), sconfitta.
+    static final String[] WIN_MSGS_LOW = {
+        "Solo la prima di una lunga serie!",
+        "Continua così!",
+        "Ottimo lavoro!",
+        "Una vittoria meritata!",
+        "Si parte bene!",
+        "Bel colpo!",
+        "Si comincia a carburare!"
+    };
+    static final String[] WIN_MSGS_HIGH = {
+        "Sei inarrestabile!",
+        "Che striscia di vittorie!",
+        "Nessuno può fermarti!",
+        "Stai dominando!",
+        "Vittoria dopo vittoria, complimenti!",
+        "Sei in stato di grazia!",
+        "Imbattibile in questo momento!"
+    };
+    static final String[] LOSS_MSGS_LOW = {
+        "Capita a tutti, rialzati!",
+        "La prossima è quella buona!",
+        "Non mollare!",
+        "Ricalibra e riparti!",
+        "Un passo indietro, due avanti!",
+        "Analizza e migliora!",
+        "Il campione si vede nelle sconfitte!",
+        "Testa alta, si riparte!",
+        "Ogni sconfitta insegna qualcosa!",
+        "Pazienza, il vento girerà!"
+    };
+    // Sconfitte consecutive (3+): il tono cambia, meglio suggerire una pausa che insistere.
+    static final String[] LOSS_MSGS_HIGH = {
+        "Forse è il momento di una pausa.",
+        "Stacca un attimo, si torna più lucidi.",
+        "Respira: una pausa non fa mai male.",
+        "Prenditi qualche minuto, poi si riparte.",
+        "Va benissimo fermarsi un attimo.",
+        "Una brutta giornata capita: rilassati un po'.",
+        "Ricaricare le energie non è mai tempo perso."
+    };
+    void showMotivationalMessage(boolean win, int streak){
+        String[] pool = win ? (streak>=3 ? WIN_MSGS_HIGH : WIN_MSGS_LOW) : (streak>=3 ? LOSS_MSGS_HIGH : LOSS_MSGS_LOW);
+        String msg = pool[new java.util.Random().nextInt(pool.length)];
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
     void play(boolean win) {
         Season s = store.seasons.get(store.current);
         int before = s.points;
-        if (win) { s.streak++; s.points += reward(s.streak); }
-        else { s.points -= 10; s.streak = 0; }
+        if (win) { s.streak++; s.lossStreak=0; s.points += reward(s.streak); }
+        else { s.points -= 10; s.streak = 0; s.lossStreak++; }
         Match m = new Match(win, before, s.points, s.streak, s.currentDeck!=null ? s.currentDeck : "Unknown");
         s.matches.add(m);
         store.save(); view.invalidate();
+        showMotivationalMessage(win, win?s.streak:s.lossStreak);
     }
 
     int reward(int streak) { return streak<=1?10:streak==2?13:streak==3?16:streak==4?19:22; }
@@ -309,8 +366,19 @@ public class MainActivity extends Activity {
     // Ricalcola punti/streak della Stagione a partire dall'ULTIMA partita rimasta (o dal baseline se non ce
     // ne sono piu'): usato dopo un annullamento.
     void recomputeSeasonState(Season s){
-        if (s.matches.isEmpty()) { s.points = s.baseline; s.streak = s.initialStreak; }
-        else { Match last = s.matches.get(s.matches.size()-1); s.points = last.after; s.streak = last.streak; }
+        if (s.matches.isEmpty()) { s.points = s.baseline; s.streak = s.initialStreak; s.lossStreak = 0; return; }
+        Match last = s.matches.get(s.matches.size()-1);
+        s.points = last.after; s.streak = last.streak;
+        // lossStreak non e' salvato per singola partita (solo il win-streak lo e'): lo ricalcoliamo scorrendo
+        // all'indietro finche' troviamo sconfitte consecutive (le correzioni non vere partite non contano).
+        int ls=0;
+        for(int i=s.matches.size()-1;i>=0;i--){
+            Match m=s.matches.get(i);
+            if(m.unknown) continue;
+            if(m.win) break;
+            ls++;
+        }
+        s.lossStreak = ls;
     }
 
     // Annulla l'ultima partita registrata: richiede sempre conferma esplicita (e' un'azione distruttiva).
@@ -349,26 +417,36 @@ public class MainActivity extends Activity {
     // appare nella lista partite come le altre, ma non conta ai fini di W/L/streak.
     void addManualCorrection(){
         Season s = store.seasons.get(store.current);
+        int[] curWL = countWL(s.matches); // vittorie/sconfitte cumulate ATTUALI, prima di questa correzione
         LinearLayout box = formBox();
         EditText p = numberField(""+s.points, true);
         EditText st = numberField(""+s.streak, true);
+        EditText wf = numberField(""+curWL[0], false);
+        EditText lf = numberField(""+curWL[1], false);
         box.addView(label("Punti attuali")); box.addView(p);
         box.addView(label("Vittorie consecutive attuali")); box.addView(st);
+        box.addView(label("Vittorie totali")); box.addView(wf);
+        box.addView(label("Sconfitte totali")); box.addView(lf);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Aggiungi correzione manuale")
-            .setMessage("Usala per allineare i punti quando hai giocato senza registrare le singole partite.")
+            .setMessage("Usala per allineare i punti quando hai giocato senza registrare le singole partite. Inserisci i totali ATTUALI (non solo quelli di questo periodo): calcolo io la differenza.")
             .setView(box).setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             try {
                 int np = Integer.parseInt(p.getText().toString());
                 int ns = Integer.parseInt(st.getText().toString());
-                if (ns < 0) return false;
+                int nw = Integer.parseInt(wf.getText().toString());
+                int nl = Integer.parseInt(lf.getText().toString());
+                if (ns < 0 || nw < 0 || nl < 0) return false;
+                int deltaW = nw - curWL[0], deltaL = nl - curWL[1];
+                if (deltaW < 0 || deltaL < 0) return false; // i totali non possono diminuire
                 Match m = Match.correction(s.points, np, s.currentDeck!=null ? s.currentDeck : "Unknown");
+                m.correctionWins = deltaW; m.correctionLosses = deltaL;
                 s.matches.add(m);
                 s.points = np; s.streak = ns;
                 store.save(); view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Valori non validi (punti/streak non validi, streak >= 0).");
+        }, "Valori non validi (i totali di vittorie/sconfitte non possono diminuire).");
         dialog.show();
     }
 
@@ -444,7 +522,10 @@ public class MainActivity extends Activity {
     // contata come una vittoria vera in alcuni punti dell'app.
     static int[] countWL(List<Match> matches){
         int w=0,l=0;
-        for(Match m: matches) if(!m.unknown){ if(m.win) w++; else l++; }
+        for(Match m: matches){
+            if(m.unknown){ w+=m.correctionWins; l+=m.correctionLosses; }
+            else { if(m.win) w++; else l++; }
+        }
         return new int[]{w,l};
     }
 
@@ -779,14 +860,18 @@ public class MainActivity extends Activity {
 
     /** Area rettangolare cliccabile associata a un indice, usata per l'hit-test nelle liste. */
     static class Hit { float top, bottom; int index; Hit(float t, float b, int i){top=t;bottom=b;index=i;} }
+    /** Area rettangolare cliccabile per l'intestazione di un giorno (espandi/collassa), associata alla sua chiave giorno. */
+    static class DayHeaderHit { float top, bottom; String dayKey; DayHeaderHit(float t, float b, String dk){top=t;bottom=b;dayKey=dk;} }
 
     class TrackerView extends View {
         Paint p=new Paint(3);
         int detailTab=0; // 0 = Gioca, 1 = Deck, 2 = Statistiche (solo dentro SCREEN_SEASON_DETAIL)
         int partiteTab=0; // 0 = Grafico, 1 = Lista partite/correzioni (tab dentro la card "PARTITE")
+        java.util.HashSet<String> collapsedDays = new java.util.HashSet<>(); // chiavi giorno (dayKey) collassate
         int bg=Color.rgb(7,11,18), card=Color.rgb(14,24,38), white=Color.WHITE, muted=Color.rgb(165,175,190), blue=Color.rgb(55,120,255), green=Color.rgb(70,205,75), red=Color.rgb(245,70,60);
         ArrayList<Hit> seasonHits=new ArrayList<>();
         ArrayList<Hit> matchHits=new ArrayList<>();
+        ArrayList<DayHeaderHit> dayHeaderHits=new ArrayList<>();
         // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
         // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
@@ -1080,6 +1165,20 @@ public class MainActivity extends Activity {
         // Rettangolo con SOLO gli angoli superiori arrotondati (quelli inferiori restano squadrati, per
         // fondersi visivamente col corpo sottostante): usato per la fascia di intestazione delle sottocard
         // giorno, che prima aveva erroneamente tutti e 4 gli angoli arrotondati.
+        // Icona "espandi/collassa" (freccia verso il basso se aperto, verso destra se chiuso), allineata a
+        // sinistra nell'intestazione delle sottocard giorno.
+        void drawExpandIcon(Canvas c, float cx, float cy, float size, int color, boolean expanded){
+            p.setColor(color); p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(size*0.16f); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND);
+            android.graphics.Path path = new android.graphics.Path();
+            if(expanded){
+                path.moveTo(cx-size*0.28f, cy-size*0.12f); path.lineTo(cx, cy+size*0.2f); path.lineTo(cx+size*0.28f, cy-size*0.12f);
+            } else {
+                path.moveTo(cx-size*0.12f, cy-size*0.28f); path.lineTo(cx+size*0.2f, cy); path.lineTo(cx-size*0.12f, cy+size*0.28f);
+            }
+            c.drawPath(path,p);
+        }
+
         void boxTopRounded(Canvas c,float l,float t,float rr,float b,float radius,int col){
             p.setColor(col); p.setStyle(Paint.Style.FILL);
             android.graphics.Path path = new android.graphics.Path();
@@ -1093,6 +1192,7 @@ public class MainActivity extends Activity {
         // dimensione di quella nel tab Deck) + pulsante W/L + Annulla + card "Partite" con i due tab. =====
         void playTab(Canvas c, Season s, float w, float h){
             matchHits.clear();
+            dayHeaderHits.clear();
             ArrayList<Match> all = s.matches; // gia' flat, una entita' di primo livello nella Season
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
@@ -1159,7 +1259,10 @@ public class MainActivity extends Activity {
             float tabIconY = listCardTop+26;
             drawMiniChartTabIcon(c, w/2-23, tabIconY, 22, partiteTab==0?blue:muted);
             drawListTabIcon(c, w/2+23, tabIconY, 22, partiteTab==1?blue:muted);
-            if(partiteTab==1) drawEditIcon(c, w-26, tabIconY, 22, muted);
+            // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
+            // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
+            // dimensione dell'icona cambiava.
+            if(partiteTab==1) drawEditIcon(c, w-18-11, tabIconY, 22, muted);
 
             if(partiteTab==0){
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
@@ -1195,7 +1298,8 @@ public class MainActivity extends Activity {
                         String dk=dayKey(all.get(idx).timestamp);
                         int j=idx; float groupRowsH=0;
                         while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)){ groupRowsH+=(float)rowHeightAt.applyAsDouble(j); j--; }
-                        totalRowsHeight += headerH + groupRowsH + groupGap;
+                        boolean collapsed = collapsedDays.contains(dk);
+                        totalRowsHeight += headerH + (collapsed?0:groupRowsH) + groupGap;
                         idx=j;
                     }
                 }
@@ -1217,42 +1321,48 @@ public class MainActivity extends Activity {
                     int dw=0, dl=0;
                     for(int k=dayStartIdx;k<=dayEndIdx;k++){ Match m=all.get(k); if(!m.unknown){ if(m.win) dw++; else dl++; } }
                     float dwr = (dw+dl)==0?0:100f*dw/(dw+dl);
+                    boolean collapsed = collapsedDays.contains(dk);
                     float groupRowsH=0; for(int k=dayStartIdx;k<=dayEndIdx;k++) groupRowsH+=(float)rowHeightAt.applyAsDouble(k);
-                    float groupTop=y, groupBottom=y+headerH+groupRowsH;
+                    float groupTop=y, groupBottom=y+headerH+(collapsed?0:groupRowsH);
 
                     box(c,30,groupTop,w-30,groupBottom,Color.rgb(10,18,30));
                     boxTopRounded(c,30,groupTop,w-30,groupTop+headerH,10,Color.rgb(21,34,56));
-                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 46, groupTop+20, 11, muted, Paint.Align.LEFT);
+                    // Pulsante espandi/collassa allineato a sinistra, prima della data.
+                    drawExpandIcon(c, 42, groupTop+20, 14, muted, !collapsed);
+                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 58, groupTop+20, 11, muted, Paint.Align.LEFT);
                     txtRowRight(c,w-46,groupTop+20,11,
                         new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
                         new int[]{green, red, wrColor(dwr,dw+dl)});
+                    dayHeaderHits.add(new DayHeaderHit(groupTop, groupTop+headerH, dk));
 
-                    float ry = groupTop+headerH;
-                    for(int k=dayEndIdx;k>=dayStartIdx;k--){
-                        Match m = all.get(k);
-                        if(m.unknown){
-                            String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
-                            box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
-                            float baseline = centeredBaseline(ry+corrRowH/2f, 14);
-                            txt(c, title, 50, baseline, 14, white, Paint.Align.LEFT);
-                            if(k==0){
-                                txt(c, ""+m.after, w-50, baseline, 14, white, Paint.Align.RIGHT);
+                    if(!collapsed){
+                        float ry = groupTop+headerH;
+                        for(int k=dayEndIdx;k>=dayStartIdx;k--){
+                            Match m = all.get(k);
+                            if(m.unknown){
+                                String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
+                                box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
+                                float baseline = centeredBaseline(ry+corrRowH/2f, 14);
+                                txt(c, title, 50, baseline, 14, white, Paint.Align.LEFT);
+                                if(k==0){
+                                    txt(c, ""+m.after, w-50, baseline, 14, white, Paint.Align.RIGHT);
+                                } else {
+                                    int gain = m.after-m.before;
+                                    int gcol = gain>0?green:(gain<0?red:muted);
+                                    txt(c, (gain>0?"+":"")+gain, w-50, baseline, 14, gcol, Paint.Align.RIGHT);
+                                }
                             } else {
+                                if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
+                                txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
+                                txt(c, "Partita "+matchNumber[k]+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
+                                txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
                                 int gain = m.after-m.before;
                                 int gcol = gain>0?green:(gain<0?red:muted);
-                                txt(c, (gain>0?"+":"")+gain, w-50, baseline, 14, gcol, Paint.Align.RIGHT);
+                                txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
                             }
-                        } else {
-                            if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
-                            txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
-                            txt(c, "Partita "+matchNumber[k]+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
-                            txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
-                            int gain = m.after-m.before;
-                            int gcol = gain>0?green:(gain<0?red:muted);
-                            txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
+                            matchHits.add(new Hit(ry,ry+(float)rowHeightAt.applyAsDouble(k),k));
+                            ry+=(float)rowHeightAt.applyAsDouble(k);
                         }
-                        matchHits.add(new Hit(ry,ry+(float)rowHeightAt.applyAsDouble(k),k));
-                        ry+=(float)rowHeightAt.applyAsDouble(k);
                     }
                     y = groupBottom+groupGap;
                     i = dayStartIdx-1;
@@ -1654,10 +1764,14 @@ public class MainActivity extends Activity {
                 if(contentY>=440&&contentY<=482){
                     if(x>=w/2-38 && x<w/2-6){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w-42 && x<w-10){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    if(partiteTab==1 && x>=w-40 && x<w-18){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
                 if(partiteTab==1){
                     float matchContentY = contentY + matchInnerScrollY;
+                    for(DayHeaderHit hit: dayHeaderHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){
+                        if(collapsedDays.contains(hit.dayKey)) collapsedDays.remove(hit.dayKey); else collapsedDays.add(hit.dayKey);
+                        invalidate(); return true;
+                    } }
                     for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
                 }
             } else if(detailTab==1){
@@ -1677,10 +1791,14 @@ public class MainActivity extends Activity {
 
     static class Match {
         boolean win,unknown;int before,after,streak;long timestamp;String deck;
+        // Solo per le correzioni (unknown=true): quante vittorie/sconfitte rappresenta il periodo non
+        // tracciato — contano SOLO per le statistiche aggregate (W/L/win rate di Stagione), non per lo
+        // streak (non sappiamo l'ordine esatto) e non per le statistiche di un deck specifico.
+        int correctionWins=0, correctionLosses=0;
         Match(boolean w,int b,int a,int st,String deck){win=w;before=b;after=a;streak=st;timestamp=System.currentTimeMillis();this.deck=deck;}
         static Match correction(int b,int a,String deck){Match m=new Match(a>=b,b,a,0,deck);m.unknown=true;return m;}
-        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);o.put("ts",timestamp);o.put("dk",deck!=null?deck:"Unknown");return o;}
-        static Match from(JSONObject o)throws Exception{Match m=new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0),o.optString("dk","Unknown"));m.unknown=o.optBoolean("u",false);m.timestamp=o.optLong("ts",0);return m;}
+        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);o.put("ts",timestamp);o.put("dk",deck!=null?deck:"Unknown");o.put("cw",correctionWins);o.put("cl",correctionLosses);return o;}
+        static Match from(JSONObject o)throws Exception{Match m=new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0),o.optString("dk","Unknown"));m.unknown=o.optBoolean("u",false);m.timestamp=o.optLong("ts",0);m.correctionWins=o.optInt("cw",0);m.correctionLosses=o.optInt("cl",0);return m;}
     }
     static class Deck {
         String name; ArrayList<String> images=new ArrayList<>(); Deck(String n){name=n;}
@@ -1701,18 +1819,18 @@ public class MainActivity extends Activity {
         }
     }
     static class Season {
-        String name;int baseline,initialStreak,points,streak;String currentDeck="Unknown";
+        String name;int baseline,initialStreak,points,streak,lossStreak;String currentDeck="Unknown";
         ArrayList<Deck> decks=new ArrayList<>();ArrayList<Match> matches=new ArrayList<>();
         Season(String n){name=n;}
         JSONObject json()throws Exception{
-            JSONObject o=new JSONObject();o.put("n",name);o.put("b",baseline);o.put("is",initialStreak);o.put("p",points);o.put("s",streak);o.put("cd",currentDeck);
+            JSONObject o=new JSONObject();o.put("n",name);o.put("b",baseline);o.put("is",initialStreak);o.put("p",points);o.put("s",streak);o.put("ls",lossStreak);o.put("cd",currentDeck);
             JSONArray d=new JSONArray();for(Deck x:decks)d.put(x.json());o.put("d",d);
             JSONArray mm=new JSONArray();for(Match x:matches)mm.put(x.json());o.put("matches",mm);
             return o;
         }
         static Season from(JSONObject o)throws Exception{
             Season s=new Season(o.optString("n"));
-            s.baseline=o.optInt("b");s.initialStreak=o.optInt("is");s.points=o.optInt("p");s.streak=o.optInt("s");
+            s.baseline=o.optInt("b");s.initialStreak=o.optInt("is");s.points=o.optInt("p");s.streak=o.optInt("s");s.lossStreak=o.optInt("ls");
             s.currentDeck=o.optString("cd","Unknown");
             JSONArray d=o.optJSONArray("d");if(d!=null)for(int i=0;i<d.length();i++)s.decks.add(Deck.from(d.getJSONObject(i)));
             JSONArray mm=o.optJSONArray("matches");
