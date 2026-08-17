@@ -1199,8 +1199,9 @@ public class MainActivity extends Activity {
 
         void detailHeader(Canvas c, Season s, float w){
             float centerY=36;
-            drawLeftArrow(c,24,centeredBaseline(centerY,32),32,white);
-            txt(c,s.name,60,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
+            // Freccia "indietro" rimossa: si torna sempre con il pulsante di sistema Android, non serve
+            // duplicarla nell'interfaccia.
+            txt(c,s.name,24,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
             drawEditIcon(c,w-24,32,18,muted);
         }
 
@@ -1237,8 +1238,10 @@ public class MainActivity extends Activity {
                 Session se=s.sessions.get(i);
                 boolean isLast = i==s.sessions.size()-1;
                 box(c,18,y,w-18,y+86,card);
-                txt(c, se.name, 34,y+26,15,white,Paint.Align.LEFT);
-                txt(c, se.untracked ? "Sessione non tracciata" : deckDisplayShort(se.deck), 34,y+48,12,muted,Paint.Align.LEFT);
+                // Il deck e' l'informazione piu' importante a colpo d'occhio (che mazzo si sta usando),
+                // quindi ora e' lui il testo primario; il nome della sessione passa in secondo piano.
+                txt(c, se.untracked ? "Sessione non tracciata" : deckDisplayShort(se.deck), 34,y+26,15,white,Paint.Align.LEFT);
+                txt(c, se.name, 34,y+48,12,muted,Paint.Align.LEFT);
                 // Timestamp iniziale della sessione (quando e' stata creata), non l'ultimo aggiornamento.
                 txt(c, formatTimestamp(se.timestamp), 34,y+66,10,muted,Paint.Align.LEFT);
                 int sw,sl;
@@ -1433,8 +1436,11 @@ public class MainActivity extends Activity {
             boolean showDeleteItem = isLast;
             boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem || showEditUntrackedItem;
             float centerY=36;
-            drawLeftArrow(c,24,centeredBaseline(centerY,32),32,white);
-            txt(c,x.name,60,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
+            // Titolo = deck (l'informazione piu' importante a colpo d'occhio), sottotitolo = nome sessione
+            // (prima era il contrario, con una card DECK separata sotto — ora rimossa, il deck vive nel titolo).
+            String deckTitle = x.untracked ? "Sessione non tracciata" : ("Unknown".equals(x.deck) ? "Deck sconosciuto" : x.deck);
+            txt(c, deckTitle, 24, 30, 19, white, Paint.Align.LEFT);
+            txt(c, x.name, 24, 48, 12, muted, Paint.Align.LEFT);
             if(showKebab) drawKebabIcon(c,w-24,centerY,muted);
 
             // Header fisso sopra, barra prev/next fissa sotto (bottomNav): solo il contenuto in mezzo
@@ -1454,8 +1460,7 @@ public class MainActivity extends Activity {
                 drawChart(c,18,260,w-18,260+260,x.matches,s,x.timestamp);
                 lastContentBottom = 260+260+20;
             } else {
-                box(c,18,58,w-18,118,card); txt(c,"DECK",32,80,11,muted,Paint.Align.LEFT);
-                txt(c, "Unknown".equals(x.deck) ? "Deck sconosciuto — tocca per scegliere" : x.deck, 32,104, "Unknown".equals(x.deck)?13:18, "Unknown".equals(x.deck)?muted:white, Paint.Align.LEFT);
+                // Card DECK rimossa: il deck e' ora nel titolo dell'header, non serve piu' ripeterlo qui.
                 int gain = x.matches.isEmpty()?0:(x.matches.get(x.matches.size()-1).after - x.matches.get(0).before);
                 // Griglia 2x2: Punti attuali/Statistiche sopra, Vittorie consecutive/Variazione sotto
                 // (prima le 3 card affiancate avevano fatto sparire W/L/% della sessione corrente: ora c'e'
@@ -1465,31 +1470,31 @@ public class MainActivity extends Activity {
                 float swr = (sw+sl)==0 ? 0 : 100f*sw/(sw+sl);
                 float gap2=8; float colW=(w-36-gap2)/2;
                 float c1L=18, c1R=18+colW, c2L=c1R+gap2, c2R=w-18;
-                box(c,c1L,124,c1R,198,card);
-                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,146,11,muted,Paint.Align.CENTER);
-                txt(c,""+s.points,(c1L+c1R)/2,182,26,white,Paint.Align.CENTER);
-                box(c,c2L,124,c2R,198,card);
-                txt(c,"STATISTICHE",(c2L+c2R)/2,144,11,muted,Paint.Align.CENTER);
-                txtRowCentered(c,(c2L+c2R)/2,178,14,
+                box(c,c1L,66,c1R,140,card);
+                txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,88,11,muted,Paint.Align.CENTER);
+                txt(c,""+s.points,(c1L+c1R)/2,124,26,white,Paint.Align.CENTER);
+                box(c,c2L,66,c2R,140,card);
+                txt(c,"STATISTICHE",(c2L+c2R)/2,86,11,muted,Paint.Align.CENTER);
+                txtRowCentered(c,(c2L+c2R)/2,120,14,
                     new String[]{sw+"W   ", sl+"L   ", String.format(Locale.US,"%.1f%%",swr)},
                     new int[]{green,red,white});
-                box(c,c1L,206,c1R,280,card);
-                txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,228,11,muted,Paint.Align.CENTER);
-                txt(c,""+s.streak,(c1L+c1R)/2,264,26,white,Paint.Align.CENTER);
-                netGainRow(c,c2L,206,280,c2R,gain);
+                box(c,c1L,148,c1R,222,card);
+                txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,170,11,muted,Paint.Align.CENTER);
+                txt(c,""+s.streak,(c1L+c1R)/2,206,26,white,Paint.Align.CENTER);
+                netGainRow(c,c2L,148,222,c2R,gain);
 
                 if(!isLast){
-                    box(c,18,288,w-18,334,card); txt(c,"Sessione conclusa",w/2,316,13,muted,Paint.Align.CENTER);
-                    drawChart(c,18,348,w-18,348+260,x.matches,s,x.timestamp);
-                    lastContentBottom = 348+260+20;
+                    box(c,18,230,w-18,276,card); txt(c,"Sessione conclusa",w/2,258,13,muted,Paint.Align.CENTER);
+                    drawChart(c,18,290,w-18,290+260,x.matches,s,x.timestamp);
+                    lastContentBottom = 290+260+20;
                 } else {
-                    box(c,18,288,w/2-8,334,green); box(c,w/2+8,288,w-18,334,red);
-                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,318,20,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L  (−10)",w*3/4,318,20,Color.WHITE,Paint.Align.CENTER);
-                    box(c,18,346,w/2-8,392,card); box(c,w/2+8,346,w-18,392,card);
-                    txt(c,"↶  ANNULLA",w/4,375,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,375,16,white,Paint.Align.CENTER);
-                    drawChart(c,18,404,w-18,404+260,x.matches,s,x.timestamp);
-                    lastContentBottom = 404+260+20;
+                    box(c,18,230,w/2-8,276,green); box(c,w/2+8,230,w-18,276,red);
+                    txt(c,"W  (+"+reward(s.streak+1)+")",w/4,260,20,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L  (−10)",w*3/4,260,20,Color.WHITE,Paint.Align.CENTER);
+                    box(c,18,288,w/2-8,334,card); box(c,w/2+8,288,w-18,334,card);
+                    txt(c,"↶  ANNULLA",w/4,317,16,white,Paint.Align.CENTER); txt(c,"↷  RIPETI",w*3/4,317,16,white,Paint.Align.CENTER);
+                    drawChart(c,18,346,w-18,346+260,x.matches,s,x.timestamp);
+                    lastContentBottom = 346+260+20;
                 }
             }
             c.restore();
@@ -1684,7 +1689,6 @@ public class MainActivity extends Activity {
                 boolean showKebab = showNewSessionItem || showDeckEditItem || canConvert || showDeleteItem || showEditUntrackedItem;
                 float navY = h-BOTTOM_UI_HEIGHT+8;
                 if(y<52){
-                    if(x<60){ goBack(); return true; }
                     if(showKebab && x>w-56){ sessionOptionsMenu(sess, isLast, canConvert, w-144, 52); return true; } // icona "⋮": menu ancorato subito sotto l'icona, non centrato
                     return true;
                 }
@@ -1698,18 +1702,15 @@ public class MainActivity extends Activity {
                 if(sess.untracked){
                     return true; // il tocco sul glifo "⋮" e' ora gestito dall'header (stessa posizione della sessione normale)
                 }
-                if(contentY>=58 && contentY<=118){
-                    return true; // riga DECK: nessuna azione, per cambiare/rinominare usa il menu "⋮" in alto
-                }
-                if(isLast && contentY>=288 && contentY<=334){ if(x<w/2) win(); else loss(); return true; }
-                if(isLast && contentY>=346 && contentY<=392){ if(x<w/2) undo(); else redo(); return true; }
+                // Card DECK rimossa (il deck e' ora nel titolo dell'header): nessuna zona di tocco dedicata qui.
+                if(isLast && contentY>=230 && contentY<=276){ if(x<w/2) win(); else loss(); return true; }
+                if(isLast && contentY>=288 && contentY<=334){ if(x<w/2) undo(); else redo(); return true; }
                 return true;
             }
 
             // SCREEN_SEASON_DETAIL: header (y<52) e barra tab in basso (y>h-58) sono fissi, usa 'y' grezza;
             // tutto il resto e' contenuto scrollabile, usa 'contentY'.
             if(y<52){
-                if(x<60){ goBack(); return true; }
                 if(x>w-60){ renameSeason(); return true; }
                 return true;
             }
