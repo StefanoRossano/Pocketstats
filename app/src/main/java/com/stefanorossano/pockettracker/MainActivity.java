@@ -166,7 +166,7 @@ public class MainActivity extends Activity {
         store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
         if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
         screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
-        pickDeckFor(s, dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Scegli il Deck", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
     }
 
 
@@ -179,13 +179,20 @@ public class MainActivity extends Activity {
     // Selettore di deck condiviso: usato sia per scegliere il deck "attuale" (quello che verra' assegnato alla
     // PROSSIMA partita registrata) sia per cambiare retroattivamente il deck di una partita GIA' giocata.
     // onPicked riceve il nome del deck scelto (o appena creato) e decide lui cosa farne.
-    void pickDeckFor(Season s, java.util.function.Consumer<String> onPicked) {
+    void pickDeckFor(Season s, String headerText, java.util.function.Consumer<String> onPicked) {
         ArrayList<String> names = new ArrayList<>();
         for (Deck d : s.decks) names.add(d.name);
         Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
 
         LinearLayout box = formBox();
-        box.addView(label("Deck (tocca per selezionare, o creane uno nuovo)"));
+        // Header dentro il box stesso (non piu' AlertDialog.setTitle): cosi' condivide lo stesso padding dei
+        // pulsanti sotto ed e' allineato a sinistra come loro — il titolo nativo del dialog aveva un padding
+        // diverso e non risultava allineato. Il messaggio di spiegazione sotto e' stato rimosso.
+        TextView header = new TextView(this);
+        header.setText(headerText); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setPadding(0,0,0,dp(14));
+        box.addView(header);
 
         String[] selected = {null};
         Runnable[] refreshSelector = new Runnable[1];
@@ -223,7 +230,7 @@ public class MainActivity extends Activity {
         newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); newDeckName.requestFocus(); });
         closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
 
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Scegli il Deck").setView(box)
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             String newName = newDeckName.getText().toString().trim();
@@ -266,14 +273,14 @@ public class MainActivity extends Activity {
     // Cambia il deck "attuale" (quello che verra' usato per la PROSSIMA partita registrata).
     void chooseCurrentDeck() {
         Season s = store.seasons.get(store.current);
-        pickDeckFor(s, name -> { s.currentDeck = name; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Scegli il Deck", name -> { s.currentDeck = name; store.save(); view.invalidate(); });
     }
 
     // Cambia retroattivamente il deck di una partita GIA' giocata: le statistiche per deck sono sempre
     // calcolate al volo dal campo 'deck' di ogni partita, quindi si aggiornano da sole.
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
-        pickDeckFor(s, name -> { m.deck = name; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Che deck hai usato in questa partita?", name -> { m.deck = name; store.save(); view.invalidate(); });
     }
 
     void win() { play(true); }
@@ -335,8 +342,8 @@ public class MainActivity extends Activity {
     void addManualCorrection(){
         Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
-        EditText p = numberField("Punti attuali", true);
-        EditText st = numberField("Vittorie consecutive attuali", true);
+        EditText p = numberField(""+s.points, true);
+        EditText st = numberField(""+s.streak, true);
         box.addView(label("Punti attuali")); box.addView(p);
         box.addView(label("Vittorie consecutive attuali")); box.addView(st);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Aggiungi correzione manuale")
@@ -477,10 +484,14 @@ public class MainActivity extends Activity {
     void renameSeason(){
         Season s=store.seasons.get(store.current);
         LinearLayout box = formBox();
-        box.addView(label("Nome Stagione"));
+        TextView header = new TextView(this);
+        header.setText("Rinomina Stagione"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setPadding(0,0,0,dp(14));
+        box.addView(header);
         EditText e=field(s.name); e.setText(s.name);
         box.addView(e);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rinomina Stagione").setView(box)
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             String n = e.getText().toString().trim();
@@ -1050,79 +1061,80 @@ public class MainActivity extends Activity {
             c.drawPath(path,p);
         }
 
-        // ===== Tab "Gioca": card "Andamento Stagione" (punti, partite, grafico) + pulsante "Gioca" + card
-        // "Partite" (raggruppata per giorno, ogni giorno e' una sottocard con intestazione data+statistiche
-        // su sfondo leggermente diverso). Le correzioni (punti di partenza + correzioni manuali) restano nella
-        // STESSA lista, nella loro posizione cronologica, ma con uno stile di riga distinto. =====
+        // ===== Tab "Gioca": due card vere e proprie (Punti attuali / Partite totali, non piu' annidate in
+        // una card "Andamento Stagione" involucro) + card "Deck Selezionato" (con anteprima grande, stessa
+        // dimensione di quella nel tab Deck) + pulsante W/L + Annulla + card "Partite" con i due tab. =====
         void playTab(Canvas c, Season s, float w, float h){
             matchHits.clear();
             ArrayList<Match> all = s.matches; // gia' flat, una entita' di primo livello nella Season
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
 
-            // ===== Card "ANDAMENTO STAGIONE": ora solo i due numeri, il grafico si e' spostato dentro la
-            // card "PARTITE" (ha piu' senso li', accanto alla lista che lo alimenta). =====
-            box(c,18,58,w-18,188,card);
-            txt(c,"ANDAMENTO STAGIONE",34,80,12,muted,Paint.Align.LEFT);
-            float c1L=30, c1R=w/2-6, c2L=w/2+6, c2R=w-30;
-            box(c,c1L,92,c1R,174,Color.rgb(10,18,30));
-            float[] b1 = centerLines(133,6,11,26);
-            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,b1[0],11,muted,Paint.Align.CENTER);
-            txt(c,""+s.points,(c1L+c1R)/2,b1[1],26,white,Paint.Align.CENTER);
-            box(c,c2L,92,c2R,174,Color.rgb(10,18,30));
-            float[] b2 = centerLines(133,6,11,20,15);
-            txt(c,"PARTITE TOTALI",(c2L+c2R)/2,b2[0],11,muted,Paint.Align.CENTER);
-            txt(c,""+(W+L),(c2L+c2R)/2,b2[1],20,white,Paint.Align.CENTER);
-            txtRowCentered(c,(c2L+c2R)/2,b2[2],15,
+            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": ora due card vere e proprie (sfondo "card", non piu'
+            // il tono scuro da sotto-card), ciascuna col proprio titolo in alto a sinistra — stesso stile e
+            // stesso offset (box_top+22) della card "DECK SELEZIONATO" qui sotto, per coerenza. =====
+            float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
+            box(c,c1L,58,c1R,158,card);
+            txt(c,"PUNTI ATTUALI",c1L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(127,26),26,white,Paint.Align.CENTER);
+            box(c,c2L,58,c2R,158,card);
+            txt(c,"PARTITE TOTALI",c2L+16,80,12,muted,Paint.Align.LEFT);
+            float[] pb = centerLines(127,6,20,15);
+            txt(c,""+(W+L),(c2L+c2R)/2,pb[0],20,white,Paint.Align.CENTER);
+            txtRowCentered(c,(c2L+c2R)/2,pb[1],15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
             // ===== Card "DECK SELEZIONATO": deck usato per la prossima partita registrata, con l'anteprima
-            // a sinistra del nome se il deck ne ha una. Tutta la card e' toccabile per cambiarlo. =====
+            // a sinistra del nome se il deck ne ha una — stessa dimensione (64x80) di quella nel tab Deck,
+            // stesso margine (6px sopra/sotto dentro un'area di 92, identica proporzione). Tutta la card e'
+            // toccabile per cambiarlo. =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
-            box(c,18,202,w-18,292,card);
-            txt(c,"DECK SELEZIONATO",34,224,12,muted,Paint.Align.LEFT);
+            box(c,18,172,w-18,294,card);
+            txt(c,"DECK SELEZIONATO",34,194,12,muted,Paint.Align.LEFT);
             if(noDeck){
-                float[] nd0 = centerLines(264,4,17,11);
+                float[] nd0 = centerLines(238,4,17,11);
                 txt(c,"Nessun deck selezionato",w/2,nd0[0],17,white,Paint.Align.CENTER);
                 txt(c,"Tocca per selezionare un deck",w/2,nd0[1],11,muted,Paint.Align.CENTER);
             } else {
                 Deck curDeckObj = findDeck(s, s.currentDeck);
                 Bitmap preview = curDeckObj!=null ? getDeckPreview(curDeckObj) : null;
                 if(preview!=null){
-                    float thumbW=44, thumbH=52, thumbX=34, thumbY=264-thumbH/2f;
-                    drawCoverImage(c, preview, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH, 6);
-                    txt(c,s.currentDeck, thumbX+thumbW+14, centeredBaseline(264,18), 18, white, Paint.Align.LEFT);
+                    float thumbW=64, thumbH=80, thumbX=34, thumbY=208+6;
+                    drawCoverImage(c, preview, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH, 8);
+                    txt(c,s.currentDeck, thumbX+thumbW+14, centeredBaseline(208+46,18), 18, white, Paint.Align.LEFT);
                 } else {
-                    txt(c,s.currentDeck,w/2,centeredBaseline(264,18),18,white,Paint.Align.CENTER);
+                    txt(c,s.currentDeck,w/2,centeredBaseline(238,18),18,white,Paint.Align.CENTER);
                 }
             }
 
             // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,302,gR,366,green); box(c,rL,302,rR,366,red);
-            float[] wl2 = centerLines(334,6,22,13);
+            box(c,gL,308,gR,372,green); box(c,rL,308,rR,372,red);
+            float[] wl2 = centerLines(340,6,22,13);
             txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
 
-            box(c,18,376,w-18,422,card);
+            box(c,18,386,w-18,432,card);
             boolean lastIsCorrection = !all.isEmpty() && all.get(all.size()-1).unknown;
             String undoLabel = lastIsCorrection ? "ANNULLA CORREZIONE MANUALE" : "ANNULLA ULTIMA PARTITA";
             p.setTextSize(15); float undoLabelW=p.measureText(undoLabel);
             float undoIconW=16, undoGap=8, undoGroupW=undoIconW+undoGap+undoLabelW, undoGroupL=w/2-undoGroupW/2;
-            drawUndoIcon(c,undoGroupL+undoIconW/2,399,16,white);
-            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,405,15,white,Paint.Align.LEFT);
+            drawUndoIcon(c,undoGroupL+undoIconW/2,409,16,white);
+            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,415,15,white,Paint.Align.LEFT);
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
-            float listCardTop=440, contentHeight=300;
+            float listCardTop=450, contentHeight=300;
             float contentTop=listCardTop+42, contentBottom=contentTop+contentHeight;
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
-            txt(c,"PARTITE",34,listCardTop+26,12,muted,Paint.Align.LEFT);
+            // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header, l'icona
+            // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
+            // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
             float tabIconY = listCardTop+26;
-            drawListTabIcon(c, w-24, tabIconY, 16, partiteTab==1?blue:muted);
-            drawMiniChartTabIcon(c, w-54, tabIconY, 16, partiteTab==0?blue:muted);
-            if(partiteTab==1) drawEditIcon(c, w-86, tabIconY, 16, blue);
+            drawMiniChartTabIcon(c, w/2-18, tabIconY, 16, partiteTab==0?blue:muted);
+            drawListTabIcon(c, w/2+18, tabIconY, 16, partiteTab==1?blue:muted);
+            if(partiteTab==1) drawEditIcon(c, w-32, tabIconY, 16, muted);
 
             if(partiteTab==0){
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
@@ -1349,7 +1361,8 @@ public class MainActivity extends Activity {
 
         void decks(Canvas c,Season s,float w,float h){
             box(c,w-165,48,w-18,76,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-91,68,13,white,Paint.Align.CENTER);
-            float y=90;
+            box(c,18,90,w-18,138,blue); txt(c,"AGGIUNGI DECK",w/2,117,14,white,Paint.Align.CENTER);
+            float y=152;
             for(Deck d: sortedDecks(s)){
                 int[] wl=deckWL(s,d.name); int best=longestStreakForDeck(s,d.name); int gain=deckGain(s,d.name);
                 y = deckCard(c, d, d.name, false, wl[0], wl[1], best, gain, y, w, true);
@@ -1359,8 +1372,7 @@ public class MainActivity extends Activity {
                 int ndbest=longestStreakForDeck(s,"Unknown"); int ndgain=deckGain(s,"Unknown");
                 y = deckCard(c, null, null, true, nd[0], nd[1], ndbest, ndgain, y, w, true);
             }
-            box(c,18,y,w-18,y+58,blue);txt(c,"AGGIUNGI DECK",w/2,y+37,14,white,Paint.Align.CENTER);
-            lastContentBottom = y+58+20;
+            lastContentBottom = y+20;
         }
 
         void stats(Canvas c,Season s,float w,float h){
@@ -1373,51 +1385,49 @@ public class MainActivity extends Activity {
             int[] nd = noDeckWL(s);
             int deckPlayedCount = sd.size() + (nd[0]+nd[1]>0 ? 1 : 0);
 
-            // La sezione "DECK" (con le sotto-card per singolo deck) e' stata rimossa: e' una pura ripetizione
-            // del tab Deck, che mostra le stesse identiche informazioni.
-            box(c,18,58,w-18,356,card);
-            txt(c,"STATISTICHE STAGIONE",34,80,12,muted,Paint.Align.LEFT);
-            float c1L=30, c1R=w/2-6, c2L=w/2+6, c2R=w-30;
-            box(c,c1L,92,c1R,152,Color.rgb(10,18,30));
-            box(c,c2L,92,c2R,152,Color.rgb(10,18,30));
-            float[] r1 = centerLines(122,6,10,22);
-            txt(c,"PUNTI",(c1L+c1R)/2,r1[0],10,muted,Paint.Align.CENTER);
-            txt(c,""+s.points,(c1L+c1R)/2,r1[1],22,white,Paint.Align.CENTER);
-            txt(c,"VARIAZIONE",(c2L+c2R)/2,r1[0],10,muted,Paint.Align.CENTER);
-            txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,r1[1],22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
-            box(c,c1L,160,c1R,220,Color.rgb(10,18,30));
-            box(c,c2L,160,c2R,220,Color.rgb(10,18,30));
-            float[] r2 = centerLines(190,6,10,22);
-            txt(c,"PARTITE TOTALI",(c1L+c1R)/2,r2[0],10,muted,Paint.Align.CENTER);
-            txt(c,""+(W+L),(c1L+c1R)/2,r2[1],22,white,Paint.Align.CENTER);
-            txt(c,"W / L / %",(c2L+c2R)/2,r2[0],10,muted,Paint.Align.CENTER);
-            txtRowCentered(c,(c2L+c2R)/2,r2[1],15,
+            // Niente piu' card contenitore "STATISTICHE STAGIONE": ogni riga e' ora una coppia di card vere e
+            // proprie (sfondo "card", titolo in alto a sinistra), stesso stile usato nel tab Gioca per Punti
+            // attuali/Partite totali. La sezione "DECK" (con le sotto-card per singolo deck) resta rimossa:
+            // era una pura ripetizione del tab Deck.
+            float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
+
+            box(c,c1L,58,c1R,158,card);
+            txt(c,"PUNTI",c1L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(127,22),22,white,Paint.Align.CENTER);
+            box(c,c2L,58,c2R,158,card);
+            txt(c,"VARIAZIONE",c2L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,centeredBaseline(127,22),22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
+
+            box(c,c1L,172,c1R,272,card);
+            txt(c,"PARTITE TOTALI",c1L+16,194,12,muted,Paint.Align.LEFT);
+            txt(c,""+(W+L),(c1L+c1R)/2,centeredBaseline(241,20),20,white,Paint.Align.CENTER);
+            box(c,c2L,172,c2R,272,card);
+            txt(c,"W / L / %",c2L+16,194,12,muted,Paint.Align.LEFT);
+            txtRowCentered(c,(c2L+c2R)/2,centeredBaseline(241,15),15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
-            box(c,c1L,228,c1R,288,Color.rgb(10,18,30));
-            float[] r3a = centerLines(258,6,10,22);
-            txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,r3a[0],10,muted,Paint.Align.CENTER);
-            txt(c,""+s.streak,(c1L+c1R)/2,r3a[1],22,white,Paint.Align.CENTER);
-            box(c,c2L,228,c2R,288,Color.rgb(10,18,30));
-            float[] r3b = centerLines(258,6,10,22);
-            txt(c,"MASSIME",(c2L+c2R)/2,r3b[0],10,muted,Paint.Align.CENTER);
-            txt(c,""+maxStreak,(c2L+c2R)/2,r3b[1],22,white,Paint.Align.CENTER);
+
+            box(c,c1L,286,c1R,386,card);
+            txt(c,"VITTORIE CONSECUTIVE",c1L+16,308,12,muted,Paint.Align.LEFT);
+            txt(c,""+s.streak,(c1L+c1R)/2,centeredBaseline(355,22),22,white,Paint.Align.CENTER);
+            box(c,c2L,286,c2R,386,card);
+            txt(c,"MASSIME",c2L+16,308,12,muted,Paint.Align.LEFT);
+            txt(c,""+maxStreak,(c2L+c2R)/2,centeredBaseline(355,22),22,white,Paint.Align.CENTER);
+
             String mostPlayedName = "-"; int mostPlayedCount = 0;
             for(Deck d: sd){
                 int[] dwl = deckWL(s,d.name); int total=dwl[0]+dwl[1];
                 if(total>mostPlayedCount){ mostPlayedCount=total; mostPlayedName=d.name; }
             }
             if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName="Deck sconosciuto"; }
-            // Riga uniformata alla stessa altezza (60) delle altre tre sopra — prima era piu' bassa (48).
-            box(c,c1L,296,c1R,356,Color.rgb(10,18,30));
-            float[] r4 = centerLines(326,6,10,16);
-            txt(c,"DECK GIOCATI",(c1L+c1R)/2,r4[0],10,muted,Paint.Align.CENTER);
-            txt(c,""+deckPlayedCount,(c1L+c1R)/2,r4[1],16,white,Paint.Align.CENTER);
-            box(c,c2L,296,c2R,356,Color.rgb(10,18,30));
-            txt(c,"DECK PIU' GIOCATO",(c2L+c2R)/2,r4[0],10,muted,Paint.Align.CENTER);
-            txt(c,mostPlayedName,(c2L+c2R)/2,r4[1],16,white,Paint.Align.CENTER);
+            box(c,c1L,400,c1R,500,card);
+            txt(c,"DECK GIOCATI",c1L+16,422,12,muted,Paint.Align.LEFT);
+            txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(469,16),16,white,Paint.Align.CENTER);
+            box(c,c2L,400,c2R,500,card);
+            txt(c,"DECK PIU' GIOCATO",c2L+16,422,12,muted,Paint.Align.LEFT);
+            txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(469,16),16,white,Paint.Align.CENTER);
 
-            lastContentBottom = 356+20;
+            lastContentBottom = 500+20;
         }
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,long unusedTimestamp,List<Integer> dayBoundaries){
@@ -1463,7 +1473,8 @@ public class MainActivity extends Activity {
                 p.setColor(m.unknown?Color.GRAY:(m.win?green:red));
                 c.drawCircle(x,y,4,p);
             }
-            txt(c,"INIZIO: "+ms.get(0).before,l+10,t+34,12,white,Paint.Align.LEFT);
+            txt(c,"Punti iniziali: "+ms.get(0).before,l+10,t+32,12,white,Paint.Align.LEFT);
+            txt(c,"Punti attuali: "+ms.get(ms.size()-1).after,l+10,t+50,12,white,Paint.Align.LEFT);
         }
 
         // Icona "scoppio" per il tab Gioca: stessa forma esatta usata nell'icona dell'app (solo riscalata).
@@ -1601,13 +1612,13 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(contentY>=202&&contentY<=292){ chooseCurrentDeck(); return true; }
-                if(contentY>=302&&contentY<=366){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=376&&contentY<=422){ confirmUndo(); return true; }
-                if(contentY>=440&&contentY<=482){
-                    if(x>=w-36){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(x>=w-66&&x<w-36){ partiteTab=0; invalidate(); return true; } // icona grafico
-                    if(partiteTab==1 && x>=w-98&&x<w-66){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                if(contentY>=172&&contentY<=294){ chooseCurrentDeck(); return true; }
+                if(contentY>=308&&contentY<=372){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=386&&contentY<=432){ confirmUndo(); return true; }
+                if(contentY>=450&&contentY<=492){
+                    if(x>=w/2-33 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
+                    if(x>=w/2+3 && x<w/2+33){ partiteTab=1; invalidate(); return true; } // icona lista
+                    if(partiteTab==1 && x>=w-47 && x<w-17){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
                 if(partiteTab==1){
                     float matchContentY = contentY + matchInnerScrollY;
@@ -1615,15 +1626,13 @@ public class MainActivity extends Activity {
                 }
             } else if(detailTab==1){
                 if(contentY>=48&&contentY<=76&&x>=w-165){ showDeckSortMenu(); return true; }
-                float yy=90;
+                if(contentY>=90&&contentY<=138){ addDeck(); return true; }
+                float yy=152;
                 for(Deck d: sortedDecks(s)){
                     if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ confirmDeleteDeck(s,d); return true; }
                     if(contentY>=yy&&contentY<=yy+92){ openDeckImages(d); return true; }
                     yy+=104;
                 }
-                int[] nd = noDeckWL(s);
-                if (nd[0]+nd[1] > 0) yy+=104;
-                if(contentY>=yy&&contentY<=yy+58){ addDeck(); return true; }
             }
             return true;
         }
