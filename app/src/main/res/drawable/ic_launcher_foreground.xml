@@ -2,14 +2,9 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Tutto il contenuto ridotto un altro po' (0.75x, era 0.85x) e centrato verticalmente (translateY ridotto
-         di conseguenza, il contenuto ora ha piu' margine naturale e non serve spingerlo cosi' in basso). -->
-    <group android:scaleX="0.75" android:scaleY="0.75" android:pivotX="54" android:pivotY="54" android:translateY="5">
-        <!-- Ombra della carta: marcata e direzionale (giu'+destra, niente su alto/sinistra), semitrasparente
-             (i vector drawable non supportano blur/drop-shadow reali, quindi la si approssima cosi'). -->
-        <path android:fillColor="#59000000"
-            android:pathData="M42,24 L73,24 A12,12 0 0 1 85,36 L85,84 A12,12 0 0 1 73,96 L42,96 A12,12 0 0 1 30,84 L30,36 A12,12 0 0 1 42,24 Z"/>
-        <!-- Carta TCG: corpo blu pieno, bordo bianco -->
+    <!-- Ridotto (0.72x) e centrato verticalmente senza offset artificiale (era spostato in basso). -->
+    <group android:scaleX="0.72" android:scaleY="0.72" android:pivotX="54" android:pivotY="54">
+        <!-- Carta TCG: corpo blu pieno, bordo bianco (ombra rimossa: lo sfondo scuro non ne ha bisogno) -->
         <path android:fillColor="#3778FF" android:strokeColor="#FFFFFF" android:strokeWidth="3"
             android:pathData="M40,20 L68,20 A10,10 0 0 1 78,30 L78,78 A10,10 0 0 1 68,88 L40,88 A10,10 0 0 1 30,78 L30,30 A10,10 0 0 1 40,20 Z"/>
         <!-- Riquadro "foto" chiaro in alto -->
