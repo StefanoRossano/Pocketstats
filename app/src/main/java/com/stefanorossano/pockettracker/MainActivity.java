@@ -1488,15 +1488,34 @@ public class MainActivity extends Activity {
             Bitmap preview = deckObj!=null ? getDeckPreview(deckObj) : null;
             float textX = 46;
             if (preview!=null) {
-                float thumbW=56, thumbH=76, thumbX=40, thumbY=y+8, pad=3;
+                // Dimensione aumentata (era 56x76) e avvicinata alle proporzioni naturali del box del mazzo
+                // (piu' largo che alto, circa 0.88): il ritaglio "a copertura" deve tagliare via meno,
+                // riducendo il rischio di perdere parte importante dell'immagine.
+                float thumbW=64, thumbH=80, thumbX=40, thumbY=y+6, pad=3;
                 box(c, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH, Color.rgb(58,74,94));
                 float imgL=thumbX+pad, imgT=thumbY+pad, imgR=thumbX+thumbW-pad, imgB=thumbY+thumbH-pad;
+                // Ritaglio "a copertura" (come object-fit:cover), non uno stiramento: prima drawBitmap forzava
+                // l'immagine dentro il rettangolo di destinazione deformandola se le proporzioni non
+                // coincidevano — da qui sia la distorsione visibile sia il margine bianco che sovrastava la
+                // cornice (il ritaglio grezzo non corrispondeva mai esattamente al contenitore).
+                float dstAspect = (imgR-imgL)/(imgB-imgT);
+                int pw=preview.getWidth(), ph=preview.getHeight();
+                float srcAspect = (float)pw/ph;
+                int srcL,srcT,srcR,srcB;
+                if (srcAspect > dstAspect) {
+                    int srcW = Math.round(ph*dstAspect);
+                    srcL=(pw-srcW)/2; srcR=srcL+srcW; srcT=0; srcB=ph;
+                } else {
+                    int srcH = Math.round(pw/dstAspect);
+                    srcT=(ph-srcH)/2; srcB=srcT+srcH; srcL=0; srcR=pw;
+                }
+                android.graphics.Rect src = new android.graphics.Rect(srcL,srcT,srcR,srcB);
                 c.save();
                 android.graphics.Path clip = new android.graphics.Path();
                 clip.addRoundRect(new android.graphics.RectF(imgL,imgT,imgR,imgB), 5,5, android.graphics.Path.Direction.CW);
                 c.clipPath(clip);
                 android.graphics.Rect dst = new android.graphics.Rect((int)imgL,(int)imgT,(int)imgR,(int)imgB);
-                c.drawBitmap(preview, null, dst, null);
+                c.drawBitmap(preview, src, dst, null);
                 c.restore();
                 textX = thumbX+thumbW+14;
             }
@@ -1767,8 +1786,9 @@ public class MainActivity extends Activity {
                 } else {
                     float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
                     box(c,gL,230,gR,294,green); box(c,rL,230,rR,294,red);
-                    txt(c,"W",(gL+gR)/2,266,22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,286,13,Color.WHITE,Paint.Align.CENTER);
-                    txt(c,"L",(rL+rR)/2,266,22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,286,13,Color.WHITE,Paint.Align.CENTER);
+                    float[] wl2 = centerLines(262,6,22,13);
+                    txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+                    txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
                     box(c,18,306,w/2-8,352,card); box(c,w/2+8,306,w-18,352,card);
                     drawUndoRedoIcon(c,w/4-38,329,16,white,false);
                     txt(c,"ANNULLA",w/4+8,335,16,white,Paint.Align.CENTER);
