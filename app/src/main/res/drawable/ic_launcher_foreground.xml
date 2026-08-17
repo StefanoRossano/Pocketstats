@@ -2,9 +2,9 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Tutto il contenuto ridotto (0.85x) e spostato in basso (ancora un po' di piu' di prima), per non
-         riempire troppo l'icona -->
-    <group android:scaleX="0.85" android:scaleY="0.85" android:pivotX="54" android:pivotY="54" android:translateY="8">
+    <!-- Tutto il contenuto ridotto un altro po' (0.75x, era 0.85x) e centrato verticalmente (translateY ridotto
+         di conseguenza, il contenuto ora ha piu' margine naturale e non serve spingerlo cosi' in basso). -->
+    <group android:scaleX="0.75" android:scaleY="0.75" android:pivotX="54" android:pivotY="54" android:translateY="5">
         <!-- Ombra della carta: marcata e direzionale (giu'+destra, niente su alto/sinistra), semitrasparente
              (i vector drawable non supportano blur/drop-shadow reali, quindi la si approssima cosi'). -->
         <path android:fillColor="#59000000"
