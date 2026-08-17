@@ -23,7 +23,6 @@ public class MainActivity extends Activity {
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
     static final int SCREEN_SEASON_DETAIL = 1; // Dettaglio Season: tab Gioca / Deck / Statistiche
-    static final int SCREEN_SESSION_PLAY = 2;  // Schermata di registrazione partita (W/L, annulla)
 
     static final int DEFAULT_BASELINE = 810; // Punteggio di partenza standard per una nuova Stagione
 
@@ -61,10 +60,9 @@ public class MainActivity extends Activity {
         if (store != null) store.save();
     }
 
-    /** Naviga di un livello indietro nella gerarchia Lista Season -> Dettaglio -> Registrazione partita. */
+    /** Naviga di un livello indietro nella gerarchia Lista Season -> Dettaglio. */
     void goBack() {
-        if (screen == SCREEN_SESSION_PLAY) { screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; }
-        else if (screen == SCREEN_SEASON_DETAIL) { screen = SCREEN_SEASON_LIST; }
+        if (screen == SCREEN_SEASON_DETAIL) { screen = SCREEN_SEASON_LIST; }
         view.invalidate();
     }
 
@@ -185,44 +183,60 @@ public class MainActivity extends Activity {
         ArrayList<String> names = new ArrayList<>();
         for (Deck d : s.decks) names.add(d.name);
         Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
-        if (names.isEmpty()) { createDeckAndAssignTo(s, onPicked); return; }
 
         LinearLayout box = formBox();
-        box.addView(label("Deck"));
+        box.addView(label("Deck (tocca per selezionare, o creane uno nuovo)"));
+
+        String[] selected = {null};
+        Runnable[] refreshSelector = new Runnable[1];
         Button deckSelector = new Button(this); styleSecondaryButton(deckSelector);
-        deckSelector.setText(withBigArrow("Tocca per scegliere un deck  ▾"));
+        deckSelector.setEnabled(!names.isEmpty());
+        refreshSelector[0] = () -> deckSelector.setText(withBigArrow((selected[0] != null ? selected[0] : (names.isEmpty() ? "Nessun deck esistente" : "Tocca per scegliere un deck")) + "  ▾"));
+        refreshSelector[0].run();
         LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        selLp.topMargin = dp(6); deckSelector.setLayoutParams(selLp);
-        box.addView(deckSelector);
-
-        Button newDeckBtn = new Button(this); newDeckBtn.setText("+ Nuovo Deck..."); styleSecondaryButton(newDeckBtn);
-        LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        newBtnLp.topMargin = dp(10); newDeckBtn.setLayoutParams(newBtnLp);
-        box.addView(newDeckBtn);
-
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Scegli il Deck").setView(box)
-            .setNegativeButton("Annulla", null).create();
+        box.addView(deckSelector, selLp);
         deckSelector.setOnClickListener(v -> {
             new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
-                onPicked.accept(names.get(which)); dialog.dismiss();
+                selected[0] = names.get(which); refreshSelector[0].run();
             }).show();
         });
-        newDeckBtn.setOnClickListener(v -> { dialog.dismiss(); createDeckAndAssignTo(s, onPicked); });
-        dialog.show();
-    }
 
-    void createDeckAndAssignTo(Season s, java.util.function.Consumer<String> onPicked) {
-        LinearLayout box = formBox();
-        EditText e = field("Nome Deck"); box.addView(e);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(box)
-            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
+        // "Nuovo Deck": si trasforma in un campo di testo con una "✕" sovrapposta per richiuderlo, invece
+        // di aprire un secondo dialog separato — piu' rapido per la creazione al volo.
+        Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
+        LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        newBtnLp.topMargin = dp(10); box.addView(newDeckBtn, newBtnLp);
+
+        android.widget.FrameLayout newDeckSection = new android.widget.FrameLayout(this);
+        EditText newDeckName = field("Nome nuovo deck"); newDeckName.setPadding(dp(14),dp(12),dp(44),dp(12));
+        newDeckSection.addView(newDeckName, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT));
+        TextView closeNewDeck = new TextView(this); closeNewDeck.setText("✕"); closeNewDeck.setTextColor(MUTED_TXT); closeNewDeck.setGravity(Gravity.CENTER);
+        GradientDrawable closeCircle = new GradientDrawable(); closeCircle.setShape(GradientDrawable.OVAL); closeCircle.setColor(Color.rgb(24,36,52));
+        closeNewDeck.setBackground(closeCircle);
+        android.widget.FrameLayout.LayoutParams closeLp = new android.widget.FrameLayout.LayoutParams(dp(28), dp(28));
+        closeLp.gravity = Gravity.END|Gravity.CENTER_VERTICAL; closeLp.rightMargin = dp(8);
+        newDeckSection.addView(closeNewDeck, closeLp);
+        LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sectionLp.topMargin = dp(10); newDeckSection.setLayoutParams(sectionLp); newDeckSection.setVisibility(View.GONE);
+        box.addView(newDeckSection);
+
+        newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); newDeckName.requestFocus(); });
+        closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Scegli il Deck").setView(box)
+            .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
-            String n = e.getText().toString().trim();
-            if (n.isEmpty() || deckNameTaken(s, n)) return false;
-            s.decks.add(new Deck(n)); store.save();
-            onPicked.accept(n);
+            String newName = newDeckName.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                if (deckNameTaken(s, newName)) return false;
+                s.decks.add(new Deck(newName)); store.save();
+                onPicked.accept(newName);
+                return true;
+            }
+            if (selected[0] == null) return false;
+            onPicked.accept(selected[0]);
             return true;
-        }, "Nome Deck non valido o già esistente.");
+        }, "Seleziona un deck esistente o scrivi il nome di uno nuovo.");
         dialog.show();
     }
 
@@ -333,12 +347,6 @@ public class MainActivity extends Activity {
     void newSeason(){ wizardStep1(false, null); }
 
     // Menu "⋮" della schermata di registrazione partita: azioni secondarie (modifica deck, correzione manuale).
-    void playScreenKebabMenu(float rightEdgeX, float anchorY){
-        view.showAnchoredMenu(rightEdgeX, anchorY,
-            new String[]{"Modifica deck","Aggiungi correzione manuale"},
-            new int[]{Color.WHITE, Color.WHITE},
-            new Runnable[]{ this::chooseCurrentDeck, this::addManualCorrection });
-    }
 
     // Colori/stile condivisi per i widget nativi dei dialog (Season/Deck), coerenti con la palette scura
     // del resto dell'app invece dei widget Android di default (che stonavano visivamente).
@@ -936,7 +944,6 @@ public class MainActivity extends Activity {
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             Season s = store.seasons.get(store.current);
-            if (screen == SCREEN_SESSION_PLAY) { playScreen(c,s,w,h); c.restore(); return; }
             // SCREEN_SEASON_DETAIL: header e barra tab in basso restano fissi, il contenuto in mezzo scorre.
             detailHeader(c,s,w);
             bodyTop=44; bodyBottom=h-58; // 44 e non 58: nel tab Deck la pillola "Ordina" parte da y=48
@@ -998,7 +1005,16 @@ public class MainActivity extends Activity {
             drawEditIcon(c,44+nameW+22,centerY,18,white);
         }
 
-        void boxR(Canvas c,float l,float t,float rr,float b,float radius,int col){p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawRoundRect(l,t,rr,b,radius,radius,p);}
+        // Rettangolo con SOLO gli angoli superiori arrotondati (quelli inferiori restano squadrati, per
+        // fondersi visivamente col corpo sottostante): usato per la fascia di intestazione delle sottocard
+        // giorno, che prima aveva erroneamente tutti e 4 gli angoli arrotondati.
+        void boxTopRounded(Canvas c,float l,float t,float rr,float b,float radius,int col){
+            p.setColor(col); p.setStyle(Paint.Style.FILL);
+            android.graphics.Path path = new android.graphics.Path();
+            float[] radii = {radius,radius, radius,radius, 0,0, 0,0}; // TL,TR,BR,BL
+            path.addRoundRect(l,t,rr,b,radii, android.graphics.Path.Direction.CW);
+            c.drawPath(path,p);
+        }
 
         // ===== Tab "Gioca": card "Andamento Stagione" (punti, partite, grafico) + pulsante "Gioca" + card
         // "Partite" (raggruppata per giorno, ogni giorno e' una sottocard con intestazione data+statistiche
@@ -1036,24 +1052,60 @@ public class MainActivity extends Activity {
                 new int[]{green, red, wrColor(wr,W+L)});
             drawChart(c,30,184,w-30,328,all,0,dayBoundaries);
 
-            // ===== Pulsante "Gioca": entra nella schermata di registrazione partita. =====
-            box(c,18,356,w-18,404,blue);
-            drawBurstTabIcon(c,w/2-64,380,0.7f,white);
-            txt(c,"Gioca",w/2+10,386,15,white,Paint.Align.CENTER);
+            // ===== Card "DECK SELEZIONATO": deck usato per la prossima partita registrata. Tutta la card e'
+            // toccabile per cambiarlo (niente matita: sarebbe un'icona in piu' per un'azione che riguarda
+            // l'intera card, non una singola riga di testo — il tocco sulla card stessa e' piu' immediato). =====
+            boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
+            box(c,18,356,w-18,432,card);
+            txt(c,"DECK SELEZIONATO",34,378,12,muted,Paint.Align.LEFT);
+            if(noDeck){
+                float[] nd0 = centerLines(408,4,17,11);
+                txt(c,"Nessun deck selezionato",w/2,nd0[0],17,white,Paint.Align.CENTER);
+                txt(c,"Tocca per selezionare un deck",w/2,nd0[1],11,muted,Paint.Align.CENTER);
+            } else {
+                txt(c,s.currentDeck,w/2,centeredBaseline(410,18),18,white,Paint.Align.CENTER);
+            }
 
-            // ===== Card "PARTITE": altezza FISSA, lista scorrevole al suo interno con scrollbar propria. =====
-            float listCardTop=418, listHeight=300;
+            // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
+            float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
+            box(c,gL,442,gR,506,green); box(c,rL,442,rR,506,red);
+            float[] wl2 = centerLines(474,6,22,13);
+            txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+            txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+
+            box(c,18,516,w-18,562,card);
+            p.setTextSize(15); float undoLabelW=p.measureText("ANNULLA ULTIMA PARTITA");
+            float undoIconW=16, undoGap=8, undoGroupW=undoIconW+undoGap+undoLabelW, undoGroupL=w/2-undoGroupW/2;
+            drawUndoIcon(c,undoGroupL+undoIconW/2,539,16,white);
+            txt(c,"ANNULLA ULTIMA PARTITA",undoGroupL+undoIconW+undoGap,545,15,white,Paint.Align.LEFT);
+
+            // ===== Card "PARTITE": altezza FISSA, lista scorrevole al suo interno con scrollbar propria.
+            // "+" nell'intestazione per aggiungere una correzione manuale. =====
+            float listCardTop=580, listHeight=300;
             float listTop=listCardTop+42, listBottom=listTop+listHeight;
             float listCardBottom = listBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
             txt(c,"PARTITE",34,listCardTop+26,12,muted,Paint.Align.LEFT);
+            txt(c,"+",w-32,listCardTop+30,22,blue,Paint.Align.CENTER);
 
-            float headerH=32, rowH=64, groupGap=10;
-            // Prima passata: conta quanti gruppi-giorno ci sono, per calcolare l'altezza totale del contenuto
-            // (serve PRIMA di disegnare, per scrollbar e clip).
-            int groupCount=0;
-            { int idx=all.size()-1; while(idx>=0){ String dk=dayKey(all.get(idx).timestamp); int j=idx; while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)) j--; groupCount++; idx=j; } }
-            float totalRowsHeight = groupCount*(headerH+groupGap) + all.size()*rowH;
+            float headerH=32, rowH=64, groupGap=10, corrCardH=64;
+            // Prima passata: percorre la stessa sequenza di "blocchi" (gruppo-giorno di partite reali, oppure
+            // correzione singola come sottocard a se') per calcolare l'altezza totale del contenuto — serve
+            // PRIMA di disegnare, per scrollbar e clip.
+            float totalRowsHeight = 0;
+            {
+                int idx=all.size()-1;
+                while(idx>=0){
+                    if(all.get(idx).unknown){ totalRowsHeight += corrCardH+groupGap; idx--; }
+                    else {
+                        String dk=dayKey(all.get(idx).timestamp);
+                        int j=idx;
+                        while(j>=0 && !all.get(j).unknown && dayKey(all.get(j).timestamp).equals(dk)) j--;
+                        totalRowsHeight += headerH + (idx-j)*rowH + groupGap;
+                        idx=j;
+                    }
+                }
+            }
             resetMatchInnerScrollIfNeeded("matchinner:"+store.current);
             matchInnerMaxScrollY = Math.max(0, totalRowsHeight-listHeight);
             if(matchInnerScrollY>matchInnerMaxScrollY) matchInnerScrollY=matchInnerMaxScrollY;
@@ -1064,53 +1116,60 @@ public class MainActivity extends Activity {
             float y=listTop+4;
             int i = all.size()-1;
             while(i>=0){
-                String dk = dayKey(all.get(i).timestamp);
-                int dayEndIdx = i;
-                int j = i;
-                while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)) j--;
-                int dayStartIdx = j+1;
-                int dw=0, dl=0;
-                for(int k=dayStartIdx;k<=dayEndIdx;k++){ Match m=all.get(k); if(!m.unknown){ if(m.win) dw++; else dl++; } }
-                float dwr = (dw+dl)==0?0:100f*dw/(dw+dl);
-                int rowsInGroup = dayEndIdx-dayStartIdx+1;
-                float groupTop=y, groupBottom=y+headerH+rowsInGroup*rowH;
+                Match mi = all.get(i);
+                if(mi.unknown){
+                    // Sottocard STANDALONE per la correzione (punti di partenza se e' la primissima partita
+                    // in assoluto, altrimenti correzione manuale successiva): niente giorno/deck/badge qui,
+                    // una card a se' — non una riga mescolata dentro un gruppo giorno.
+                    String title = (i==0) ? "Punti di partenza" : "Correzione manuale";
+                    box(c,26,y,w-26,y+corrCardH,Color.rgb(10,18,30));
+                    txt(c, title, 42,y+26,15,white,Paint.Align.LEFT);
+                    txt(c, formatDateOnly(mi.timestamp)+"  •  "+formatTimeOnly(mi.timestamp), 42,y+48,12,muted,Paint.Align.LEFT);
+                    int gain = mi.after-mi.before;
+                    int gcol = gain>0?green:(gain<0?red:muted);
+                    txt(c, (gain>0?"+":"")+gain, w-42, y+26, 15, gcol, Paint.Align.RIGHT);
+                    txt(c, mi.before+" → "+mi.after, w-42, y+46, 11, muted, Paint.Align.RIGHT);
+                    matchHits.add(new Hit(y,y+corrCardH,i));
+                    y += corrCardH+groupGap;
+                    i--;
+                } else {
+                    String dk = dayKey(mi.timestamp);
+                    int dayEndIdx = i;
+                    int j = i;
+                    while(j>=0 && !all.get(j).unknown && dayKey(all.get(j).timestamp).equals(dk)) j--;
+                    int dayStartIdx = j+1;
+                    int dw=0, dl=0;
+                    for(int k=dayStartIdx;k<=dayEndIdx;k++){ if(all.get(k).win) dw++; else dl++; }
+                    float dwr = (dw+dl)==0?0:100f*dw/(dw+dl);
+                    int rowsInGroup = dayEndIdx-dayStartIdx+1;
+                    float groupTop=y, groupBottom=y+headerH+rowsInGroup*rowH;
 
-                // Sottocard del giorno: sfondo, poi fascia intestazione (data + W/L/% del giorno) su sfondo
-                // piu' chiaro, cosi' la data non si perde piu' in mezzo alle righe.
-                box(c,26,groupTop,w-26,groupBottom,Color.rgb(10,18,30));
-                boxR(c,26,groupTop,w-26,groupTop+headerH,10,Color.rgb(21,34,56));
-                txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 38, groupTop+20, 11, muted, Paint.Align.LEFT);
-                txtRowRight(c,w-38,groupTop+20,11,
-                    new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
-                    new int[]{green, red, wrColor(dwr,dw+dl)});
+                    // Sottocard del giorno: sfondo, poi fascia intestazione (data + W/L/% del giorno) su
+                    // sfondo piu' chiaro, con SOLO gli angoli superiori arrotondati (quelli inferiori restano
+                    // squadrati, per fondersi visivamente col corpo sottostante — prima erano tutti arrotondati).
+                    box(c,26,groupTop,w-26,groupBottom,Color.rgb(10,18,30));
+                    boxTopRounded(c,26,groupTop,w-26,groupTop+headerH,10,Color.rgb(21,34,56));
+                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 38, groupTop+20, 11, muted, Paint.Align.LEFT);
+                    txtRowRight(c,w-38,groupTop+20,11,
+                        new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
+                        new int[]{green, red, wrColor(dwr,dw+dl)});
 
-                float ry = groupTop+headerH;
-                for(int k=dayEndIdx;k>=dayStartIdx;k--){
-                    Match m = all.get(k);
-                    if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(38,ry,w-38,ry,p); }
-                    if(m.unknown){
-                        // Correzione (punti di partenza se e' la primissima partita in assoluto, altrimenti
-                        // correzione manuale successiva): niente deck ne' badge W/L, solo la variazione punti.
-                        String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
-                        txt(c, title, 46,ry+26,15,white,Paint.Align.LEFT);
-                        txt(c, formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
-                        int gain = m.after-m.before;
-                        int gcol = gain>0?green:(gain<0?red:muted);
-                        txt(c, (gain>0?"+":"")+gain, w-46, ry+26, 15, gcol, Paint.Align.RIGHT);
-                        txt(c, m.before+" → "+m.after, w-46, ry+46, 11, muted, Paint.Align.RIGHT);
-                    } else {
+                    float ry = groupTop+headerH;
+                    for(int k=dayEndIdx;k>=dayStartIdx;k--){
+                        Match m = all.get(k);
+                        if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(38,ry,w-38,ry,p); }
                         txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
                         txt(c, "Partita "+(k+1)+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
                         txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
                         int gain = m.after-m.before;
                         int gcol = gain>0?green:(gain<0?red:muted);
                         txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
+                        matchHits.add(new Hit(ry,ry+rowH,k));
+                        ry+=rowH;
                     }
-                    matchHits.add(new Hit(ry,ry+rowH,k));
-                    ry+=rowH;
+                    y = groupBottom+groupGap;
+                    i = dayStartIdx-1;
                 }
-                y = groupBottom+groupGap;
-                i = dayStartIdx-1;
             }
             c.restore();
 
@@ -1361,44 +1420,6 @@ public class MainActivity extends Activity {
             lastContentBottom = deckCardBottom+20;
         }
 
-        // ===== Schermata di registrazione partita: deck attuale, punti/streak, W/L, annulla. Niente piu'
-        // grafico qui (non ha senso su una singola partita): resta solo nella card "Andamento Stagione". =====
-        void playScreen(Canvas c, Season s, float w, float h){
-            float centerY=36;
-            drawChevronBack(c,24,centerY,20,white);
-            String deckTitle = ("Unknown".equals(s.currentDeck) || s.currentDeck==null) ? "Deck sconosciuto" : s.currentDeck;
-            txt(c, deckTitle, 44, 30, 19, white, Paint.Align.LEFT);
-            txt(c, "Partita "+(s.matches.size()+1), 44, 48, 12, muted, Paint.Align.LEFT);
-            drawKebabIcon(c,w-24,centerY,white);
-
-            bodyTop=58; bodyBottom=h;
-            resetScrollIfNeeded("play:"+store.current);
-            c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
-
-            float gap2=8; float colW=(w-36-gap2)/2;
-            float c1L=18, c1R=18+colW, c2L=c1R+gap2, c2R=w-18;
-            box(c,c1L,66,c1R,140,card); box(c,c2L,66,c2R,140,card);
-            float[] g1 = centerLines(103,6,11,26);
-            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,g1[0],11,muted,Paint.Align.CENTER);
-            txt(c,""+s.points,(c1L+c1R)/2,g1[1],26,white,Paint.Align.CENTER);
-            txt(c,"VITTORIE CONSECUTIVE",(c2L+c2R)/2,g1[0],11,muted,Paint.Align.CENTER);
-            txt(c,""+s.streak,(c2L+c2R)/2,g1[1],26,white,Paint.Align.CENTER);
-
-            float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,148,gR,212,green); box(c,rL,148,rR,212,red);
-            float[] wl2 = centerLines(180,6,22,13);
-            txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
-            txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
-
-            box(c,18,224,w-18,270,card);
-            drawUndoIcon(c,w/2-52,247,16,white);
-            txt(c,"ANNULLA ULTIMA PARTITA",w/2+18,253,15,white,Paint.Align.CENTER);
-
-            lastContentBottom = 270+20;
-            c.restore();
-            finishScroll(); drawScrollbar(c,w);
-        }
-
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,long unusedTimestamp,List<Integer> dayBoundaries){
             box(c,l,t,rr,b,Color.rgb(10,18,30));
             int gridColor = Color.rgb(26,38,56);
@@ -1553,17 +1574,6 @@ public class MainActivity extends Activity {
 
             Season s = store.seasons.get(store.current);
 
-            if(screen==SCREEN_SESSION_PLAY){
-                if(y<52){
-                    if(x<60){ goBack(); return true; }
-                    if(x>w-56){ playScreenKebabMenu(w-18, 52); return true; }
-                    return true;
-                }
-                if(contentY>=148 && contentY<=212){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=224 && contentY<=270){ confirmUndo(); return true; }
-                return true;
-            }
-
             if(y<52){
                 if(x<60){ goBack(); return true; }
                 p.setTextSize(20); float nameW=p.measureText(s.name);
@@ -1572,10 +1582,10 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(contentY>=356&&contentY<=404){
-                    screen=SCREEN_SESSION_PLAY; invalidate();
-                    return true;
-                }
+                if(contentY>=356&&contentY<=432){ chooseCurrentDeck(); return true; }
+                if(contentY>=442&&contentY<=506){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=516&&contentY<=562){ confirmUndo(); return true; }
+                if(contentY>=580&&contentY<=622&&x>=w-56){ addManualCorrection(); return true; }
                 float matchContentY = contentY + matchInnerScrollY;
                 for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
             } else if(detailTab==1){
@@ -1654,10 +1664,18 @@ public class MainActivity extends Activity {
                     for(int i=0;i<ss.length();i++){
                         JSONObject so=ss.getJSONObject(i);
                         String deck=so.optString("d","Unknown");
+                        // Il flag "sessione non tracciata" era il campo canonico e sempre affidabile nei
+                        // dati vecchi; quello sulla singola partita ("u") non e' garantito essersi salvato
+                        // correttamente in ogni versione precedente dell'app — qui il livello sessione ha
+                        // sempre la priorita', per non perdere la marcatura "e' una correzione, non una vera
+                        // vittoria/sconfitta" (causa del bug per cui la correzione iniziale appariva come
+                        // una normale partita con tanto di badge "W").
+                        boolean sessionUntracked = so.optBoolean("u", false);
                         JSONArray mArr=so.optJSONArray("m");
                         if(mArr!=null) for(int j=0;j<mArr.length();j++){
                             JSONObject mo=mArr.getJSONObject(j);
                             Match m=Match.from(mo);
+                            if(sessionUntracked) m.unknown = true;
                             if(m.deck==null || m.deck.isEmpty() || "Unknown".equals(m.deck)) m.deck=deck;
                             s.matches.add(m);
                         }
@@ -1675,7 +1693,7 @@ public class MainActivity extends Activity {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
         void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
-        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
+        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
         // quando il campo non esisteva ancora ricevevano l'ora di caricamento come stima, finendo tutte con
@@ -1688,6 +1706,27 @@ public class MainActivity extends Activity {
             for(Season s: seasons) for(Match m: s.matches){
                 Integer cnt = counts.get(m.timestamp);
                 if(m.timestamp>0 && cnt!=null && cnt>1){ m.timestamp=0; changed=true; }
+            }
+            return changed;
+        }
+
+        // Ripara le correzioni etichettate male nei dati vecchi (unknown=false quando dovrebbe essere true):
+        // NON e' un'euristica incerta ma una certezza matematica. Il guadagno di una vittoria vera puo'
+        // essere SOLO uno tra {10,13,16,19,22} (a seconda della serie), una sconfitta vera e' SEMPRE
+        // esattamente -10 — sono gli unici valori che play() puo' produrre. Qualsiasi altro guadagno e'
+        // impossibile per una partita vera: e' per forza una correzione.
+        boolean repairMislabeledCorrections(){
+            int[] validWinGains = {10,13,16,19,22};
+            boolean changed=false;
+            for(Season s: seasons){
+                for(Match m: s.matches){
+                    if(m.unknown) continue;
+                    int gain = m.after-m.before;
+                    boolean plausible;
+                    if(m.win){ plausible=false; for(int g: validWinGains) if(gain==g){ plausible=true; break; } }
+                    else plausible = (gain==-10);
+                    if(!plausible){ m.unknown=true; changed=true; }
+                }
             }
             return changed;
         }
