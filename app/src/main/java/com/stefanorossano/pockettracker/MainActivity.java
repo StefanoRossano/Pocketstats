@@ -1262,7 +1262,7 @@ public class MainActivity extends Activity {
             // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
             // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
             // dimensione dell'icona cambiava.
-            if(partiteTab==1) drawEditIcon(c, w-18-11, tabIconY, 22, muted);
+            if(partiteTab==1) drawEditIcon(c, w/2+69, tabIconY, 22, muted);
 
             if(partiteTab==0){
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
@@ -1329,8 +1329,8 @@ public class MainActivity extends Activity {
                     boxTopRounded(c,30,groupTop,w-30,groupTop+headerH,10,Color.rgb(21,34,56));
                     // Pulsante espandi/collassa allineato a sinistra, prima della data.
                     drawExpandIcon(c, 42, groupTop+20, 14, muted, !collapsed);
-                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 58, groupTop+20, 11, muted, Paint.Align.LEFT);
-                    txtRowRight(c,w-46,groupTop+20,11,
+                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 58, centeredBaseline(groupTop+20,11), 11, muted, Paint.Align.LEFT);
+                    txtRowRight(c,w-46,centeredBaseline(groupTop+20,11),11,
                         new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
                         new int[]{green, red, wrColor(dwr,dw+dl)});
                     dayHeaderHits.add(new DayHeaderHit(groupTop, groupTop+headerH, dk));
@@ -1343,14 +1343,19 @@ public class MainActivity extends Activity {
                                 String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
                                 box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
                                 txt(c, title, 50, ry+26, 15, white, Paint.Align.LEFT);
-                                txtRow(c, 50, ry+46, 12, new String[]{"+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"}, new int[]{green, red});
-                                if(k==0){
-                                    txt(c, ""+m.after, w-50, ry+26, 15, white, Paint.Align.RIGHT);
-                                } else {
+                                // Seconda riga: TUTTE le variazioni insieme (punti, vittorie consecutive, W, L)
+                                // — e' una card diversa dalle partite, non deve seguire lo stesso schema
+                                // "titolo a sinistra, valore isolato a destra".
+                                String pointsStr; int pointsColor;
+                                if(k==0){ pointsStr = m.after+" punti"; pointsColor = white; }
+                                else {
                                     int gain = m.after-m.before;
-                                    int gcol = gain>0?green:(gain<0?red:muted);
-                                    txt(c, (gain>0?"+":"")+gain, w-50, ry+26, 15, gcol, Paint.Align.RIGHT);
+                                    pointsStr = (gain>=0?"+":"")+gain+" punti";
+                                    pointsColor = gain>0?green:(gain<0?red:muted);
                                 }
+                                txtRow(c, 50, ry+46, 12,
+                                    new String[]{pointsStr+"   ", m.streak+"VC   ", "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
+                                    new int[]{pointsColor, muted, green, red});
                             } else {
                                 if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
                                 txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
@@ -1764,7 +1769,7 @@ public class MainActivity extends Activity {
                 if(contentY>=440&&contentY<=482){
                     if(x>=w/2-38 && x<w/2-6){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w-40 && x<w-18){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    if(partiteTab==1 && x>=w/2+58 && x<w/2+80){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
                 if(partiteTab==1){
                     float matchContentY = contentY + matchInnerScrollY;
