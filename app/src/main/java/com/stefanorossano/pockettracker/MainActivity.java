@@ -153,7 +153,7 @@ public class MainActivity extends Activity {
                 s.baseline = DEFAULT_BASELINE; s.initialStreak = 0;
                 s.currentDeck = "Unknown";
                 Match m0 = Match.correction(DEFAULT_BASELINE, np, "Unknown");
-                m0.correctionWins = nw; m0.correctionLosses = nl;
+                m0.correctionWins = nw; m0.correctionLosses = nl; m0.streak = ns; // altrimenti un annullamento successivo recupererebbe sempre streak=0 dalla correzione
                 s.matches.add(m0);
                 s.points = np; s.streak = ns;
                 store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
@@ -419,10 +419,10 @@ public class MainActivity extends Activity {
         Season s = store.seasons.get(store.current);
         int[] curWL = countWL(s.matches); // vittorie/sconfitte cumulate ATTUALI, prima di questa correzione
         LinearLayout box = formBox();
-        EditText p = numberField(""+s.points, true);
-        EditText st = numberField(""+s.streak, true);
-        EditText wf = numberField(""+curWL[0], false);
-        EditText lf = numberField(""+curWL[1], false);
+        EditText p = numberField(""+s.points, true); p.setText(""+s.points);
+        EditText st = numberField(""+s.streak, true); st.setText(""+s.streak);
+        EditText wf = numberField(""+curWL[0], false); wf.setText(""+curWL[0]);
+        EditText lf = numberField(""+curWL[1], false); lf.setText(""+curWL[1]);
         box.addView(label("Punti attuali")); box.addView(p);
         box.addView(label("Vittorie consecutive attuali")); box.addView(st);
         box.addView(label("Vittorie totali")); box.addView(wf);
@@ -440,7 +440,7 @@ public class MainActivity extends Activity {
                 int deltaW = nw - curWL[0], deltaL = nl - curWL[1];
                 if (deltaW < 0 || deltaL < 0) return false; // i totali non possono diminuire
                 Match m = Match.correction(s.points, np, s.currentDeck!=null ? s.currentDeck : "Unknown");
-                m.correctionWins = deltaW; m.correctionLosses = deltaL;
+                m.correctionWins = deltaW; m.correctionLosses = deltaL; m.streak = ns; // altrimenti un annullamento successivo recupererebbe sempre streak=0 dalla correzione
                 s.matches.add(m);
                 s.points = np; s.streak = ns;
                 store.save(); view.invalidate();
@@ -1283,7 +1283,7 @@ public class MainActivity extends Activity {
                 // Tab Lista: raggruppata per GIORNO, indipendentemente dal tipo (partita o correzione): una
                 // correzione "vive" comunque sotto la data a cui appartiene, con uno stile di riga diverso
                 // (una sua piccola sottocard interna, invece di una riga piatta).
-                float headerH=32, matchRowH=64, corrRowH=48, groupGap=10;
+                float headerH=32, matchRowH=64, corrRowH=64, groupGap=10;
                 // Numerazione "Partita N": conta solo le partite VERE (esclude le correzioni), cosi' la
                 // primissima partita vera e' sempre "Partita 1".
                 int[] matchNumber = new int[all.size()];
@@ -1342,14 +1342,14 @@ public class MainActivity extends Activity {
                             if(m.unknown){
                                 String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
                                 box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
-                                float baseline = centeredBaseline(ry+corrRowH/2f, 14);
-                                txt(c, title, 50, baseline, 14, white, Paint.Align.LEFT);
+                                txt(c, title, 50, ry+26, 15, white, Paint.Align.LEFT);
+                                txtRow(c, 50, ry+46, 12, new String[]{"+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"}, new int[]{green, red});
                                 if(k==0){
-                                    txt(c, ""+m.after, w-50, baseline, 14, white, Paint.Align.RIGHT);
+                                    txt(c, ""+m.after, w-50, ry+26, 15, white, Paint.Align.RIGHT);
                                 } else {
                                     int gain = m.after-m.before;
                                     int gcol = gain>0?green:(gain<0?red:muted);
-                                    txt(c, (gain>0?"+":"")+gain, w-50, baseline, 14, gcol, Paint.Align.RIGHT);
+                                    txt(c, (gain>0?"+":"")+gain, w-50, ry+26, 15, gcol, Paint.Align.RIGHT);
                                 }
                             } else {
                                 if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
