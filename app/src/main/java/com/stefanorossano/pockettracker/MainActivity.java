@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.content.*;
 import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -191,21 +192,28 @@ public class MainActivity extends Activity {
         TextView header = new TextView(this);
         header.setText(headerText); header.setTextColor(Color.WHITE); header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setPadding(0,0,0,dp(14));
+        header.setPadding(0,dp(10),0,dp(14));
         box.addView(header);
 
         String[] selected = {null};
         Runnable[] refreshSelector = new Runnable[1];
         Button deckSelector = new Button(this); styleSecondaryButton(deckSelector);
         deckSelector.setEnabled(!names.isEmpty());
-        refreshSelector[0] = () -> deckSelector.setText(withBigArrow((selected[0] != null ? selected[0] : (names.isEmpty() ? "Nessun deck esistente" : "Tocca per scegliere un deck")) + "  ▾"));
+        Bitmap downArrow = makeDownArrowIcon(Color.WHITE, dp(12));
+        BitmapDrawable downArrowDrawable = new BitmapDrawable(getResources(), downArrow);
+        downArrowDrawable.setBounds(0,0,dp(12),dp(12));
+        deckSelector.setCompoundDrawables(null,null,downArrowDrawable,null);
+        deckSelector.setCompoundDrawablePadding(dp(8));
+        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : (names.isEmpty() ? "Nessun deck esistente" : "Tocca per scegliere un deck"));
         refreshSelector[0].run();
         LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         box.addView(deckSelector, selLp);
         deckSelector.setOnClickListener(v -> {
+            // "Annulla" esplicito: prima si poteva chiudere questo dialog SOLO toccando fuori, senza alcun
+            // pulsante di uscita visibile.
             new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
                 selected[0] = names.get(which); refreshSelector[0].run();
-            }).show();
+            }).setNegativeButton("Annulla", null).show();
         });
 
         // "Nuovo Deck": si trasforma in un campo di testo con una "✕" sovrapposta per richiuderlo, invece
@@ -394,16 +402,10 @@ public class MainActivity extends Activity {
 
     // Il glifo "▾" nel testo di un pulsante (es. selettore deck) risultava troppo piccolo rispetto al resto:
     // qui lo ingrandiamo SOLO lui (l'ultimo carattere), lasciando il resto del testo alla dimensione normale.
-    CharSequence withBigArrow(String base){
-        android.text.SpannableString sp = new android.text.SpannableString(base);
-        int idx = base.length()-1;
-        sp.setSpan(new android.text.style.RelativeSizeSpan(1.7f), idx, idx+1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return sp;
-    }
 
     LinearLayout formBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(6),dp(20),0);return l;}
     TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(MUTED_TXT);t.setTextSize(12);t.setPadding(0,dp(10),0,dp(4));return t;}
-    EditText field(String hint){EditText e=new EditText(this);e.setHint(hint);e.setSingleLine();styleField(e);return e;}
+    EditText field(String hint){EditText e=new EditText(this);e.setHint(hint);e.setSingleLine();e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);styleField(e);return e;}
     EditText multilineField(String hint, String initial){
         EditText e=new EditText(this);
         e.setHint(hint);
@@ -487,7 +489,7 @@ public class MainActivity extends Activity {
         TextView header = new TextView(this);
         header.setText("Rinomina Stagione"); header.setTextColor(Color.WHITE); header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setPadding(0,0,0,dp(14));
+        header.setPadding(0,dp(10),0,dp(14));
         box.addView(header);
         EditText e=field(s.name); e.setText(s.name);
         box.addView(e);
@@ -504,6 +506,14 @@ public class MainActivity extends Activity {
 
     // Elimina un deck: se e' usato in una o piu' partite, avvisa prima e, se confermato, imposta quelle
     // partite su "Deck sconosciuto" (Unknown) invece di lasciarle con un riferimento a un deck inesistente.
+    // Menu "⋮" della card di un deck: rinomina, aggiungi immagine, elimina (in rosso, sempre con conferma).
+    void deckActionsMenu(Season s, Deck d, float rightEdgeX, float anchorY){
+        view.showAnchoredMenu(rightEdgeX, anchorY,
+            new String[]{"Rinomina deck","Aggiungi immagine","Elimina deck"},
+            new int[]{Color.WHITE, Color.WHITE, red()},
+            new Runnable[]{ () -> renameDeckDialog(d), () -> pickImageFor(d), () -> confirmDeleteDeck(s,d) });
+    }
+
     void confirmDeleteDeck(Season s, Deck d){
         int usedCount = 0;
         for (Match m: s.matches) if (d.name.equals(m.deck)) usedCount++;
@@ -626,6 +636,23 @@ public class MainActivity extends Activity {
         } else {
             p2.moveTo(s*0.62f, s*0.22f); p2.lineTo(s*0.34f, s*0.5f); p2.lineTo(s*0.62f, s*0.78f);
         }
+        cc.drawPath(p2, pp);
+        return bmp;
+    }
+
+    // Icona freccia-in-giu' per i selettori "▾": prima era un carattere Unicode ingrandito con uno span nel
+    // testo del pulsante, che disallineava verticalmente il glifo dal resto del testo (lo scaling di un
+    // singolo carattere via Span non garantisce l'allineamento sulla stessa baseline). Come "compound
+    // drawable" nativo, Android centra automaticamente icona e testo sulla stessa riga, senza disallineamenti.
+    Bitmap makeDownArrowIcon(int color, int sizePx){
+        Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas cc = new Canvas(bmp);
+        Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pp.setColor(color); pp.setStyle(Paint.Style.STROKE);
+        pp.setStrokeWidth(sizePx*0.14f); pp.setStrokeCap(Paint.Cap.ROUND); pp.setStrokeJoin(Paint.Join.ROUND);
+        float s = sizePx;
+        android.graphics.Path p2 = new android.graphics.Path();
+        p2.moveTo(s*0.22f, s*0.38f); p2.lineTo(s*0.5f, s*0.66f); p2.lineTo(s*0.78f, s*0.38f);
         cc.drawPath(p2, pp);
         return bmp;
     }
@@ -1070,61 +1097,59 @@ public class MainActivity extends Activity {
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
 
-            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": ora due card vere e proprie (sfondo "card", non piu'
-            // il tono scuro da sotto-card), ciascuna col proprio titolo in alto a sinistra — stesso stile e
-            // stesso offset (box_top+22) della card "DECK SELEZIONATO" qui sotto, per coerenza. =====
+            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": due card vere e proprie, altezza ridotta a quella
+            // che il contenuto richiede davvero (92, non 100 indovinati a caso), stesso centro per entrambe
+            // pur avendo un numero diverso di righe di contenuto. =====
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
-            box(c,c1L,58,c1R,158,card);
+            box(c,c1L,58,c1R,150,card);
             txt(c,"PUNTI ATTUALI",c1L+16,80,12,muted,Paint.Align.LEFT);
-            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(127,26),26,white,Paint.Align.CENTER);
-            box(c,c2L,58,c2R,158,card);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(121,26),26,white,Paint.Align.CENTER);
+            box(c,c2L,58,c2R,150,card);
             txt(c,"PARTITE TOTALI",c2L+16,80,12,muted,Paint.Align.LEFT);
-            float[] pb = centerLines(127,6,20,15);
+            float[] pb = centerLines(121,6,20,15);
             txt(c,""+(W+L),(c2L+c2R)/2,pb[0],20,white,Paint.Align.CENTER);
             txtRowCentered(c,(c2L+c2R)/2,pb[1],15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
-            // ===== Card "DECK SELEZIONATO": deck usato per la prossima partita registrata, con l'anteprima
-            // a sinistra del nome se il deck ne ha una — stessa dimensione (64x80) di quella nel tab Deck,
-            // stesso margine (6px sopra/sotto dentro un'area di 92, identica proporzione). Tutta la card e'
-            // toccabile per cambiarlo. =====
+            // ===== Card "DECK SELEZIONATO": altezza calcolata dal contenuto reale (label + anteprima 64x80 +
+            // margine sotto — prima l'anteprima toccava esattamente il bordo della card, margine zero). =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
-            box(c,18,172,w-18,294,card);
-            txt(c,"DECK SELEZIONATO",34,194,12,muted,Paint.Align.LEFT);
+            box(c,18,164,w-18,288,card);
+            txt(c,"DECK SELEZIONATO",34,186,12,muted,Paint.Align.LEFT);
             if(noDeck){
-                float[] nd0 = centerLines(238,4,17,11);
+                float[] nd0 = centerLines(232,4,17,11);
                 txt(c,"Nessun deck selezionato",w/2,nd0[0],17,white,Paint.Align.CENTER);
                 txt(c,"Tocca per selezionare un deck",w/2,nd0[1],11,muted,Paint.Align.CENTER);
             } else {
                 Deck curDeckObj = findDeck(s, s.currentDeck);
                 Bitmap preview = curDeckObj!=null ? getDeckPreview(curDeckObj) : null;
                 if(preview!=null){
-                    float thumbW=64, thumbH=80, thumbX=34, thumbY=208+6;
+                    float thumbW=64, thumbH=80, thumbX=34, thumbY=198;
                     drawCoverImage(c, preview, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH, 8);
-                    txt(c,s.currentDeck, thumbX+thumbW+14, centeredBaseline(208+46,18), 18, white, Paint.Align.LEFT);
+                    txt(c,s.currentDeck, thumbX+thumbW+14, centeredBaseline(thumbY+thumbH/2f,18), 18, white, Paint.Align.LEFT);
                 } else {
-                    txt(c,s.currentDeck,w/2,centeredBaseline(238,18),18,white,Paint.Align.CENTER);
+                    txt(c,s.currentDeck,w/2,centeredBaseline(232,18),18,white,Paint.Align.CENTER);
                 }
             }
 
             // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,308,gR,372,green); box(c,rL,308,rR,372,red);
-            float[] wl2 = centerLines(340,6,22,13);
+            box(c,gL,302,gR,366,green); box(c,rL,302,rR,366,red);
+            float[] wl2 = centerLines(334,6,22,13);
             txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
 
-            box(c,18,386,w-18,432,card);
+            box(c,18,380,w-18,426,card);
             boolean lastIsCorrection = !all.isEmpty() && all.get(all.size()-1).unknown;
             String undoLabel = lastIsCorrection ? "ANNULLA CORREZIONE MANUALE" : "ANNULLA ULTIMA PARTITA";
             p.setTextSize(15); float undoLabelW=p.measureText(undoLabel);
             float undoIconW=16, undoGap=8, undoGroupW=undoIconW+undoGap+undoLabelW, undoGroupL=w/2-undoGroupW/2;
-            drawUndoIcon(c,undoGroupL+undoIconW/2,409,16,white);
-            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,415,15,white,Paint.Align.LEFT);
+            drawUndoIcon(c,undoGroupL+undoIconW/2,403,16,white);
+            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,409,15,white,Paint.Align.LEFT);
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
-            float listCardTop=450, contentHeight=300;
+            float listCardTop=440, contentHeight=300;
             float contentTop=listCardTop+42, contentBottom=contentTop+contentHeight;
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
@@ -1132,9 +1157,9 @@ public class MainActivity extends Activity {
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
             float tabIconY = listCardTop+26;
-            drawMiniChartTabIcon(c, w/2-18, tabIconY, 16, partiteTab==0?blue:muted);
-            drawListTabIcon(c, w/2+18, tabIconY, 16, partiteTab==1?blue:muted);
-            if(partiteTab==1) drawEditIcon(c, w-32, tabIconY, 16, muted);
+            drawMiniChartTabIcon(c, w/2-19, tabIconY, 18, partiteTab==0?blue:muted);
+            drawListTabIcon(c, w/2+19, tabIconY, 18, partiteTab==1?blue:muted);
+            if(partiteTab==1) drawEditIcon(c, w-32, tabIconY, 18, muted);
 
             if(partiteTab==0){
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
@@ -1339,11 +1364,11 @@ public class MainActivity extends Activity {
             txt(c, isUnknown?"Deck sconosciuto":name, textX,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
             float wr=(W+L)==0?0:100f*W/(W+L);
             txt(c,(W+L)+" partite",textX,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
+            // Icona "⋮" per le azioni del deck: rinomina, aggiungi immagine, elimina (in un menu a tendina,
+            // invece del solo cestino di prima) — cosi' il deck e' rinominabile anche da qui, non solo dalla
+            // galleria immagini.
             if (!isUnknown && showDelete) {
-                Bitmap trash = makeTrashIcon(muted, 64);
-                float ts=16, tx=w-30-10-ts, ty=y+8;
-                android.graphics.Rect dst = new android.graphics.Rect((int)tx, (int)ty, (int)(tx+ts), (int)(ty+ts));
-                c.drawBitmap(trash, null, dst, null);
+                drawKebabIcon(c, w-30-10-8, y+16, muted);
             }
             if (isUnknown) {
                 txtRow(c,textX,y+64,11,
@@ -1391,28 +1416,30 @@ public class MainActivity extends Activity {
             // era una pura ripetizione del tab Deck.
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
 
-            box(c,c1L,58,c1R,158,card);
+            // Ogni riga ridotta a 80 di altezza (era 100, sproporzionata per una sola riga di contenuto sotto
+            // il titolo): stesso schema label(top+22)/contenuto centrato usato nel tab Gioca.
+            box(c,c1L,58,c1R,138,card);
             txt(c,"PUNTI",c1L+16,80,12,muted,Paint.Align.LEFT);
-            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(127,22),22,white,Paint.Align.CENTER);
-            box(c,c2L,58,c2R,158,card);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
+            box(c,c2L,58,c2R,138,card);
             txt(c,"VARIAZIONE",c2L+16,80,12,muted,Paint.Align.LEFT);
-            txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,centeredBaseline(127,22),22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
+            txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,centeredBaseline(108,22),22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
 
-            box(c,c1L,172,c1R,272,card);
-            txt(c,"PARTITE TOTALI",c1L+16,194,12,muted,Paint.Align.LEFT);
-            txt(c,""+(W+L),(c1L+c1R)/2,centeredBaseline(241,20),20,white,Paint.Align.CENTER);
-            box(c,c2L,172,c2R,272,card);
-            txt(c,"W / L / %",c2L+16,194,12,muted,Paint.Align.LEFT);
-            txtRowCentered(c,(c2L+c2R)/2,centeredBaseline(241,15),15,
+            box(c,c1L,152,c1R,232,card);
+            txt(c,"PARTITE TOTALI",c1L+16,174,12,muted,Paint.Align.LEFT);
+            txt(c,""+(W+L),(c1L+c1R)/2,centeredBaseline(202,20),20,white,Paint.Align.CENTER);
+            box(c,c2L,152,c2R,232,card);
+            txt(c,"W / L / %",c2L+16,174,12,muted,Paint.Align.LEFT);
+            txtRowCentered(c,(c2L+c2R)/2,centeredBaseline(202,15),15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
-            box(c,c1L,286,c1R,386,card);
-            txt(c,"VITTORIE CONSECUTIVE",c1L+16,308,12,muted,Paint.Align.LEFT);
-            txt(c,""+s.streak,(c1L+c1R)/2,centeredBaseline(355,22),22,white,Paint.Align.CENTER);
-            box(c,c2L,286,c2R,386,card);
-            txt(c,"MASSIME",c2L+16,308,12,muted,Paint.Align.LEFT);
-            txt(c,""+maxStreak,(c2L+c2R)/2,centeredBaseline(355,22),22,white,Paint.Align.CENTER);
+            box(c,c1L,246,c1R,326,card);
+            txt(c,"VITTORIE CONSECUTIVE",c1L+16,268,12,muted,Paint.Align.LEFT);
+            txt(c,""+s.streak,(c1L+c1R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
+            box(c,c2L,246,c2R,326,card);
+            txt(c,"MASSIME",c2L+16,268,12,muted,Paint.Align.LEFT);
+            txt(c,""+maxStreak,(c2L+c2R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
 
             String mostPlayedName = "-"; int mostPlayedCount = 0;
             for(Deck d: sd){
@@ -1420,61 +1447,70 @@ public class MainActivity extends Activity {
                 if(total>mostPlayedCount){ mostPlayedCount=total; mostPlayedName=d.name; }
             }
             if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName="Deck sconosciuto"; }
-            box(c,c1L,400,c1R,500,card);
-            txt(c,"DECK GIOCATI",c1L+16,422,12,muted,Paint.Align.LEFT);
-            txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(469,16),16,white,Paint.Align.CENTER);
-            box(c,c2L,400,c2R,500,card);
-            txt(c,"DECK PIU' GIOCATO",c2L+16,422,12,muted,Paint.Align.LEFT);
-            txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(469,16),16,white,Paint.Align.CENTER);
+            box(c,c1L,340,c1R,420,card);
+            txt(c,"DECK GIOCATI",c1L+16,362,12,muted,Paint.Align.LEFT);
+            txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
+            box(c,c2L,340,c2R,420,card);
+            txt(c,"DECK PIU' GIOCATO",c2L+16,362,12,muted,Paint.Align.LEFT);
+            txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
 
-            lastContentBottom = 500+20;
+            lastContentBottom = 420+20;
         }
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,long unusedTimestamp,List<Integer> dayBoundaries){
             box(c,l,t,rr,b,Color.rgb(10,18,30));
+            // Zone dedicate: header per il testo "Punti iniziali/attuali" (prima si sovrapponeva quasi
+            // esattamente alla prima riga della griglia), corpo per griglia+grafico, footer per le date
+            // sull'asse x.
+            float headerZoneH=44, footerZoneH=18;
+            float gridTop=t+headerZoneH, gridBottom=b-footerZoneH;
             int gridColor = Color.rgb(26,38,56);
             p.setColor(gridColor); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
             int gridLines=3;
             for(int i=1;i<=gridLines;i++){
-                float gy = t+22 + i*(b-t-42)/(gridLines+1);
+                float gy = gridTop + i*(gridBottom-gridTop)/(gridLines+1);
                 c.drawLine(l+8,gy,rr-8,gy,p);
             }
+            txt(c,"Punti iniziali: "+(ms.isEmpty()?0:ms.get(0).before),l+10,t+16,12,white,Paint.Align.LEFT);
+            txt(c,"Punti attuali: "+(ms.isEmpty()?0:ms.get(ms.size()-1).after),l+10,t+34,12,white,Paint.Align.LEFT);
             if(ms.isEmpty()){
-                txt(c,"Nessuna partita ancora",(l+rr)/2,(t+b)/2,13,muted,Paint.Align.CENTER);
+                txt(c,"Nessuna partita ancora",(l+rr)/2,(gridTop+gridBottom)/2,13,muted,Paint.Align.CENTER);
                 return;
             }
             float min=ms.get(0).before,max=ms.get(0).before;for(Match m:ms){min=Math.min(min,m.after);max=Math.max(max,m.after);}
             min-=20;max+=20;if(max==min)max=min+1;
             int n=ms.size();
 
-            // Colonne verticali SOLO in corrispondenza di un cambio di giorno: prima ce n'era una per OGNI
-            // partita, troppo fitte e confuse visivamente.
+            // Colonne verticali SOLO in corrispondenza di un cambio di giorno, con la relativa data sotto
+            // (nella zona footer), allineata alla stessa colonna.
             if(dayBoundaries!=null && !dayBoundaries.isEmpty()){
                 p.setColor(Color.rgb(52,68,96)); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1);
                 for(int idx: dayBoundaries){
                     float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
-                    c.drawLine(gx,t+8,gx,b-8,p);
+                    c.drawLine(gx,gridTop,gx,gridBottom,p);
+                }
+                for(int idx: dayBoundaries){
+                    float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
+                    txt(c, formatDateOnly(ms.get(idx).timestamp), gx, gridBottom+13, 9, muted, Paint.Align.CENTER);
                 }
             }
 
             p.setStrokeWidth(2);
-            float prevX=l+12, prevY=b-20-(ms.get(0).before-min)/(max-min)*(b-t-36);
+            float prevX=l+12, prevY=gridBottom-8-(ms.get(0).before-min)/(max-min)*(gridBottom-gridTop-16);
             float startX=prevX, startY=prevY;
             for(int i=0;i<ms.size();i++){
                 Match m=ms.get(i);float x=l+12+(i+1)*(rr-l-24)/Math.max(1,ms.size());
-                float y=b-20-(m.after-min)/(max-min)*(b-t-36);
+                float y=gridBottom-8-(m.after-min)/(max-min)*(gridBottom-gridTop-16);
                 p.setColor(m.unknown?Color.GRAY:(m.win?green:red));p.setStyle(Paint.Style.STROKE);c.drawLine(prevX,prevY,x,y,p);prevX=x;prevY=y;
             }
             p.setStyle(Paint.Style.FILL);
             p.setColor(muted); c.drawCircle(startX,startY,4,p);
             for(int i=0;i<ms.size();i++){
                 Match m=ms.get(i);float x=l+12+(i+1)*(rr-l-24)/Math.max(1,ms.size());
-                float y=b-20-(m.after-min)/(max-min)*(b-t-36);
+                float y=gridBottom-8-(m.after-min)/(max-min)*(gridBottom-gridTop-16);
                 p.setColor(m.unknown?Color.GRAY:(m.win?green:red));
                 c.drawCircle(x,y,4,p);
             }
-            txt(c,"Punti iniziali: "+ms.get(0).before,l+10,t+32,12,white,Paint.Align.LEFT);
-            txt(c,"Punti attuali: "+ms.get(ms.size()-1).after,l+10,t+50,12,white,Paint.Align.LEFT);
         }
 
         // Icona "scoppio" per il tab Gioca: stessa forma esatta usata nell'icona dell'app (solo riscalata).
@@ -1546,9 +1582,9 @@ public class MainActivity extends Activity {
             for(int i=0;i<3;i++){
                 int col=i==detailTab?blue:muted;
                 float cx=w*(i+.5f)/3, iconCy=y+18;
-                if(i==0) drawBurstTabIcon(c,cx,iconCy,0.85f,col);
-                else if(i==1) drawCardTabIcon(c,cx,iconCy,18,col);
-                else drawStatsTabIcon(c,cx,iconCy,18,col);
+                if(i==0) drawBurstTabIcon(c,cx,iconCy,0.95f,col);
+                else if(i==1) drawCardTabIcon(c,cx,iconCy,20,col);
+                else drawStatsTabIcon(c,cx,iconCy,20,col);
                 txt(c,n[i],cx,y+48,12,col,Paint.Align.CENTER);
             }
         }
@@ -1612,10 +1648,10 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(contentY>=172&&contentY<=294){ chooseCurrentDeck(); return true; }
-                if(contentY>=308&&contentY<=372){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=386&&contentY<=432){ confirmUndo(); return true; }
-                if(contentY>=450&&contentY<=492){
+                if(contentY>=164&&contentY<=288){ chooseCurrentDeck(); return true; }
+                if(contentY>=302&&contentY<=366){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=380&&contentY<=426){ confirmUndo(); return true; }
+                if(contentY>=440&&contentY<=482){
                     if(x>=w/2-33 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+3 && x<w/2+33){ partiteTab=1; invalidate(); return true; } // icona lista
                     if(partiteTab==1 && x>=w-47 && x<w-17){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
@@ -1629,7 +1665,7 @@ public class MainActivity extends Activity {
                 if(contentY>=90&&contentY<=138){ addDeck(); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
-                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ confirmDeleteDeck(s,d); return true; }
+                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-18,yy+30); return true; }
                     if(contentY>=yy&&contentY<=yy+92){ openDeckImages(d); return true; }
                     yy+=104;
                 }
