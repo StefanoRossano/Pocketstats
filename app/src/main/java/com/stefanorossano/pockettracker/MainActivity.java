@@ -511,7 +511,7 @@ public class MainActivity extends Activity {
         view.showAnchoredMenu(rightEdgeX, anchorY,
             new String[]{"Rinomina deck","Aggiungi immagine","Elimina deck"},
             new int[]{Color.WHITE, Color.WHITE, red()},
-            new Runnable[]{ () -> renameDeckDialog(d), () -> pickImageFor(d), () -> confirmDeleteDeck(s,d) });
+            new Runnable[]{ () -> renameDeckDialog(d), () -> openDeckImages(d), () -> confirmDeleteDeck(s,d) });
     }
 
     void confirmDeleteDeck(Season s, Deck d){
@@ -1157,9 +1157,9 @@ public class MainActivity extends Activity {
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
             float tabIconY = listCardTop+26;
-            drawMiniChartTabIcon(c, w/2-19, tabIconY, 18, partiteTab==0?blue:muted);
-            drawListTabIcon(c, w/2+19, tabIconY, 18, partiteTab==1?blue:muted);
-            if(partiteTab==1) drawEditIcon(c, w-32, tabIconY, 18, muted);
+            drawMiniChartTabIcon(c, w/2-23, tabIconY, 22, partiteTab==0?blue:muted);
+            drawListTabIcon(c, w/2+23, tabIconY, 22, partiteTab==1?blue:muted);
+            if(partiteTab==1) drawEditIcon(c, w-26, tabIconY, 22, muted);
 
             if(partiteTab==0){
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
@@ -1368,7 +1368,7 @@ public class MainActivity extends Activity {
             // invece del solo cestino di prima) — cosi' il deck e' rinominabile anche da qui, non solo dalla
             // galleria immagini.
             if (!isUnknown && showDelete) {
-                drawKebabIcon(c, w-30-10-8, y+16, muted);
+                drawKebabIcon(c, w-30-10-8, y+22, muted);
             }
             if (isUnknown) {
                 txtRow(c,textX,y+64,11,
@@ -1419,7 +1419,7 @@ public class MainActivity extends Activity {
             // Ogni riga ridotta a 80 di altezza (era 100, sproporzionata per una sola riga di contenuto sotto
             // il titolo): stesso schema label(top+22)/contenuto centrato usato nel tab Gioca.
             box(c,c1L,58,c1R,138,card);
-            txt(c,"PUNTI",c1L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c,"PUNTI ATTUALI",c1L+16,80,12,muted,Paint.Align.LEFT);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
             txt(c,"VARIAZIONE",c2L+16,80,12,muted,Paint.Align.LEFT);
@@ -1652,9 +1652,9 @@ public class MainActivity extends Activity {
                 if(contentY>=302&&contentY<=366){ if(x<w/2) win(); else loss(); return true; }
                 if(contentY>=380&&contentY<=426){ confirmUndo(); return true; }
                 if(contentY>=440&&contentY<=482){
-                    if(x>=w/2-33 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
-                    if(x>=w/2+3 && x<w/2+33){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w-47 && x<w-17){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    if(x>=w/2-38 && x<w/2-6){ partiteTab=0; invalidate(); return true; } // icona grafico
+                    if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
+                    if(partiteTab==1 && x>=w-42 && x<w-10){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
                 if(partiteTab==1){
                     float matchContentY = contentY + matchInnerScrollY;
@@ -1665,8 +1665,9 @@ public class MainActivity extends Activity {
                 if(contentY>=90&&contentY<=138){ addDeck(); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
-                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-18,yy+30); return true; }
-                    if(contentY>=yy&&contentY<=yy+92){ openDeckImages(d); return true; }
+                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-32,yy+36-scrollY); return true; }
+                    // Il tap sulla card non apre piu' la selezione immagine: ora c'e' la voce "Aggiungi
+                    // immagine" nel menu "⋮" per questo, la card in se' non ha piu' un'azione al tocco.
                     yy+=104;
                 }
             }
