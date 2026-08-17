@@ -998,17 +998,19 @@ public class MainActivity extends Activity {
             drawEditIcon(c,44+nameW+22,centerY,18,white);
         }
 
+        void boxR(Canvas c,float l,float t,float rr,float b,float radius,int col){p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawRoundRect(l,t,rr,b,radius,radius,p);}
+
         // ===== Tab "Gioca": card "Andamento Stagione" (punti, partite, grafico) + pulsante "Gioca" + card
-        // "Partite" (lista raggruppata per giorno). Niente piu' concetto di sessione: ogni partita e' una
-        // riga a se', con il proprio deck. =====
+        // "Partite" (raggruppata per giorno, ogni giorno e' una sottocard con intestazione data+statistiche
+        // su sfondo leggermente diverso). Le correzioni (punti di partenza + correzioni manuali) restano nella
+        // STESSA lista, nella loro posizione cronologica, ma con uno stile di riga distinto. =====
         void playTab(Canvas c, Season s, float w, float h){
             matchHits.clear();
             ArrayList<Match> all = s.matches; // gia' flat, una entita' di primo livello nella Season
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
 
-            // Colonne verticali del grafico aggregato: segnano un cambio di GIORNO (prima segnavano l'inizio
-            // di una sessione, concetto ora sparito).
+            // Colonne verticali del grafico aggregato: segnano un cambio di GIORNO.
             ArrayList<Integer> dayBoundaries = new ArrayList<>();
             String prevDay=null;
             for(int i=0;i<all.size();i++){
@@ -1039,18 +1041,19 @@ public class MainActivity extends Activity {
             drawBurstTabIcon(c,w/2-64,380,0.7f,white);
             txt(c,"Gioca",w/2+10,386,15,white,Paint.Align.CENTER);
 
-            // ===== Card "PARTITE": altezza FISSA, lista scorrevole al suo interno con scrollbar propria,
-            // raggruppata per giorno. =====
+            // ===== Card "PARTITE": altezza FISSA, lista scorrevole al suo interno con scrollbar propria. =====
             float listCardTop=418, listHeight=300;
             float listTop=listCardTop+42, listBottom=listTop+listHeight;
             float listCardBottom = listBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
             txt(c,"PARTITE",34,listCardTop+26,12,muted,Paint.Align.LEFT);
 
-            // Altezza totale del contenuto: una riga di intestazione (30) per ogni giorno diverso, una riga
-            // partita (78) per ciascuna partita.
-            int dayCount = all.isEmpty() ? 0 : (dayBoundaries.size()+1);
-            float totalRowsHeight = dayCount*30f + all.size()*78f;
+            float headerH=32, rowH=64, groupGap=10;
+            // Prima passata: conta quanti gruppi-giorno ci sono, per calcolare l'altezza totale del contenuto
+            // (serve PRIMA di disegnare, per scrollbar e clip).
+            int groupCount=0;
+            { int idx=all.size()-1; while(idx>=0){ String dk=dayKey(all.get(idx).timestamp); int j=idx; while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)) j--; groupCount++; idx=j; } }
+            float totalRowsHeight = groupCount*(headerH+groupGap) + all.size()*rowH;
             resetMatchInnerScrollIfNeeded("matchinner:"+store.current);
             matchInnerMaxScrollY = Math.max(0, totalRowsHeight-listHeight);
             if(matchInnerScrollY>matchInnerMaxScrollY) matchInnerScrollY=matchInnerMaxScrollY;
@@ -1069,28 +1072,44 @@ public class MainActivity extends Activity {
                 int dw=0, dl=0;
                 for(int k=dayStartIdx;k<=dayEndIdx;k++){ Match m=all.get(k); if(!m.unknown){ if(m.win) dw++; else dl++; } }
                 float dwr = (dw+dl)==0?0:100f*dw/(dw+dl);
-                // Intestazione giorno
-                txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 34, y+18, 11, muted, Paint.Align.LEFT);
-                txtRowRight(c,w-34,y+18,11,
+                int rowsInGroup = dayEndIdx-dayStartIdx+1;
+                float groupTop=y, groupBottom=y+headerH+rowsInGroup*rowH;
+
+                // Sottocard del giorno: sfondo, poi fascia intestazione (data + W/L/% del giorno) su sfondo
+                // piu' chiaro, cosi' la data non si perde piu' in mezzo alle righe.
+                box(c,26,groupTop,w-26,groupBottom,Color.rgb(10,18,30));
+                boxR(c,26,groupTop,w-26,groupTop+headerH,10,Color.rgb(21,34,56));
+                txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 38, groupTop+20, 11, muted, Paint.Align.LEFT);
+                txtRowRight(c,w-38,groupTop+20,11,
                     new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
                     new int[]{green, red, wrColor(dwr,dw+dl)});
-                y+=30;
-                // Righe partita di questo giorno, dalla piu' recente alla piu' vecchia
+
+                float ry = groupTop+headerH;
                 for(int k=dayEndIdx;k>=dayStartIdx;k--){
                     Match m = all.get(k);
-                    boolean isActive = (k==all.size()-1);
-                    box(c,30,y,w-30,y+70, Color.rgb(10,18,30));
-                    if(isActive) strokeBox(c,30,y,w-30,y+70,Color.rgb(255,138,61));
-                    String title = m.unknown ? "Correzione manuale" : deckDisplayShort(m.deck);
-                    txt(c, title, 46,y+26,15,white,Paint.Align.LEFT);
-                    txt(c, "Partita "+(k+1)+"  •  "+formatTimeOnly(m.timestamp), 46,y+48,12,muted,Paint.Align.LEFT);
-                    if(!m.unknown) txtRowRight(c,w-46,y+26,13,new String[]{m.win?"W":"", !m.win?"L":""},new int[]{green,red});
-                    int gain = m.after-m.before;
-                    int gcol = gain>0?green:(gain<0?red:muted);
-                    txt(c, (gain>0?"+":"")+gain, w-46, y+50, 12, gcol, Paint.Align.RIGHT);
-                    matchHits.add(new Hit(y,y+70,k));
-                    y+=78;
+                    if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(38,ry,w-38,ry,p); }
+                    if(m.unknown){
+                        // Correzione (punti di partenza se e' la primissima partita in assoluto, altrimenti
+                        // correzione manuale successiva): niente deck ne' badge W/L, solo la variazione punti.
+                        String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
+                        txt(c, title, 46,ry+26,15,white,Paint.Align.LEFT);
+                        txt(c, formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
+                        int gain = m.after-m.before;
+                        int gcol = gain>0?green:(gain<0?red:muted);
+                        txt(c, (gain>0?"+":"")+gain, w-46, ry+26, 15, gcol, Paint.Align.RIGHT);
+                        txt(c, m.before+" → "+m.after, w-46, ry+46, 11, muted, Paint.Align.RIGHT);
+                    } else {
+                        txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
+                        txt(c, "Partita "+(k+1)+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
+                        txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
+                        int gain = m.after-m.before;
+                        int gcol = gain>0?green:(gain<0?red:muted);
+                        txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
+                    }
+                    matchHits.add(new Hit(ry,ry+rowH,k));
+                    ry+=rowH;
                 }
+                y = groupBottom+groupGap;
                 i = dayStartIdx-1;
             }
             c.restore();
@@ -1558,7 +1577,7 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 float matchContentY = contentY + matchInnerScrollY;
-                for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ changeMatchDeck(s.matches.get(hit.index)); return true; } }
+                for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
             } else if(detailTab==1){
                 if(contentY>=48&&contentY<=76&&x>=w-165){ showDeckSortMenu(); return true; }
                 float yy=90;
