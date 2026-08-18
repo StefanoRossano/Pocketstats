@@ -1007,18 +1007,19 @@ public class MainActivity extends Activity {
         Paint p=new Paint(3);
         int detailTab=0; // 0 = Gioca, 1 = Deck, 2 = Statistiche (solo dentro SCREEN_SEASON_DETAIL)
         int partiteTab=0; // 0 = Grafico, 1 = Lista partite/correzioni (tab dentro la card "PARTITE")
-        int chartRange=1; // 0 = 1 giorno (da mezzanotte), 1 = 3 giorni, 2 = tutto
+        int chartRange=0; // 0 = 1 giorno (da mezzanotte), 1 = 3 giorni, 2 = tutto
         // Barra "salta al giorno": scroll ORIZZONTALE indipendente da quello verticale della lista partite.
         // Il collasso/espandi per giorno e' stato rimosso: saltare direttamente al giorno risolve lo stesso
         // problema (navigare centinaia di partite) in modo piu' diretto.
         float dateBarScrollX=0, dateBarMaxScrollX=0, dateBarTop=0, dateBarBottom=0;
         String dateBarScrollKey="";
+        String selectedDateBarDay=null; // dayKey della pillola scelta col tap; null = nessun tap ancora, evidenzia "oggi"
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
         ArrayList<String> dateBarDayKeys=new ArrayList<>(); ArrayList<float[]> dateBarPillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di dateBarDayKeys
         java.util.HashMap<String,Float> dayYOffsetMap=new java.util.HashMap<>(); // dayKey -> offset Y (nel contenuto della lista) dove inizia quel gruppo
         void resetDateBarIfNeeded(String key, float totalW, float visibleW){
             dateBarMaxScrollX = Math.max(0, totalW-visibleW);
-            if(!key.equals(dateBarScrollKey)){ dateBarScrollX = dateBarMaxScrollX; dateBarScrollKey = key; } // di default: mostra il piu' recente (a destra)
+            if(!key.equals(dateBarScrollKey)){ dateBarScrollX = dateBarMaxScrollX; dateBarScrollKey = key; selectedDateBarDay = null; } // di default: mostra il piu' recente (a destra)
             if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
             if(dateBarScrollX<0) dateBarScrollX=0;
         }
@@ -1354,62 +1355,67 @@ public class MainActivity extends Activity {
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
 
-            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": due card vere e proprie, altezza ridotta a quella
-            // che il contenuto richiede davvero (92, non 100 indovinati a caso), stesso centro per entrambe
-            // pur avendo un numero diverso di righe di contenuto. =====
+            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": stessa altezza (80) delle equivalenti in Statistiche
+            // — prima erano 92, causando un brutto salto di dimensione visibile cambiando tab. Titoli ora
+            // centrati orizzontalmente, come in tutte le altre card. =====
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
-            box(c,c1L,58,c1R,150,card);
-            txt(c,"PUNTI ATTUALI",c1L+16,80,12,muted,Paint.Align.LEFT);
-            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(121,26),26,white,Paint.Align.CENTER);
-            box(c,c2L,58,c2R,150,card);
-            txt(c,"PARTITE TOTALI",c2L+16,80,12,muted,Paint.Align.LEFT);
-            float[] pb = centerLines(121,6,20,15);
+            box(c,c1L,58,c1R,138,card);
+            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,26),26,white,Paint.Align.CENTER);
+            box(c,c2L,58,c2R,138,card);
+            txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
+            float[] pb = centerLines(108,6,20,15);
             txt(c,""+(W+L),(c2L+c2R)/2,pb[0],20,white,Paint.Align.CENTER);
             txtRowCentered(c,(c2L+c2R)/2,pb[1],15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
-            // ===== Card "DECK SELEZIONATO": altezza calcolata dal contenuto reale (label + anteprima 64x80 +
-            // margine sotto — prima l'anteprima toccava esattamente il bordo della card, margine zero). =====
+            // ===== Card "DECK SELEZIONATO": tutto centrato orizzontalmente — titolo, anteprima (se presente)
+            // e nome del deck SOTTO l'anteprima (non piu' di fianco). Altezza FISSA indipendentemente dallo
+            // stato (con/senza anteprima), per evitare un salto quando si aggiunge/rimuove un'immagine. =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
-            box(c,18,164,w-18,288,card);
-            txt(c,"DECK SELEZIONATO",34,186,12,muted,Paint.Align.LEFT);
+            box(c,18,152,w-18,302,card);
+            txt(c,"DECK SELEZIONATO",w/2,174,12,muted,Paint.Align.CENTER);
             if(noDeck){
-                float[] nd0 = centerLines(232,4,17,11);
+                float[] nd0 = centerLines(244,4,17,11);
                 txt(c,"Nessun deck selezionato",w/2,nd0[0],17,white,Paint.Align.CENTER);
                 txt(c,"Tocca per selezionare un deck",w/2,nd0[1],11,muted,Paint.Align.CENTER);
             } else {
                 Deck curDeckObj = findDeck(s, s.currentDeck);
                 Bitmap preview = curDeckObj!=null ? getDeckPreview(curDeckObj) : null;
                 if(preview!=null){
-                    float thumbW=64, thumbH=80, thumbX=34, thumbY=198;
+                    float thumbW=64, thumbH=80, thumbX=w/2-thumbW/2, thumbY=186;
                     drawCoverImage(c, preview, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH, 8);
-                    txt(c,s.currentDeck, thumbX+thumbW+14, centeredBaseline(thumbY+thumbH/2f,18), 18, white, Paint.Align.LEFT);
+                    txt(c,s.currentDeck, w/2, centeredBaseline(284,18), 18, white, Paint.Align.CENTER);
                 } else {
-                    txt(c,s.currentDeck,w/2,centeredBaseline(232,18),18,white,Paint.Align.CENTER);
+                    txt(c,s.currentDeck,w/2,centeredBaseline(244,18),18,white,Paint.Align.CENTER);
                 }
             }
 
             // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,302,gR,366,green); box(c,rL,302,rR,366,red);
-            float[] wl2 = centerLines(334,6,22,13);
+            box(c,gL,316,gR,380,green); box(c,rL,316,rR,380,red);
+            float[] wl2 = centerLines(348,6,22,13);
             txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
 
-            box(c,18,380,w-18,426,card);
+            box(c,18,394,w-18,440,card);
             boolean lastIsCorrection = !all.isEmpty() && all.get(all.size()-1).unknown;
             String undoLabel = lastIsCorrection ? "ANNULLA CORREZIONE MANUALE" : "ANNULLA ULTIMA PARTITA";
             p.setTextSize(15); float undoLabelW=p.measureText(undoLabel);
             float undoIconW=16, undoGap=8, undoGroupW=undoIconW+undoGap+undoLabelW, undoGroupL=w/2-undoGroupW/2;
-            drawUndoIcon(c,undoGroupL+undoIconW/2,403,16,white);
-            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,409,15,white,Paint.Align.LEFT);
+            drawUndoIcon(c,undoGroupL+undoIconW/2,417,16,white);
+            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,423,15,white,Paint.Align.LEFT);
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
-            float listCardTop=440, contentHeight=300;
+            float listCardTop=454, contentHeight=300;
             float contentTop=listCardTop+42, contentBottom=contentTop+contentHeight;
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
+            // Fascia di sfondo distinta per l'header (icone tab): prima le icone "fluttuavano" senza alcuna
+            // demarcazione, confondendosi visivamente col resto della card. Angoli arrotondati solo in alto,
+            // dato che tocca il bordo superiore della card stessa.
+            boxTopRounded(c,18,listCardTop,w-18,listCardTop+42,18,Color.rgb(15,25,40));
             // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header, l'icona
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
@@ -1419,7 +1425,7 @@ public class MainActivity extends Activity {
             // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
             // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
             // dimensione dell'icona cambiava.
-            if(partiteTab==1) drawEditIcon(c, w/2+69, tabIconY, 22, muted);
+            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 22, muted);
 
             if(partiteTab==0){
                 // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
@@ -1507,21 +1513,27 @@ public class MainActivity extends Activity {
                 dateBarTop = contentTop; dateBarBottom = contentTop+pillPadH;
 
                 String mostRecentDayKey = all.isEmpty() ? null : dayKey(all.get(all.size()-1).timestamp);
+                String highlightedDay = selectedDateBarDay!=null ? selectedDateBarDay : mostRecentDayKey;
+                // Sfondo distinto per l'intera riga della barra date (altrimenti si confondeva col resto):
+                // un rettangolo pieno, niente angoli arrotondati — non e' la prima ne' l'ultima sezione
+                // della card, sta in mezzo tra le icone tab e la lista.
+                p.setColor(Color.rgb(15,25,40)); p.setStyle(Paint.Style.FILL);
+                c.drawRect(18,dateBarTop-6,w-18,dateBarBottom+6,p);
                 c.save(); c.clipRect(18,dateBarTop,w-18,dateBarBottom);
                 c.translate(18-dateBarScrollX, 0);
                 for(int di=0; di<distinctDays.size(); di++){
                     String dk = distinctDays.get(di);
                     float[] b = dateBarPillBounds.get(di);
-                    boolean isToday = dk.equals(mostRecentDayKey);
+                    boolean isSelected = dk.equals(highlightedDay);
                     String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
-                    box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isToday?blue:Color.rgb(10,18,30));
-                    txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isToday?Color.WHITE:muted, Paint.Align.CENTER);
+                    box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isSelected?blue:Color.rgb(10,18,30));
+                    txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isSelected?Color.WHITE:muted, Paint.Align.CENTER);
                 }
                 c.restore();
                 // Sfumatura sul bordo destro della barra (non su una singola pillola): solo se c'e' altro da
                 // scorrere verso sinistra, un indizio visivo pulito invece di un suggerimento testuale fisso.
                 if(dateBarScrollX < dateBarMaxScrollX-1){
-                    android.graphics.LinearGradient grad = new android.graphics.LinearGradient(w-42,0,w-18,0, Color.argb(0,7,11,18), Color.argb(255,7,11,18), android.graphics.Shader.TileMode.CLAMP);
+                    android.graphics.LinearGradient grad = new android.graphics.LinearGradient(w-42,0,w-18,0, Color.argb(0,15,25,40), Color.argb(255,15,25,40), android.graphics.Shader.TileMode.CLAMP);
                     p.setShader(grad); p.setStyle(Paint.Style.FILL);
                     c.drawRect(w-42,dateBarTop,w-18,dateBarTop+pillPadH,p);
                     p.setShader(null);
@@ -1780,26 +1792,26 @@ public class MainActivity extends Activity {
             // Ogni riga ridotta a 80 di altezza (era 100, sproporzionata per una sola riga di contenuto sotto
             // il titolo): stesso schema label(top+22)/contenuto centrato usato nel tab Gioca.
             box(c,c1L,58,c1R,138,card);
-            txt(c,"PUNTI ATTUALI",c1L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
-            txt(c,"VARIAZIONE",c2L+16,80,12,muted,Paint.Align.LEFT);
+            txt(c,"VARIAZIONE",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,centeredBaseline(108,22),22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
 
             box(c,c1L,152,c1R,232,card);
-            txt(c,"PARTITE TOTALI",c1L+16,174,12,muted,Paint.Align.LEFT);
+            txt(c,"PARTITE TOTALI",(c1L+c1R)/2,174,12,muted,Paint.Align.CENTER);
             txt(c,""+(W+L),(c1L+c1R)/2,centeredBaseline(202,20),20,white,Paint.Align.CENTER);
             box(c,c2L,152,c2R,232,card);
-            txt(c,"W / L / %",c2L+16,174,12,muted,Paint.Align.LEFT);
+            txt(c,"W / L / %",(c2L+c2R)/2,174,12,muted,Paint.Align.CENTER);
             txtRowCentered(c,(c2L+c2R)/2,centeredBaseline(202,15),15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
             box(c,c1L,246,c1R,326,card);
-            txt(c,"VITTORIE CONSECUTIVE",c1L+16,268,12,muted,Paint.Align.LEFT);
+            txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,268,12,muted,Paint.Align.CENTER);
             txt(c,""+s.streak,(c1L+c1R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
             box(c,c2L,246,c2R,326,card);
-            txt(c,"MASSIME",c2L+16,268,12,muted,Paint.Align.LEFT);
+            txt(c,"MASSIME",(c2L+c2R)/2,268,12,muted,Paint.Align.CENTER);
             txt(c,""+maxStreak,(c2L+c2R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
 
             String mostPlayedName = "-"; int mostPlayedCount = 0;
@@ -1809,10 +1821,10 @@ public class MainActivity extends Activity {
             }
             if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName="Deck sconosciuto"; }
             box(c,c1L,340,c1R,420,card);
-            txt(c,"DECK GIOCATI",c1L+16,362,12,muted,Paint.Align.LEFT);
+            txt(c,"DECK GIOCATI",(c1L+c1R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
             box(c,c2L,340,c2R,420,card);
-            txt(c,"DECK PIU' GIOCATO",c2L+16,362,12,muted,Paint.Align.LEFT);
+            txt(c,"DECK PIU' GIOCATO",(c2L+c2R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
 
             lastContentBottom = 420+20;
@@ -2036,16 +2048,16 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
-                if(contentY>=198&&contentY<=278&&x>=34&&x<=98){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
-                if(contentY>=164&&contentY<=288){ chooseCurrentDeck(); return true; }
-                if(contentY>=302&&contentY<=366){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=380&&contentY<=426){ confirmUndo(); return true; }
-                if(contentY>=440&&contentY<=482){
+                if(contentY>=186&&contentY<=266&&x>=w/2-32&&x<=w/2+32){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
+                if(contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
+                if(contentY>=316&&contentY<=380){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=394&&contentY<=440){ confirmUndo(); return true; }
+                if(contentY>=454&&contentY<=496){
                     if(x>=w/2-38 && x<w/2-6){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w/2+58 && x<w/2+80){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    if(partiteTab==1 && x>=w/2+79 && x<w/2+101){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
-                if(partiteTab==0 && contentY>=485 && contentY<=511){
+                if(partiteTab==0 && contentY>=499 && contentY<=525){
                     String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
                     float pillX=30;
                     for(int ri=0; ri<3; ri++){
@@ -2063,6 +2075,7 @@ public class MainActivity extends Activity {
                             float[] b = dateBarPillBounds.get(di);
                             if(tapXInBar>=b[0] && tapXInBar<=b[0]+b[1]){
                                 String dk = dateBarDayKeys.get(di);
+                                selectedDateBarDay = dk; // evidenzia la pillola toccata, non sempre l'ultima
                                 Float off = dayYOffsetMap.get(dk);
                                 if(off!=null){ matchInnerScrollY = Math.max(0, Math.min(off, matchInnerMaxScrollY)); invalidate(); }
                                 return true;
