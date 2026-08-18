@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.136";
+    static final String APP_VERSION = "v0.2.137";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1020,6 +1020,9 @@ public class MainActivity extends Activity {
         // volta scorsa e' rimasto vecchio quando ho cambiato il calcolo di contentTop, causando un bug di
         // tocco reale (la zona cliccabile non corrispondeva piu' a dove le pillole erano davvero disegnate).
         float rangePillsTop=0, rangePillsBottom=0;
+        // Posizione del badge "Annulla" flottante, calcolata durante il disegno e letta dal tocco — stesso
+        // principio delle altre coordinate condivise, per non ripetere lo stesso bug di sfasamento.
+        float undoBadgeCx=0, undoBadgeCy=0;
         // Stesso principio: margine sinistro della barra date condiviso tra disegno e tocco (era un numero
         // magico "10" duplicato a mano nel codice di tocco — stessa classe di bug, per sicurezza lo elimino).
         float dateBarPillLeftMargin=10;
@@ -1405,22 +1408,34 @@ public class MainActivity extends Activity {
             }
 
             // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
+            // ===== Pulsanti W/L e badge "Annulla" flottante: prima "Annulla" era una barra intera separata
+            // (spazio verticale + orizzontale sprecato). Ora e' un cerchietto che sporge leggermente sopra
+            // la riga W/L, posizionato sopra IL PULSANTE CHE VERREBBE ANNULLATO (sopra W se l'ultima e' stata
+            // una vittoria, sopra L se una sconfitta, al centro se e' una correzione manuale) — cosi' la sua
+            // posizione da' anche un indizio visivo su cosa sta per succedere. =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,316,gR,380,green); box(c,rL,316,rR,380,red);
-            float[] wl2 = centerLines(348,6,22,13);
+            box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
+            float[] wl2 = centerLines(354,6,22,13);
             txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
 
-            box(c,18,394,w-18,440,card);
-            boolean lastIsCorrection = !all.isEmpty() && all.get(all.size()-1).unknown;
-            String undoLabel = lastIsCorrection ? "ANNULLA CORREZIONE MANUALE" : "ANNULLA ULTIMA PARTITA";
-            p.setTextSize(15); float undoLabelW=p.measureText(undoLabel);
-            float undoIconW=16, undoGap=8, undoGroupW=undoIconW+undoGap+undoLabelW, undoGroupL=w/2-undoGroupW/2;
-            drawUndoIcon(c,undoGroupL+undoIconW/2,417,16,white);
-            txt(c,undoLabel,undoGroupL+undoIconW+undoGap,423,15,white,Paint.Align.LEFT);
+            boolean hasHistory = !all.isEmpty();
+            boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
+            undoBadgeCy = 322;
+            if(!hasHistory) { undoBadgeCx = w/2; }
+            else if(lastIsCorrection) { undoBadgeCx = w/2; }
+            else { undoBadgeCx = all.get(all.size()-1).win ? (gL+gR)/2 : (rL+rR)/2; }
+            if(hasHistory){
+                float badgeR = 18;
+                p.setColor(Color.rgb(20,32,52)); p.setStyle(Paint.Style.FILL);
+                c.drawCircle(undoBadgeCx, undoBadgeCy, badgeR, p);
+                p.setColor(bg); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
+                c.drawCircle(undoBadgeCx, undoBadgeCy, badgeR, p);
+                drawUndoIcon(c, undoBadgeCx, undoBadgeCy, 18, white);
+            }
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
-            float listCardTop=454, contentHeight=300;
+            float listCardTop=400, contentHeight=300;
             float contentTop=listCardTop+42+8, contentBottom=contentTop+contentHeight; // +8: margine sotto la fascia icone, prima assente
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
@@ -2091,11 +2106,14 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
+                // Badge "Annulla" flottante: controllato PRIMA delle altre zone, dato che sta a cavallo tra
+                // la card "Deck Selezionato" e la riga W/L (un cerchio, non un rettangolo, quindi serve un
+                // test di distanza invece di un normale confronto di range).
+                if(Math.hypot(x-undoBadgeCx, contentY-undoBadgeCy) <= 20){ confirmUndo(); return true; }
                 if(contentY>=186&&contentY<=266&&x>=w/2-32&&x<=w/2+32){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
                 if(contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
-                if(contentY>=316&&contentY<=380){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=394&&contentY<=440){ confirmUndo(); return true; }
-                if(contentY>=454&&contentY<=496){
+                if(contentY>=322&&contentY<=386){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=400&&contentY<=442){
                     // Zone di tocco allargate (erano 22-32 unita' di larghezza, sotto lo standard consigliato
                     // di ~44dp per un tocco affidabile — spiega perche' a volte serviva ritoccare piu' volte).
                     if(x>=w/2-43 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
