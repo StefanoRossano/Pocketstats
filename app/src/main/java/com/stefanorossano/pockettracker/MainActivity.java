@@ -1012,6 +1012,15 @@ public class MainActivity extends Activity {
         // Il collasso/espandi per giorno e' stato rimosso: saltare direttamente al giorno risolve lo stesso
         // problema (navigare centinaia di partite) in modo piu' diretto.
         float dateBarScrollX=0, dateBarMaxScrollX=0, dateBarTop=0, dateBarBottom=0;
+        // Zona di tocco delle pillole "1 giorno/3 giorni/Tutto" (tab Grafico), calcolata durante il disegno
+        // esattamente come le coordinate di disegno stesse — MAI un numero fisso copiato a mano, che la
+        // volta scorsa e' rimasto vecchio quando ho cambiato il calcolo di contentTop, causando un bug di
+        // tocco reale (la zona cliccabile non corrispondeva piu' a dove le pillole erano davvero disegnate).
+        float rangePillsTop=0, rangePillsBottom=0;
+        // Stesso principio: margine sinistro della barra date condiviso tra disegno e tocco (era un numero
+        // magico "10" duplicato a mano nel codice di tocco — stessa classe di bug, per sicurezza lo elimino).
+        float dateBarPillLeftMargin=10;
+        ArrayList<float[]> rangePillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di rangeLabels
         String dateBarScrollKey="";
         String selectedDateBarDay=null; // dayKey della pillola scelta col tap; null = nessun tap ancora, evidenzia "oggi"
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
@@ -1415,7 +1424,7 @@ public class MainActivity extends Activity {
             // Fascia di sfondo distinta per l'header (icone tab): prima le icone "fluttuavano" senza alcuna
             // demarcazione, confondendosi visivamente col resto della card. Angoli arrotondati solo in alto,
             // dato che tocca il bordo superiore della card stessa.
-            boxTopRounded(c,18,listCardTop,w-18,listCardTop+42,18,Color.rgb(15,25,40));
+            boxTopRounded(c,18,listCardTop,w-18,listCardTop+42,18,Color.rgb(21,34,56));
             // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header, l'icona
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
@@ -1432,9 +1441,12 @@ public class MainActivity extends Activity {
                 // dura in genere circa 2 settimane, "7g/30g" da app di finanza non avevano senso qui).
                 String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
                 float pillY=contentTop+16, pillH=26;
+                rangePillsTop = pillY-pillH/2; rangePillsBottom = pillY+pillH/2;
                 float pillGap=8; float pillX=30;
+                rangePillBounds = new ArrayList<>();
                 for(int ri=0; ri<3; ri++){
                     p.setTextSize(11); float tw=p.measureText(rangeLabels[ri]); float pw=tw+24;
+                    rangePillBounds.add(new float[]{pillX,pw});
                     box(c,pillX,pillY-pillH/2,pillX+pw,pillY+pillH/2, ri==chartRange?blue:Color.rgb(10,18,30));
                     txt(c,rangeLabels[ri],pillX+pw/2,centeredBaseline(pillY,11),11, ri==chartRange?Color.WHITE:muted, Paint.Align.CENTER);
                     pillX += pw+pillGap;
@@ -1496,7 +1508,7 @@ public class MainActivity extends Activity {
                 // ordine ASCENDENTE (piu' vecchia a sinistra, oggi a destra) — di default scrollata tutta a
                 // destra, cosi' "oggi" e' subito visibile senza dover scorrere. Scroll orizzontale proprio,
                 // indipendente da quello verticale della lista sotto. =====
-                float pillBandH=34, pillPadH=22, pillPadX=11, pillGap=6, pillLeftMargin=10;
+                float pillBandH=34, pillPadH=22, pillPadX=11, pillGap=6, pillLeftMargin=dateBarPillLeftMargin, pillRightMargin=10;
                 float bandBottomMargin=8; // margine visibile tra la fascia e la lista sotto (prima assente, si sovrapponevano)
                 float dateBarH = pillBandH + bandBottomMargin;
                 ArrayList<String> distinctDays = new ArrayList<>();
@@ -1518,7 +1530,7 @@ public class MainActivity extends Activity {
                     pillCursor += pw+pillGap;
                 }
                 float totalPillsWidth = Math.max(0, pillCursor-pillGap);
-                float dateBarVisibleW = w-36-pillLeftMargin;
+                float dateBarVisibleW = w-36-pillLeftMargin-pillRightMargin;
                 resetDateBarIfNeeded("datebar:"+store.current, totalPillsWidth, dateBarVisibleW);
                 float bandTop = contentTop, bandBottom = contentTop+pillBandH;
                 dateBarTop = bandTop + (pillBandH-pillPadH)/2; dateBarBottom = dateBarTop+pillPadH;
@@ -2022,11 +2034,17 @@ public class MainActivity extends Activity {
             if(e.getAction()==MotionEvent.ACTION_MOVE){
                 float dy = touchDownY - y;
                 float dx = touchDownX - x;
-                if(dateBarDragCandidate && Math.abs(dx)>8){
-                    isDraggingDateBar = true;
-                    dateBarScrollX = touchStartDateBarScrollX + dx;
-                    if(dateBarScrollX<0) dateBarScrollX=0; if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
-                    invalidate();
+                if(dateBarDragCandidate){
+                    // Un tocco iniziato sulla barra date non deve MAI far scorrere anche lo scroll verticale
+                    // esterno della schermata: prima, se il piccolo movimento verticale (rumore naturale di un
+                    // trascinamento quasi-orizzontale) superava la soglia PRIMA di quello orizzontale, il
+                    // codice cadeva per errore nel ramo dello scroll esterno, facendolo avanzare di uno step.
+                    if(Math.abs(dx)>8){
+                        isDraggingDateBar = true;
+                        dateBarScrollX = touchStartDateBarScrollX + dx;
+                        if(dateBarScrollX<0) dateBarScrollX=0; if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
+                        invalidate();
+                    }
                     return true;
                 }
                 if(Math.abs(dy)>8){
@@ -2072,24 +2090,23 @@ public class MainActivity extends Activity {
                 if(contentY>=316&&contentY<=380){ if(x<w/2) win(); else loss(); return true; }
                 if(contentY>=394&&contentY<=440){ confirmUndo(); return true; }
                 if(contentY>=454&&contentY<=496){
-                    if(x>=w/2-38 && x<w/2-6){ partiteTab=0; invalidate(); return true; } // icona grafico
-                    if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w/2+79 && x<w/2+101){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    // Zone di tocco allargate (erano 22-32 unita' di larghezza, sotto lo standard consigliato
+                    // di ~44dp per un tocco affidabile — spiega perche' a volte serviva ritoccare piu' volte).
+                    if(x>=w/2-43 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
+                    if(x>=w/2+3 && x<w/2+43){ partiteTab=1; invalidate(); return true; } // icona lista
+                    if(partiteTab==1 && x>=w/2+70 && x<w/2+110){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
-                if(partiteTab==0 && contentY>=499 && contentY<=525){
-                    String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
-                    float pillX=30;
-                    for(int ri=0; ri<3; ri++){
-                        p.setTextSize(11); float tw=p.measureText(rangeLabels[ri]); float pw=tw+24;
-                        if(x>=pillX && x<=pillX+pw){ chartRange=ri; invalidate(); return true; }
-                        pillX += pw+8;
+                if(partiteTab==0 && contentY>=rangePillsTop && contentY<=rangePillsBottom){
+                    for(int ri=0; ri<rangePillBounds.size(); ri++){
+                        float[] b = rangePillBounds.get(ri);
+                        if(x>=b[0] && x<=b[0]+b[1]){ chartRange=ri; invalidate(); return true; }
                     }
                 }
                 if(partiteTab==1){
                     // Tap sulla barra "salta al giorno" (non un trascinamento, gia' gestito sopra): trova la
                     // pillola toccata e scrolla la lista fino a dove inizia quel giorno.
                     if(contentY>=dateBarTop && contentY<=dateBarBottom && x>=18 && x<=w-18){
-                        float tapXInBar = x-18-10+dateBarScrollX; // -10: stesso margine sinistro (pillLeftMargin) usato nel disegno
+                        float tapXInBar = x-18-dateBarPillLeftMargin+dateBarScrollX; // stesso campo usato nel disegno, non piu' un numero duplicato a mano
                         for(int di=0; di<dateBarPillBounds.size(); di++){
                             float[] b = dateBarPillBounds.get(di);
                             if(tapXInBar>=b[0] && tapXInBar<=b[0]+b[1]){
