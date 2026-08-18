@@ -1409,7 +1409,7 @@ public class MainActivity extends Activity {
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
             float listCardTop=454, contentHeight=300;
-            float contentTop=listCardTop+42, contentBottom=contentTop+contentHeight;
+            float contentTop=listCardTop+42+8, contentBottom=contentTop+contentHeight; // +8: margine sotto la fascia icone, prima assente
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
             // Fascia di sfondo distinta per l'header (icone tab): prima le icone "fluttuavano" senza alcuna
@@ -1496,46 +1496,65 @@ public class MainActivity extends Activity {
                 // ordine ASCENDENTE (piu' vecchia a sinistra, oggi a destra) — di default scrollata tutta a
                 // destra, cosi' "oggi" e' subito visibile senza dover scorrere. Scroll orizzontale proprio,
                 // indipendente da quello verticale della lista sotto. =====
-                float dateBarH=34, pillPadH=22, pillPadX=11, pillGap=6;
+                float pillBandH=34, pillPadH=22, pillPadX=11, pillGap=6, pillLeftMargin=10;
+                float bandBottomMargin=8; // margine visibile tra la fascia e la lista sotto (prima assente, si sovrapponevano)
+                float dateBarH = pillBandH + bandBottomMargin;
                 ArrayList<String> distinctDays = new ArrayList<>();
                 { String prevDk=null; for(int idx=0; idx<all.size(); idx++){ String dk=dayKey(all.get(idx).timestamp); if(!dk.equals(prevDk)){ distinctDays.add(dk); prevDk=dk; } } }
+                // === DEBUG TEMPORANEO: 10 pillole finte per testare scroll/gradiente senza dover popolare
+                // davvero 10 giorni di dati. RIMUOVERE questo blocco prima del rebuild finale. ===
+                boolean DEBUG_FAKE_PILLS = true;
+                if (DEBUG_FAKE_PILLS) {
+                    ArrayList<String> fake = new ArrayList<>();
+                    for (int di=1; di<=10; di++) fake.add("TEST"+String.format("%02d",di));
+                    distinctDays.addAll(0, fake);
+                }
                 dateBarDayKeys = distinctDays; dateBarPillBounds = new ArrayList<>();
                 float pillCursor=0;
                 for(String dk: distinctDays){
-                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    String label = dk.equals("?") ? "?" : dk.startsWith("TEST") ? ("T"+dk.substring(4)) : dk.substring(6,8)+"/"+dk.substring(4,6);
                     p.setTextSize(11); float tw=p.measureText(label); float pw=tw+pillPadX*2;
                     dateBarPillBounds.add(new float[]{pillCursor,pw});
                     pillCursor += pw+pillGap;
                 }
                 float totalPillsWidth = Math.max(0, pillCursor-pillGap);
-                float dateBarVisibleW = w-36;
+                float dateBarVisibleW = w-36-pillLeftMargin;
                 resetDateBarIfNeeded("datebar:"+store.current, totalPillsWidth, dateBarVisibleW);
-                dateBarTop = contentTop; dateBarBottom = contentTop+pillPadH;
+                float bandTop = contentTop, bandBottom = contentTop+pillBandH;
+                dateBarTop = bandTop + (pillBandH-pillPadH)/2; dateBarBottom = dateBarTop+pillPadH;
 
                 String mostRecentDayKey = all.isEmpty() ? null : dayKey(all.get(all.size()-1).timestamp);
                 String highlightedDay = selectedDateBarDay!=null ? selectedDateBarDay : mostRecentDayKey;
                 // Sfondo distinto per l'intera riga della barra date (altrimenti si confondeva col resto):
                 // un rettangolo pieno, niente angoli arrotondati — non e' la prima ne' l'ultima sezione
-                // della card, sta in mezzo tra le icone tab e la lista.
+                // della card, sta in mezzo tra le icone tab e la lista. Occupa ESATTAMENTE [bandTop,
+                // bandBottom], senza margini negativi che la facevano sovrapporre alla fascia sopra.
                 p.setColor(Color.rgb(15,25,40)); p.setStyle(Paint.Style.FILL);
-                c.drawRect(18,dateBarTop-6,w-18,dateBarBottom+6,p);
+                c.drawRect(18,bandTop,w-18,bandBottom,p);
                 c.save(); c.clipRect(18,dateBarTop,w-18,dateBarBottom);
-                c.translate(18-dateBarScrollX, 0);
+                c.translate(18+pillLeftMargin-dateBarScrollX, 0);
                 for(int di=0; di<distinctDays.size(); di++){
                     String dk = distinctDays.get(di);
                     float[] b = dateBarPillBounds.get(di);
                     boolean isSelected = dk.equals(highlightedDay);
-                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    String label = dk.equals("?") ? "?" : dk.startsWith("TEST") ? ("T"+dk.substring(4)) : dk.substring(6,8)+"/"+dk.substring(4,6);
                     box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isSelected?blue:Color.rgb(10,18,30));
                     txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isSelected?Color.WHITE:muted, Paint.Align.CENTER);
                 }
                 c.restore();
-                // Sfumatura sul bordo destro della barra (non su una singola pillola): solo se c'e' altro da
-                // scorrere verso sinistra, un indizio visivo pulito invece di un suggerimento testuale fisso.
+                // Sfumature ai due bordi della barra, sullo stesso sfondo della fascia (non su una singola
+                // pillola): a destra se c'e' altro da scorrere verso il futuro, a sinistra se c'e' altro da
+                // scorrere verso il passato.
                 if(dateBarScrollX < dateBarMaxScrollX-1){
                     android.graphics.LinearGradient grad = new android.graphics.LinearGradient(w-42,0,w-18,0, Color.argb(0,15,25,40), Color.argb(255,15,25,40), android.graphics.Shader.TileMode.CLAMP);
                     p.setShader(grad); p.setStyle(Paint.Style.FILL);
                     c.drawRect(w-42,dateBarTop,w-18,dateBarTop+pillPadH,p);
+                    p.setShader(null);
+                }
+                if(dateBarScrollX > 1){
+                    android.graphics.LinearGradient gradLeft = new android.graphics.LinearGradient(18,0,42,0, Color.argb(255,15,25,40), Color.argb(0,15,25,40), android.graphics.Shader.TileMode.CLAMP);
+                    p.setShader(gradLeft); p.setStyle(Paint.Style.FILL);
+                    c.drawRect(18,dateBarTop,42,dateBarTop+pillPadH,p);
                     p.setShader(null);
                 }
 
@@ -2070,7 +2089,7 @@ public class MainActivity extends Activity {
                     // Tap sulla barra "salta al giorno" (non un trascinamento, gia' gestito sopra): trova la
                     // pillola toccata e scrolla la lista fino a dove inizia quel giorno.
                     if(contentY>=dateBarTop && contentY<=dateBarBottom && x>=18 && x<=w-18){
-                        float tapXInBar = x-18+dateBarScrollX;
+                        float tapXInBar = x-18-10+dateBarScrollX; // -10: stesso margine sinistro (pillLeftMargin) usato nel disegno
                         for(int di=0; di<dateBarPillBounds.size(); di++){
                             float[] b = dateBarPillBounds.get(di);
                             if(tapXInBar>=b[0] && tapXInBar<=b[0]+b[1]){
