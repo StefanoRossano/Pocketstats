@@ -34,25 +34,32 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         store = new Store(this);
+        // La view serve sempre come sfondo, anche solo per ospitare i dialog di onboarding: creata subito,
+        // indipendentemente da quale flusso segue (onboarding, wizard Stagione, o ripristino normale).
+        view = new TrackerView(this);
+        setContentView(view);
+        attachInsets(view);
+        screen = SCREEN_SEASON_LIST;
+
+        // L'onboarding ("come ti chiami, allenatore?") ha sempre la priorita': anche se l'app era gia'
+        // installata con delle Stagioni, se non e' mai stato fatto lo si propone comunque una volta sola.
+        if (!store.onboardingDone) {
+            askTrainerName();
+            return;
+        }
+
         if (store.seasons.isEmpty()) {
             wizardStep1(true, null);
-        } else {
-            view = new TrackerView(this);
-            setContentView(view);
-            attachInsets(view);
+        } else if (b != null) {
             // Ripristina la schermata su cui si trovava l'utente, se questa Activity e' stata ricreata dal
             // sistema (es. processo terminato in background per liberare memoria, cosa che capita spesso
             // cambiando app): senza questo, si tornava sempre alla lista Stagioni, perdendo il contesto.
-            if (b != null) {
-                int savedCurrent = b.getInt("seasonCurrent", 0);
-                if (savedCurrent>=0 && savedCurrent<store.seasons.size()) store.current = savedCurrent;
-                view.detailTab = b.getInt("detailTab", 0);
-                view.partiteTab = b.getInt("partiteTab", 0);
-                screen = b.getInt("screen", SCREEN_SEASON_LIST);
-                if (screen==SCREEN_SEASON_DETAIL && store.seasons.isEmpty()) screen = SCREEN_SEASON_LIST;
-            } else {
-                screen = SCREEN_SEASON_LIST;
-            }
+            int savedCurrent = b.getInt("seasonCurrent", 0);
+            if (savedCurrent>=0 && savedCurrent<store.seasons.size()) store.current = savedCurrent;
+            view.detailTab = b.getInt("detailTab", 0);
+            view.partiteTab = b.getInt("partiteTab", 0);
+            screen = b.getInt("screen", SCREEN_SEASON_LIST);
+            if (screen==SCREEN_SEASON_DETAIL && store.seasons.isEmpty()) screen = SCREEN_SEASON_LIST;
         }
     }
 
@@ -116,6 +123,84 @@ public class MainActivity extends Activity {
     // attuale, registrato come correzione manuale iniziale) oppure (No: si parte dallo standard 810/streak 0).
     // Non esiste piu' il concetto di sessione: la correzione iniziale e' semplicemente la prima "partita"
     // della lista, marcata come correzione (non una vittoria/sconfitta vera).
+
+    // ===== Onboarding "Come ti chiami, allenatore?": mostrato una sola volta, la primissima volta che l'app
+    // viene aperta (anche se erano gia' presenti delle Stagioni salvate, se l'onboarding non era mai stato
+    // fatto prima). Nome usato poi per personalizzare occasionalmente i messaggi motivazionali. =====
+    // Lista minima di parole da evitare nel nome (italiano + inglese), controllo per sottostringa su
+    // testo normalizzato (minuscolo, senza spazi/punteggiatura): non e' un filtro esaustivo, ma copre i
+    // casi piu' comuni per un nome inserito in un'app personale.
+    static final String[] BAD_WORDS = {
+        "cazzo","cazzi","cazzone","minchia","stronzo","stronza","puttana","troia","vaffanculo",
+        "bastardo","bastarda","merda","coglione","cogliona","porco","porca","zoccola","fottiti",
+        "cornuto","cornuta","testadicazzo","figadimerda",
+        "fuck","shit","bitch","asshole","bastard","dick","pussy","cunt","whore","slut","nigger","faggot","retard"
+    };
+    boolean containsBadWord(String name){
+        String norm = name.toLowerCase(Locale.ITALIAN).replaceAll("[^a-zàèéìòù]", "");
+        for (String bw : BAD_WORDS) if (norm.contains(bw)) return true;
+        return false;
+    }
+
+    void askTrainerName(){
+        LinearLayout box = formBox();
+        TextView header = new TextView(this);
+        header.setText("Come ti chiami, allenatore?"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setPadding(0,dp(10),0,dp(14));
+        box.addView(header);
+        // Campo vuoto, NESSUN placeholder: tastiera con la prima lettera in maiuscolo.
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine();
+        nameField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        styleField(nameField);
+        box.addView(nameField);
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
+            .setCancelable(false)
+            .setPositiveButton("OK", null)
+            .setNeutralButton("Preferisco non rispondere", (d,w) -> confirmTrainerName(""))
+            .create();
+        showNonDismissing(dialog, () -> {
+            String n = nameField.getText().toString().trim();
+            if (n.isEmpty() || containsBadWord(n)) return false;
+            confirmTrainerName(n);
+            return true;
+        }, "Scegli un nome valido, oppure tocca \"Preferisco non rispondere\".");
+        dialog.show();
+    }
+
+    void confirmTrainerName(String name){
+        if (name.isEmpty()) {
+            store.trainerName = ""; store.onboardingDone = true; store.save();
+            showWelcomeGuide();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Conferma")
+            .setMessage("Ti chiami \""+name+"\", ho capito bene?")
+            .setCancelable(false)
+            .setPositiveButton("Sì", (d,w) -> {
+                store.trainerName = name; store.onboardingDone = true; store.save();
+                showWelcomeGuide();
+            })
+            .setNegativeButton("No", (d,w) -> askTrainerName())
+            .show();
+    }
+
+    void showWelcomeGuide(){
+        String title = store.trainerName.isEmpty() ? "Benvenuto su Pocket Tracker!" : ("Benvenuto su Pocket Tracker, "+store.trainerName+"!");
+        String guide = "Ecco come funziona, in breve:\n\n"
+            + "• Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n"
+            + "• Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n"
+            + "• Il tab Deck tiene le statistiche di ogni mazzo, con l'anteprima ritagliata dai tuoi screenshot.\n"
+            + "• Il tab Stats ti mostra il quadro generale della Stagione.\n"
+            + "• Hai giocato senza registrare ogni partita? Usa \"Aggiungi correzione manuale\" per allineare i conti.\n\n"
+            + "Buon divertimento, e che le tue serie di vittorie siano lunghe!";
+        new AlertDialog.Builder(this).setTitle(title)
+            .setMessage(guide)
+            .setCancelable(false)
+            .setPositiveButton("Iniziamo!", (d,w) -> { if (store.seasons.isEmpty()) wizardStep1(true, null); })
+            .show();
+    }
 
     void wizardStep1(boolean first, String prefillName){
         LinearLayout box = formBox();
@@ -323,14 +408,22 @@ public class MainActivity extends Activity {
 
     // Messaggi motivazionali a scomparsa dopo ogni partita registrata: vittoria con streak basso (1-2),
     // vittoria con streak alto (3+, "inarrestabile"), sconfitta.
-    static final String[] WIN_MSGS_LOW = {
+    // Fascia dedicata alla PRIMISSIMA vittoria della serie (streak==1): frasi che parlano esplicitamente di
+    // "inizio", non hanno senso ripetute a streak 2+.
+    static final String[] WIN_MSGS_FIRST = {
         "Solo la prima di una lunga serie!",
-        "Continua così!",
+        "Si parte bene!",
         "Ottimo lavoro!",
         "Una vittoria meritata!",
-        "Si parte bene!",
-        "Bel colpo!",
-        "Si comincia a carburare!"
+        "Bel colpo!"
+    };
+    // Streak==2: la serie sta iniziando a formarsi, ma non e' piu' "la prima" — frasi diverse.
+    static final String[] WIN_MSGS_LOW = {
+        "Continua così!",
+        "Si comincia a carburare!",
+        "Ottimo lavoro!",
+        "Una vittoria meritata!",
+        "Bel colpo!"
     };
     static final String[] WIN_MSGS_HIGH = {
         "Sei inarrestabile!",
@@ -363,9 +456,30 @@ public class MainActivity extends Activity {
         "Una brutta giornata capita: rilassati un po'.",
         "Ricaricare le energie non è mai tempo perso."
     };
+    // "Shuffle bag" per non ripetere le stesse frasi finche' non sono state usate tutte (poi si rimescola):
+    // una coda separata per ciascuna fascia, tenuta in memoria per la durata della sessione dell'app.
+    java.util.HashMap<Object, ArrayList<Integer>> messagePoolQueues = new java.util.HashMap<>();
+    String pickMessage(String[] pool){
+        ArrayList<Integer> queue = messagePoolQueues.get(pool);
+        if(queue==null || queue.isEmpty()){
+            queue = new ArrayList<>();
+            for(int i=0;i<pool.length;i++) queue.add(i);
+            java.util.Collections.shuffle(queue);
+            messagePoolQueues.put(pool, queue);
+        }
+        int idx = queue.remove(queue.size()-1);
+        return pool[idx];
+    }
     void showMotivationalMessage(boolean win, int streak){
-        String[] pool = win ? (streak>=3 ? WIN_MSGS_HIGH : WIN_MSGS_LOW) : (streak>=3 ? LOSS_MSGS_HIGH : LOSS_MSGS_LOW);
-        String msg = pool[new java.util.Random().nextInt(pool.length)];
+        String[] pool;
+        if(win) pool = (streak==1) ? WIN_MSGS_FIRST : (streak>=3 ? WIN_MSGS_HIGH : WIN_MSGS_LOW);
+        else pool = streak>=3 ? LOSS_MSGS_HIGH : LOSS_MSGS_LOW;
+        String msg = pickMessage(pool);
+        // Se conosciamo il nome dell'allenatore, ogni tanto (non sempre, per non risultare ripetitivo)
+        // personalizza il messaggio anteponendolo, es. "Marco, continua così!".
+        if (!store.trainerName.isEmpty() && new java.util.Random().nextInt(3)==0) {
+            msg = store.trainerName+", "+Character.toLowerCase(msg.charAt(0))+msg.substring(1);
+        }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
@@ -535,6 +649,15 @@ public class MainActivity extends Activity {
     // Chiave univoca del "giorno" di un timestamp, per raggruppare le partite: le partite senza timestamp
     // reale (dati vecchi) finiscono tutte in un unico gruppo "sconosciuto".
     String dayKey(long ts){ return ts<=0 ? "?" : new java.text.SimpleDateFormat("yyyyMMdd", Locale.ITALY).format(new java.util.Date(ts)); }
+    // Mezzanotte (00:00) di "daysBack" giorni fa: usato per il filtro "1 giorno"/"3 giorni" del grafico —
+    // giorno di CALENDARIO, non finestra scorrevole di 24/72 ore, coerente col resto dell'app (dayKey).
+    long midnightNDaysAgo(int daysBack){
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -daysBack);
+        cal.set(java.util.Calendar.HOUR_OF_DAY,0); cal.set(java.util.Calendar.MINUTE,0);
+        cal.set(java.util.Calendar.SECOND,0); cal.set(java.util.Calendar.MILLISECOND,0);
+        return cal.getTimeInMillis();
+    }
 
     // Conteggio W/L unificato: esclude le correzioni manuali (unknown=true), che non sono vittorie/sconfitte
     // vere. Centralizzare qui evita il bug per cui una correzione con punti saliti veniva erroneamente
@@ -879,18 +1002,29 @@ public class MainActivity extends Activity {
 
     /** Area rettangolare cliccabile associata a un indice, usata per l'hit-test nelle liste. */
     static class Hit { float top, bottom; int index; Hit(float t, float b, int i){top=t;bottom=b;index=i;} }
-    /** Area rettangolare cliccabile per l'intestazione di un giorno (espandi/collassa), associata alla sua chiave giorno. */
-    static class DayHeaderHit { float top, bottom; String dayKey; DayHeaderHit(float t, float b, String dk){top=t;bottom=b;dayKey=dk;} }
 
     class TrackerView extends View {
         Paint p=new Paint(3);
         int detailTab=0; // 0 = Gioca, 1 = Deck, 2 = Statistiche (solo dentro SCREEN_SEASON_DETAIL)
         int partiteTab=0; // 0 = Grafico, 1 = Lista partite/correzioni (tab dentro la card "PARTITE")
-        java.util.HashSet<String> collapsedDays = new java.util.HashSet<>(); // chiavi giorno (dayKey) collassate
+        int chartRange=1; // 0 = 1 giorno (da mezzanotte), 1 = 3 giorni, 2 = tutto
+        // Barra "salta al giorno": scroll ORIZZONTALE indipendente da quello verticale della lista partite.
+        // Il collasso/espandi per giorno e' stato rimosso: saltare direttamente al giorno risolve lo stesso
+        // problema (navigare centinaia di partite) in modo piu' diretto.
+        float dateBarScrollX=0, dateBarMaxScrollX=0, dateBarTop=0, dateBarBottom=0;
+        String dateBarScrollKey="";
+        boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
+        ArrayList<String> dateBarDayKeys=new ArrayList<>(); ArrayList<float[]> dateBarPillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di dateBarDayKeys
+        java.util.HashMap<String,Float> dayYOffsetMap=new java.util.HashMap<>(); // dayKey -> offset Y (nel contenuto della lista) dove inizia quel gruppo
+        void resetDateBarIfNeeded(String key, float totalW, float visibleW){
+            dateBarMaxScrollX = Math.max(0, totalW-visibleW);
+            if(!key.equals(dateBarScrollKey)){ dateBarScrollX = dateBarMaxScrollX; dateBarScrollKey = key; } // di default: mostra il piu' recente (a destra)
+            if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
+            if(dateBarScrollX<0) dateBarScrollX=0;
+        }
         int bg=Color.rgb(7,11,18), card=Color.rgb(14,24,38), white=Color.WHITE, muted=Color.rgb(165,175,190), blue=Color.rgb(55,120,255), green=Color.rgb(70,205,75), red=Color.rgb(245,70,60);
         ArrayList<Hit> seasonHits=new ArrayList<>();
         ArrayList<Hit> matchHits=new ArrayList<>();
-        ArrayList<DayHeaderHit> dayHeaderHits=new ArrayList<>();
         // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
         // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
@@ -1086,6 +1220,23 @@ public class MainActivity extends Activity {
         int wrColor(float wr,int total){ return total==0?muted:(wr>50?green:(wr<50?red:muted)); }
         String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "Deck sconosciuto" : deckName; }
 
+        // Palette di colori accento per deck: stesso deck = sempre stesso colore (hash deterministico del
+        // nome), deck diversi = colori diversi nella maggior parte dei casi. Cosi' due serie ADIACENTI ma di
+        // deck diversi non si fondono visivamente in un'unica striscia continua (bug con il colore unico
+        // fisso di prima) — e la stessa palette e' pronta per essere riusata in futuro anche per il matting
+        // delle anteprime.
+        // Palette di colori accento per la N-esima SERIE incontrata (non per deck: con l'hash le collisioni
+        // sono molto piu' probabili di quanto sembri, con solo 5-15 deck per Stagione). Colori tenui, non
+        // gridano, ma restano ben distinguibili l'uno dall'altro tra serie consecutive.
+        static final int[] DECK_ACCENT_COLORS = {
+            Color.rgb(224,138,79),  // arancione tenue
+            Color.rgb(94,158,199),  // azzurro tenue
+            Color.rgb(163,120,181), // viola tenue
+            Color.rgb(107,172,133), // verde tenue
+            Color.rgb(196,168,88),  // ocra tenue
+            Color.rgb(190,110,130), // rosa tenue
+        };
+
         float rowWidth(String[] parts,float size){ p.setTextSize(size); float w=0; for(String s:parts) w+=p.measureText(s); return w; }
         // Riga di testo composta da segmenti con colori diversi (es. "7W" verde + "3L" rosso + "70%" verde), allineata a sinistra.
         float txtRow(Canvas c,float x,float y,float size,String[] parts,int[] cols){
@@ -1186,18 +1337,6 @@ public class MainActivity extends Activity {
         // giorno, che prima aveva erroneamente tutti e 4 gli angoli arrotondati.
         // Icona "espandi/collassa" (freccia verso il basso se aperto, verso destra se chiuso), allineata a
         // sinistra nell'intestazione delle sottocard giorno.
-        void drawExpandIcon(Canvas c, float cx, float cy, float size, int color, boolean expanded){
-            p.setColor(color); p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(size*0.16f); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND);
-            android.graphics.Path path = new android.graphics.Path();
-            if(expanded){
-                path.moveTo(cx-size*0.28f, cy-size*0.12f); path.lineTo(cx, cy+size*0.2f); path.lineTo(cx+size*0.28f, cy-size*0.12f);
-            } else {
-                path.moveTo(cx-size*0.12f, cy-size*0.28f); path.lineTo(cx+size*0.2f, cy); path.lineTo(cx-size*0.12f, cy+size*0.28f);
-            }
-            c.drawPath(path,p);
-        }
-
         void boxTopRounded(Canvas c,float l,float t,float rr,float b,float radius,int col){
             p.setColor(col); p.setStyle(Paint.Style.FILL);
             android.graphics.Path path = new android.graphics.Path();
@@ -1211,7 +1350,6 @@ public class MainActivity extends Activity {
         // dimensione di quella nel tab Deck) + pulsante W/L + Annulla + card "Partite" con i due tab. =====
         void playTab(Canvas c, Season s, float w, float h){
             matchHits.clear();
-            dayHeaderHits.clear();
             ArrayList<Match> all = s.matches; // gia' flat, una entita' di primo livello nella Season
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
@@ -1284,11 +1422,26 @@ public class MainActivity extends Activity {
             if(partiteTab==1) drawEditIcon(c, w/2+69, tabIconY, 22, muted);
 
             if(partiteTab==0){
+                // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
+                // dura in genere circa 2 settimane, "7g/30g" da app di finanza non avevano senso qui).
+                String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
+                float pillY=contentTop+16, pillH=26;
+                float pillGap=8; float pillX=30;
+                for(int ri=0; ri<3; ri++){
+                    p.setTextSize(11); float tw=p.measureText(rangeLabels[ri]); float pw=tw+24;
+                    box(c,pillX,pillY-pillH/2,pillX+pw,pillY+pillH/2, ri==chartRange?blue:Color.rgb(10,18,30));
+                    txt(c,rangeLabels[ri],pillX+pw/2,centeredBaseline(pillY,11),11, ri==chartRange?Color.WHITE:muted, Paint.Align.CENTER);
+                    pillX += pw+pillGap;
+                }
+                float chartTop = contentTop+40;
+
                 // Tab Grafico: il punteggio iniziale (correzione in posizione 0, se presente) non ha senso
                 // qui — e' un dato di partenza, non un evento nel tempo. Le colonne verticali segnano un
-                // cambio di GIORNO.
+                // cambio di GIORNO o di DECK.
                 ArrayList<Match> chartMatches = all;
                 if(!all.isEmpty() && all.get(0).unknown) chartMatches = new ArrayList<>(all.subList(1, all.size()));
+                if(chartRange==0){ long cutoff=midnightNDaysAgo(0); ArrayList<Match> f=new ArrayList<>(); for(Match m: chartMatches) if(m.timestamp>=cutoff) f.add(m); chartMatches=f; }
+                else if(chartRange==1){ long cutoff=midnightNDaysAgo(2); ArrayList<Match> f=new ArrayList<>(); for(Match m: chartMatches) if(m.timestamp>=cutoff) f.add(m); chartMatches=f; }
                 ArrayList<Integer> dayBoundaries = new ArrayList<>();
                 String prevDay=null;
                 for(int idx=0;idx<chartMatches.size();idx++){
@@ -1296,7 +1449,7 @@ public class MainActivity extends Activity {
                     if(prevDay!=null && !dk.equals(prevDay)) dayBoundaries.add(idx);
                     prevDay=dk;
                 }
-                drawChart(c,30,contentTop,w-30,contentBottom,chartMatches,0,dayBoundaries);
+                drawChart(c,30,chartTop,w-30,contentBottom,chartMatches,0,dayBoundaries);
                 matchInnerMaxScrollY=0; // niente scroll interno nel tab Grafico
             } else {
                 // Tab Lista: raggruppata per GIORNO, indipendentemente dal tipo (partita o correzione): una
@@ -1308,28 +1461,97 @@ public class MainActivity extends Activity {
                 int[] matchNumber = new int[all.size()];
                 { int cnt=0; for(int idx=0; idx<all.size(); idx++){ if(!all.get(idx).unknown){ cnt++; matchNumber[idx]=cnt; } } }
 
+                // Serie di partite consecutive con lo STESSO deck, calcolate sull'INTERA cronologia (non per
+                // singolo giorno): cosi' una serie che continua da un giorno al successivo resta un'unica
+                // serie con un solo colore, invece di "spezzarsi" e ripartire dal colore 1 a mezzanotte. Le
+                // correzioni sono "trasparenti", non interrompono la serie. Ogni NUOVA serie incontrata (in
+                // ordine cronologico) prende il colore successivo della palette, ciclicamente.
+                int[] streakColorAt = new int[all.size()];
+                int[] streakSizeAt = new int[all.size()];
+                boolean[] isTopOfStreak = new boolean[all.size()];
+                {
+                    ArrayList<Integer> realOrder = new ArrayList<>();
+                    for(int idx=0; idx<all.size(); idx++) if(!all.get(idx).unknown) realOrder.add(idx);
+                    int streakN=0, ri=0;
+                    while(ri<realOrder.size()){
+                        int start=ri; String deckAtStart=all.get(realOrder.get(ri)).deck;
+                        while(ri<realOrder.size() && deckAtStart.equals(all.get(realOrder.get(ri)).deck)) ri++;
+                        int size=ri-start; int color=DECK_ACCENT_COLORS[streakN % DECK_ACCENT_COLORS.length];
+                        for(int q=start;q<ri;q++){
+                            int idx=realOrder.get(q);
+                            streakColorAt[idx]=color; streakSizeAt[idx]=size;
+                            isTopOfStreak[idx] = (q==ri-1); // l'ultimo in ordine CRONOLOGICO = il piu' recente (in cima nella visualizzazione)
+                        }
+                        streakN++;
+                    }
+                }
+
+                // ===== Barra "salta al giorno": una pillola per ogni data distinta con almeno una voce,
+                // ordine ASCENDENTE (piu' vecchia a sinistra, oggi a destra) — di default scrollata tutta a
+                // destra, cosi' "oggi" e' subito visibile senza dover scorrere. Scroll orizzontale proprio,
+                // indipendente da quello verticale della lista sotto. =====
+                float dateBarH=34, pillPadH=22, pillPadX=11, pillGap=6;
+                ArrayList<String> distinctDays = new ArrayList<>();
+                { String prevDk=null; for(int idx=0; idx<all.size(); idx++){ String dk=dayKey(all.get(idx).timestamp); if(!dk.equals(prevDk)){ distinctDays.add(dk); prevDk=dk; } } }
+                dateBarDayKeys = distinctDays; dateBarPillBounds = new ArrayList<>();
+                float pillCursor=0;
+                for(String dk: distinctDays){
+                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    p.setTextSize(11); float tw=p.measureText(label); float pw=tw+pillPadX*2;
+                    dateBarPillBounds.add(new float[]{pillCursor,pw});
+                    pillCursor += pw+pillGap;
+                }
+                float totalPillsWidth = Math.max(0, pillCursor-pillGap);
+                float dateBarVisibleW = w-36;
+                resetDateBarIfNeeded("datebar:"+store.current, totalPillsWidth, dateBarVisibleW);
+                dateBarTop = contentTop; dateBarBottom = contentTop+pillPadH;
+
+                String mostRecentDayKey = all.isEmpty() ? null : dayKey(all.get(all.size()-1).timestamp);
+                c.save(); c.clipRect(18,dateBarTop,w-18,dateBarBottom);
+                c.translate(18-dateBarScrollX, 0);
+                for(int di=0; di<distinctDays.size(); di++){
+                    String dk = distinctDays.get(di);
+                    float[] b = dateBarPillBounds.get(di);
+                    boolean isToday = dk.equals(mostRecentDayKey);
+                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isToday?blue:Color.rgb(10,18,30));
+                    txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isToday?Color.WHITE:muted, Paint.Align.CENTER);
+                }
+                c.restore();
+                // Sfumatura sul bordo destro della barra (non su una singola pillola): solo se c'e' altro da
+                // scorrere verso sinistra, un indizio visivo pulito invece di un suggerimento testuale fisso.
+                if(dateBarScrollX < dateBarMaxScrollX-1){
+                    android.graphics.LinearGradient grad = new android.graphics.LinearGradient(w-42,0,w-18,0, Color.argb(0,7,11,18), Color.argb(255,7,11,18), android.graphics.Shader.TileMode.CLAMP);
+                    p.setShader(grad); p.setStyle(Paint.Style.FILL);
+                    c.drawRect(w-42,dateBarTop,w-18,dateBarTop+pillPadH,p);
+                    p.setShader(null);
+                }
+
+                float listTop = contentTop+dateBarH, listHeight = contentHeight-dateBarH;
+
                 float finalCorrRowH=corrRowH, finalMatchRowH=matchRowH;
                 java.util.function.IntToDoubleFunction rowHeightAt = idx -> all.get(idx).unknown ? finalCorrRowH : finalMatchRowH;
+                dayYOffsetMap = new java.util.HashMap<>();
                 float totalRowsHeight = 0;
                 {
                     int idx=all.size()-1;
                     while(idx>=0){
                         String dk=dayKey(all.get(idx).timestamp);
+                        dayYOffsetMap.put(dk, totalRowsHeight); // offset ALL'INIZIO di questo gruppo
                         int j=idx; float groupRowsH=0;
                         while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)){ groupRowsH+=(float)rowHeightAt.applyAsDouble(j); j--; }
-                        boolean collapsed = collapsedDays.contains(dk);
-                        totalRowsHeight += headerH + (collapsed?0:groupRowsH) + groupGap;
+                        totalRowsHeight += headerH + groupRowsH + groupGap;
                         idx=j;
                     }
                 }
                 resetMatchInnerScrollIfNeeded("matchinner:"+store.current);
-                matchInnerMaxScrollY = Math.max(0, totalRowsHeight-contentHeight);
+                matchInnerMaxScrollY = Math.max(0, totalRowsHeight-listHeight);
                 if(matchInnerScrollY>matchInnerMaxScrollY) matchInnerScrollY=matchInnerMaxScrollY;
                 if(matchInnerScrollY<0) matchInnerScrollY=0;
-                matchInnerListTop=contentTop; matchInnerListBottom=contentBottom;
+                matchInnerListTop=listTop; matchInnerListBottom=listTop+listHeight;
 
-                c.save(); c.clipRect(18,contentTop,w-18,contentBottom); c.translate(0,-matchInnerScrollY);
-                float y=contentTop+4;
+                c.save(); c.clipRect(18,listTop,w-18,listTop+listHeight); c.translate(0,-matchInnerScrollY);
+                float y=listTop+4;
                 int i = all.size()-1;
                 while(i>=0){
                     String dk = dayKey(all.get(i).timestamp);
@@ -1337,56 +1559,61 @@ public class MainActivity extends Activity {
                     int j = i;
                     while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)) j--;
                     int dayStartIdx = j+1;
-                    int dw=0, dl=0;
-                    for(int k=dayStartIdx;k<=dayEndIdx;k++){ Match m=all.get(k); if(!m.unknown){ if(m.win) dw++; else dl++; } }
+                    int dw=0, dl=0; int dgain=0;
+                    for(int k=dayStartIdx;k<=dayEndIdx;k++){ Match m=all.get(k); if(!m.unknown){ if(m.win) dw++; else dl++; } dgain += (m.after-m.before); }
                     float dwr = (dw+dl)==0?0:100f*dw/(dw+dl);
-                    boolean collapsed = collapsedDays.contains(dk);
                     float groupRowsH=0; for(int k=dayStartIdx;k<=dayEndIdx;k++) groupRowsH+=(float)rowHeightAt.applyAsDouble(k);
-                    float groupTop=y, groupBottom=y+headerH+(collapsed?0:groupRowsH);
+                    float groupTop=y, groupBottom=y+headerH+groupRowsH;
 
                     box(c,30,groupTop,w-30,groupBottom,Color.rgb(10,18,30));
                     boxTopRounded(c,30,groupTop,w-30,groupTop+headerH,10,Color.rgb(21,34,56));
-                    // Pulsante espandi/collassa allineato a sinistra, prima della data.
-                    drawExpandIcon(c, 42, groupTop+20, 14, muted, !collapsed);
-                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 58, centeredBaseline(groupTop+20,11), 11, muted, Paint.Align.LEFT);
+                    txt(c, formatDateOnly(all.get(dayEndIdx).timestamp), 46, centeredBaseline(groupTop+20,11), 11, muted, Paint.Align.LEFT);
                     txtRowRight(c,w-46,centeredBaseline(groupTop+20,11),11,
-                        new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)},
-                        new int[]{green, red, wrColor(dwr,dw+dl)});
-                    dayHeaderHits.add(new DayHeaderHit(groupTop, groupTop+headerH, dk));
+                        new String[]{dw+"W  ", dl+"L  ", String.format(Locale.US,"%.1f%%",dwr)+"  ", (dgain>0?"+":"")+dgain},
+                        new int[]{green, red, wrColor(dwr,dw+dl), dgain>0?green:(dgain<0?red:muted)});
 
-                    if(!collapsed){
-                        float ry = groupTop+headerH;
-                        for(int k=dayEndIdx;k>=dayStartIdx;k--){
-                            Match m = all.get(k);
-                            if(m.unknown){
-                                String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
-                                box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
-                                txt(c, title, 50, ry+26, 15, white, Paint.Align.LEFT);
-                                // Seconda riga: TUTTE le variazioni insieme (punti, vittorie consecutive, W, L)
-                                // — e' una card diversa dalle partite, non deve seguire lo stesso schema
-                                // "titolo a sinistra, valore isolato a destra".
-                                String pointsStr; int pointsColor;
-                                if(k==0){ pointsStr = m.after+" punti"; pointsColor = white; }
-                                else {
-                                    int gain = m.after-m.before;
-                                    pointsStr = (gain>=0?"+":"")+gain+" punti";
-                                    pointsColor = gain>0?green:(gain<0?red:muted);
-                                }
-                                txtRow(c, 50, ry+46, 12,
-                                    new String[]{pointsStr+"   ", m.streak+"VC   ", "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
-                                    new int[]{pointsColor, muted, green, red});
-                            } else {
-                                if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
-                                txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
-                                txt(c, "Partita "+matchNumber[k]+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
-                                txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
+                    float ry = groupTop+headerH;
+                    for(int k=dayEndIdx;k>=dayStartIdx;k--){
+                        Match m = all.get(k);
+                        if(m.unknown){
+                            String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
+                            box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
+                            txt(c, title, 50, ry+26, 15, white, Paint.Align.LEFT);
+                            // Seconda riga: TUTTE le variazioni insieme (punti, vittorie consecutive, W, L)
+                            // — e' una card diversa dalle partite, non deve seguire lo stesso schema
+                            // "titolo a sinistra, valore isolato a destra".
+                            String pointsStr; int pointsColor;
+                            if(k==0){ pointsStr = m.after+" punti"; pointsColor = white; }
+                            else {
                                 int gain = m.after-m.before;
-                                int gcol = gain>0?green:(gain<0?red:muted);
-                                txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
+                                pointsStr = (gain>=0?"+":"")+gain+" punti";
+                                pointsColor = gain>0?green:(gain<0?red:muted);
                             }
-                            matchHits.add(new Hit(ry,ry+(float)rowHeightAt.applyAsDouble(k),k));
-                            ry+=(float)rowHeightAt.applyAsDouble(k);
+                            txtRow(c, 50, ry+46, 12,
+                                new String[]{pointsStr+"   ", m.streak+"VC   ", "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
+                                new int[]{pointsColor, muted, green, red});
+                        } else {
+                            if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
+                            // Barra colorata a sinistra per le serie di partite consecutive con lo stesso
+                            // deck (le correzioni non le interrompono); "×N" solo sulla partita piu' recente
+                            // della serie (quella in alto).
+                            if(streakSizeAt[k]>=2){
+                                p.setColor(streakColorAt[k]); p.setStyle(Paint.Style.FILL);
+                                c.drawRect(30,ry,34,ry+matchRowH,p);
+                            }
+                            if(streakSizeAt[k]>=2 && isTopOfStreak[k]){
+                                txtRow(c, 46, ry+26, 15, new String[]{deckDisplayShort(m.deck), "  ×"+streakSizeAt[k]}, new int[]{white, streakColorAt[k]});
+                            } else {
+                                txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
+                            }
+                            txt(c, "Partita "+matchNumber[k]+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
+                            txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
+                            int gain = m.after-m.before;
+                            int gcol = gain>0?green:(gain<0?red:muted);
+                            txt(c, (gain>0?"+":"")+gain, w-46, ry+48, 12, gcol, Paint.Align.RIGHT);
                         }
+                        matchHits.add(new Hit(ry,ry+(float)rowHeightAt.applyAsDouble(k),k));
+                        ry+=(float)rowHeightAt.applyAsDouble(k);
                     }
                     y = groupBottom+groupGap;
                     i = dayStartIdx-1;
@@ -1394,8 +1621,8 @@ public class MainActivity extends Activity {
                 c.restore();
 
                 if(matchInnerMaxScrollY>1){
-                    float thumbH = Math.max(24, contentHeight*(contentHeight/totalRowsHeight));
-                    float thumbY = contentTop + (contentHeight-thumbH)*(matchInnerScrollY/matchInnerMaxScrollY);
+                    float thumbH = Math.max(24, listHeight*(listHeight/totalRowsHeight));
+                    float thumbY = listTop + (listHeight-thumbH)*(matchInnerScrollY/matchInnerMaxScrollY);
                     p.setColor(Color.rgb(45,60,85)); p.setStyle(Paint.Style.FILL);
                     c.drawRoundRect(w-22,thumbY,w-19,thumbY+thumbH,1.5f,1.5f,p);
                 }
@@ -1615,8 +1842,8 @@ public class MainActivity extends Activity {
             min-=20;max+=20;if(max==min)max=min+1;
             int n=ms.size();
 
-            // Colonne verticali SOLO in corrispondenza di un cambio di giorno, con la relativa data sotto
-            // (nella zona footer), allineata alla stessa colonna.
+            // Colonne verticali per cambio GIORNO (una tonalita') e per cambio DECK (un'altra), cosi' si
+            // distinguono a colpo d'occhio i due tipi di "confine" nel grafico.
             if(dayBoundaries!=null && !dayBoundaries.isEmpty()){
                 p.setColor(Color.rgb(52,68,96)); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1);
                 for(int idx: dayBoundaries){
@@ -1626,6 +1853,21 @@ public class MainActivity extends Activity {
                 for(int idx: dayBoundaries){
                     float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
                     txt(c, formatDateOnly(ms.get(idx).timestamp), gx, gridBottom+13, 9, muted, Paint.Align.CENTER);
+                }
+            }
+            // Cambio DECK: rilevato confrontando il deck di ogni partita con quello precedente (le correzioni,
+            // che non hanno un deck significativo, vengono saltate nel confronto).
+            {
+                p.setColor(Color.rgb(120,90,190)); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1);
+                String prevDeck = null;
+                for(int idx=0; idx<n; idx++){
+                    Match m = ms.get(idx);
+                    if(m.unknown) continue;
+                    if(prevDeck!=null && !prevDeck.equals(m.deck)){
+                        float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
+                        c.drawLine(gx,gridTop,gx,gridBottom,p);
+                    }
+                    prevDeck = m.deck;
                 }
             }
 
@@ -1736,14 +1978,26 @@ public class MainActivity extends Activity {
 
             if(e.getAction()==MotionEvent.ACTION_DOWN){
                 touchDownX=x; touchDownY=y; touchStartScrollY=scrollY;
-                isDragging=false; isDraggingInner=false; innerDragTarget=0;
-                boolean overMatches = screen==SCREEN_SEASON_DETAIL && detailTab==0 && partiteTab==1 && matchInnerMaxScrollY>0
+                isDragging=false; isDraggingInner=false; innerDragTarget=0; isDraggingDateBar=false;
+                boolean overDateBar = screen==SCREEN_SEASON_DETAIL && detailTab==0 && partiteTab==1 && dateBarMaxScrollX>0
+                    && y>=(dateBarTop-scrollY) && y<=(dateBarBottom-scrollY) && x>=18 && x<=w-18;
+                dateBarDragCandidate = overDateBar;
+                if(overDateBar){ touchStartDateBarScrollX = dateBarScrollX; }
+                boolean overMatches = !overDateBar && screen==SCREEN_SEASON_DETAIL && detailTab==0 && partiteTab==1 && matchInnerMaxScrollY>0
                     && y>=(matchInnerListTop-scrollY) && y<=(matchInnerListBottom-scrollY) && x>=18 && x<=w-18;
                 if(overMatches){ innerDragTarget=1; touchStartInnerScrollY=matchInnerScrollY; }
                 return true;
             }
             if(e.getAction()==MotionEvent.ACTION_MOVE){
                 float dy = touchDownY - y;
+                float dx = touchDownX - x;
+                if(dateBarDragCandidate && Math.abs(dx)>8){
+                    isDraggingDateBar = true;
+                    dateBarScrollX = touchStartDateBarScrollX + dx;
+                    if(dateBarScrollX<0) dateBarScrollX=0; if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
+                    invalidate();
+                    return true;
+                }
                 if(Math.abs(dy)>8){
                     if(innerDragTarget!=0) isDraggingInner=true;
                     else if(touchDownY>=bodyTop && touchDownY<=bodyBottom) isDragging=true;
@@ -1760,7 +2014,7 @@ public class MainActivity extends Activity {
                 return true;
             }
             if(e.getAction()!=MotionEvent.ACTION_UP) return true;
-            if(isDragging || isDraggingInner){ isDragging=false; isDraggingInner=false; innerDragTarget=0; return true; }
+            if(isDragging || isDraggingInner || isDraggingDateBar){ isDragging=false; isDraggingInner=false; innerDragTarget=0; isDraggingDateBar=false; dateBarDragCandidate=false; return true; }
 
             float contentY = (y>=bodyTop && y<=bodyBottom) ? y+scrollY : y;
 
@@ -1791,12 +2045,32 @@ public class MainActivity extends Activity {
                     if(x>=w/2+6 && x<w/2+38){ partiteTab=1; invalidate(); return true; } // icona lista
                     if(partiteTab==1 && x>=w/2+58 && x<w/2+80){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
                 }
+                if(partiteTab==0 && contentY>=485 && contentY<=511){
+                    String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
+                    float pillX=30;
+                    for(int ri=0; ri<3; ri++){
+                        p.setTextSize(11); float tw=p.measureText(rangeLabels[ri]); float pw=tw+24;
+                        if(x>=pillX && x<=pillX+pw){ chartRange=ri; invalidate(); return true; }
+                        pillX += pw+8;
+                    }
+                }
                 if(partiteTab==1){
+                    // Tap sulla barra "salta al giorno" (non un trascinamento, gia' gestito sopra): trova la
+                    // pillola toccata e scrolla la lista fino a dove inizia quel giorno.
+                    if(contentY>=dateBarTop && contentY<=dateBarBottom && x>=18 && x<=w-18){
+                        float tapXInBar = x-18+dateBarScrollX;
+                        for(int di=0; di<dateBarPillBounds.size(); di++){
+                            float[] b = dateBarPillBounds.get(di);
+                            if(tapXInBar>=b[0] && tapXInBar<=b[0]+b[1]){
+                                String dk = dateBarDayKeys.get(di);
+                                Float off = dayYOffsetMap.get(dk);
+                                if(off!=null){ matchInnerScrollY = Math.max(0, Math.min(off, matchInnerMaxScrollY)); invalidate(); }
+                                return true;
+                            }
+                        }
+                        return true;
+                    }
                     float matchContentY = contentY + matchInnerScrollY;
-                    for(DayHeaderHit hit: dayHeaderHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){
-                        if(collapsedDays.contains(hit.dayKey)) collapsedDays.remove(hit.dayKey); else collapsedDays.add(hit.dayKey);
-                        invalidate(); return true;
-                    } }
                     for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
                 }
             } else if(detailTab==1){
@@ -1897,9 +2171,14 @@ public class MainActivity extends Activity {
     }
     static class Store {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
+        String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
-        void load(){try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void load(){
+            trainerName = pref.getString("trainerName","");
+            onboardingDone = pref.getBoolean("onboardingDone", false);
+            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
+        }
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
         // quando il campo non esisteva ancora ricevevano l'ora di caricamento come stima, finendo tutte con
