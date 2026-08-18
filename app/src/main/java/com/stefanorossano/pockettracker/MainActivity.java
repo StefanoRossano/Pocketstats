@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.137";
+    static final String APP_VERSION = "v0.2.138";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1421,17 +1421,18 @@ public class MainActivity extends Activity {
 
             boolean hasHistory = !all.isEmpty();
             boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
-            undoBadgeCy = 322;
-            if(!hasHistory) { undoBadgeCx = w/2; }
-            else if(lastIsCorrection) { undoBadgeCx = w/2; }
-            else { undoBadgeCx = all.get(all.size()-1).win ? (gL+gR)/2 : (rL+rR)/2; }
+            float badgeR = 14, cornerInset = 16; // ancorato all'angolo in alto a DESTRA del pulsante giusto,
+            // non centrato sopra: cosi' non copre piu' la lettera "W"/"L", e restando "dentro" il pulsante
+            // (non a cavallo) non rischia di sovrapporsi all'altro pulsante o di uscire dallo schermo.
+            undoBadgeCy = 322+cornerInset;
+            if(!hasHistory || lastIsCorrection) { undoBadgeCx = w/2; }
+            else { undoBadgeCx = (all.get(all.size()-1).win ? gR : rR) - cornerInset; }
             if(hasHistory){
-                float badgeR = 18;
                 p.setColor(Color.rgb(20,32,52)); p.setStyle(Paint.Style.FILL);
                 c.drawCircle(undoBadgeCx, undoBadgeCy, badgeR, p);
                 p.setColor(bg); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
                 c.drawCircle(undoBadgeCx, undoBadgeCy, badgeR, p);
-                drawUndoIcon(c, undoBadgeCx, undoBadgeCy, 18, white);
+                drawUndoIcon(c, undoBadgeCx, undoBadgeCy, 14, white);
             }
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
