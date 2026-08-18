@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.139";
+    static final String APP_VERSION = "v0.2.140";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1421,7 +1421,11 @@ public class MainActivity extends Activity {
 
             boolean hasHistory = !all.isEmpty();
             boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
-            float badgeR = 14, cornerInset = 16 - badgeR/4; // ancorato all'angolo in alto a DESTRA del pulsante giusto,
+            // Inset=8 verificato esplicitamente: sopra "L" il bordo destro del badge arriva a w-12, la
+            // scrollbar principale della pagina inizia a w-7 → 5 unita' di margine, non la tocca. Con
+            // l'inset precedente (12.5) la sporgenza reale era di appena 1.5 unita' — quasi invisibile;
+            // con 8 sporge di 6 unita' sopra E a destra del pulsante, chiaramente visibile.
+            float badgeR = 14, cornerInset = 8; // ancorato all'angolo in alto a DESTRA del pulsante giusto,
             // non centrato sopra: cosi' non copre piu' la lettera "W"/"L", e restando "dentro" il pulsante
             // (non a cavallo) non rischia di sovrapporsi all'altro pulsante o di uscire dallo schermo.
             undoBadgeCy = 322+cornerInset;
