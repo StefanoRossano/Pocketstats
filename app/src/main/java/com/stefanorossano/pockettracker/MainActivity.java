@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.140";
+    static final String APP_VERSION = "v0.2.141";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -323,13 +323,6 @@ public class MainActivity extends Activity {
         refreshSelector[0].run();
         LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         box.addView(deckSelector, selLp);
-        deckSelector.setOnClickListener(v -> {
-            // "Annulla" esplicito: prima si poteva chiudere questo dialog SOLO toccando fuori, senza alcun
-            // pulsante di uscita visibile.
-            new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
-                selected[0] = names.get(which); refreshSelector[0].run();
-            }).setNegativeButton("Annulla", null).show();
-        });
 
         // "Nuovo Deck": si trasforma in un campo di testo con una "✕" sovrapposta per richiuderlo, invece
         // di aprire un secondo dialog separato — piu' rapido per la creazione al volo.
@@ -355,6 +348,15 @@ public class MainActivity extends Activity {
 
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
+        // Selezionare un deck ESISTENTE dalla lista conferma ed esce subito (chiude anche questo dialog
+        // "genitore"): prima bisognava tornare qui e premere ancora "Conferma", un passaggio in piu' inutile
+        // visto che la scelta e' gia' inequivocabile. "Annulla" invece torna qui, come gia' faceva.
+        deckSelector.setOnClickListener(v -> {
+            new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
+                dialog.dismiss();
+                onPicked.accept(names.get(which));
+            }).setNegativeButton("Annulla", null).show();
+        });
         showNonDismissing(dialog, () -> {
             String newName = newDeckName.getText().toString().trim();
             if (!newName.isEmpty()) {
