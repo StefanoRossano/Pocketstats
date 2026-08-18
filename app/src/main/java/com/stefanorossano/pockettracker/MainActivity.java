@@ -1228,7 +1228,7 @@ public class MainActivity extends Activity {
         // Palette di colori accento per la N-esima SERIE incontrata (non per deck: con l'hash le collisioni
         // sono molto piu' probabili di quanto sembri, con solo 5-15 deck per Stagione). Colori tenui, non
         // gridano, ma restano ben distinguibili l'uno dall'altro tra serie consecutive.
-        static final int[] DECK_ACCENT_COLORS = {
+        final int[] DECK_ACCENT_COLORS = {
             Color.rgb(224,138,79),  // arancione tenue
             Color.rgb(94,158,199),  // azzurro tenue
             Color.rgb(163,120,181), // viola tenue
