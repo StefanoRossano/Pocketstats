@@ -22,11 +22,12 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.141";
+    static final String APP_VERSION = "v0.2.149";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
     static final int SCREEN_SEASON_DETAIL = 1; // Dettaglio Season: tab Gioca / Deck / Statistiche
+    static final int SCREEN_SETTINGS = 2;      // Impostazioni: nome allenatore, cancella dati
 
     static final int DEFAULT_BASELINE = 810; // Punteggio di partenza standard per una nuova Stagione
 
@@ -143,6 +144,38 @@ public class MainActivity extends Activity {
         String norm = name.toLowerCase(Locale.ITALIAN).replaceAll("[^a-zàèéìòù]", "");
         for (String bw : BAD_WORDS) if (norm.contains(bw)) return true;
         return false;
+    }
+
+    // Modifica del nome dopo l'onboarding iniziale (da Impostazioni): stesso controllo bad-words, ma qui il
+    // campo e' precompilato col nome attuale e c'e' un'opzione per rimuoverlo del tutto ("torna anonimo").
+    void editTrainerNameDialog(){
+        LinearLayout box = formBox();
+        TextView header = new TextView(this);
+        header.setText("Nome allenatore"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setPadding(0,dp(10),0,dp(14));
+        box.addView(header);
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine();
+        nameField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        styleField(nameField);
+        nameField.setText(store.trainerName);
+        box.addView(nameField);
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
+            .setPositiveButton("Salva", null)
+            .setNegativeButton("Annulla", null)
+            .setNeutralButton("Rimuovi nome", (d,w) -> {
+                store.trainerName = ""; view.cachedGreeting=null; store.save(); view.invalidate();
+            })
+            .create();
+        showNonDismissing(dialog, () -> {
+            String n = nameField.getText().toString().trim();
+            if (containsBadWord(n)) return false;
+            store.trainerName = n; view.cachedGreeting=null; // il messaggio di benvenuto va rigenerato col nuovo nome
+            store.save(); view.invalidate();
+            return true;
+        }, "Scegli un nome valido.");
+        dialog.show();
     }
 
     void askTrainerName(){
@@ -461,6 +494,39 @@ public class MainActivity extends Activity {
         "Una brutta giornata capita: rilassati un po'.",
         "Ricaricare le energie non è mai tempo perso."
     };
+    // Legata alla GIORNATA (non allo streak): quando il win rate di OGGI supera il 65%, con abbastanza
+    // partite giocate perche' la percentuale sia significativa.
+    static final String[] DAY_MSGS_HOT = {
+        "Oggi sei inarrestabile!",
+        "Oggi non ti ferma più nessuno!",
+        "Giornata da campione!",
+        "Stai dominando la giornata!",
+        "Che giornata, continua così!",
+        "Oggi hai il tocco magico!"
+    };
+    // Messaggio di benvenuto nella lista Stagioni, legato all'orario. Ogni riga e' una coppia [con nome,
+    // senza nome] — coppie separate (non un singolo template con %s tolto a mano) per evitare frasi zoppe
+    // tipo "Partitina notturna, ?" quando il nome non e' conosciuto.
+    static final String[][] GREETING_NIGHT = {
+        {"Partitina notturna, %s?", "Partitina notturna?"},
+        {"Gli allenatori più tenaci giocano di notte, %s.", "Gli allenatori più tenaci giocano di notte."},
+        {"A quest'ora, %s? Rispetto.", "A quest'ora? Rispetto."}
+    };
+    static final String[][] GREETING_MORNING = {
+        {"Buongiorno %s, si comincia!", "Buongiorno, si comincia!"},
+        {"Colazione e qualche partita, %s?", "Colazione e qualche partita?"},
+        {"Si parte presto oggi, %s!", "Si parte presto oggi!"}
+    };
+    static final String[][] GREETING_AFTERNOON = {
+        {"Pausa pranzo con qualche partita, %s?", "Pausa pranzo con qualche partita?"},
+        {"Buon pomeriggio, %s! Pronto a giocare?", "Buon pomeriggio! Pronto a giocare?"},
+        {"%s, si gioca nel pomeriggio!", "Si gioca nel pomeriggio!"}
+    };
+    static final String[][] GREETING_EVENING = {
+        {"Buonasera %s, si comincia?", "Buonasera, si comincia?"},
+        {"Serata di Pocket, %s?", "Serata di Pocket?"},
+        {"%s, pronto per qualche partita stasera?", "Pronto per qualche partita stasera?"}
+    };
     // "Shuffle bag" per non ripetere le stesse frasi finche' non sono state usate tutte (poi si rimescola):
     // una coda separata per ciascuna fascia, tenuta in memoria per la durata della sessione dell'app.
     java.util.HashMap<Object, ArrayList<Integer>> messagePoolQueues = new java.util.HashMap<>();
@@ -476,14 +542,35 @@ public class MainActivity extends Activity {
         return pool[idx];
     }
     void showMotivationalMessage(boolean win, int streak){
+        // Messaggio legato alla GIORNATA (non allo streak): se oggi il win rate supera il 65%, con almeno 5
+        // partite giocate oggi perche' la percentuale sia significativa — non sempre, per non sovrapporsi
+        // troppo spesso alla logica basata sullo streak.
+        if(win){
+            Season s = store.seasons.get(store.current);
+            String todayKey = dayKey(System.currentTimeMillis());
+            int tw=0, tl=0;
+            for(Match m: s.matches){ if(m.unknown) continue; if(dayKey(m.timestamp).equals(todayKey)){ if(m.win) tw++; else tl++; } }
+            int totalToday = tw+tl;
+            if(totalToday>=5 && (100f*tw/totalToday)>65f && new java.util.Random().nextInt(5)<2){
+                Toast.makeText(this, pickMessage(DAY_MSGS_HOT), Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
         String[] pool;
         if(win) pool = (streak==1) ? WIN_MSGS_FIRST : (streak>=3 ? WIN_MSGS_HIGH : WIN_MSGS_LOW);
         else pool = streak>=3 ? LOSS_MSGS_HIGH : LOSS_MSGS_LOW;
-        String msg = pickMessage(pool);
-        // Se conosciamo il nome dell'allenatore, ogni tanto (non sempre, per non risultare ripetitivo)
-        // personalizza il messaggio anteponendolo, es. "Marco, continua così!".
-        if (!store.trainerName.isEmpty() && new java.util.Random().nextInt(3)==0) {
-            msg = store.trainerName+", "+Character.toLowerCase(msg.charAt(0))+msg.substring(1);
+        String msg;
+        // "Distruggili tutti, NOME!" solo per streak alte (3+) e nome conosciuto, occasionalmente — il nome
+        // e' parte della frase stessa, non solo anteposto come nel caso generico sotto.
+        if (win && streak>=3 && !store.trainerName.isEmpty() && new java.util.Random().nextInt(4)==0) {
+            msg = "Distruggili tutti, "+store.trainerName+"!";
+        } else {
+            msg = pickMessage(pool);
+            // Se conosciamo il nome dell'allenatore, ogni tanto (non sempre, per non risultare ripetitivo)
+            // personalizza il messaggio anteponendolo, es. "Marco, continua così!".
+            if (!store.trainerName.isEmpty() && new java.util.Random().nextInt(3)==0) {
+                msg = store.trainerName+", "+Character.toLowerCase(msg.charAt(0))+msg.substring(1);
+            }
         }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
@@ -742,6 +829,29 @@ public class MainActivity extends Activity {
             new Runnable[]{ () -> renameDeckDialog(d), () -> openDeckImages(d), () -> confirmDeleteDeck(s,d) });
     }
 
+    // Menu "⋮" delle card Stagione (lista principale): rinomina o elimina.
+    void seasonActionsMenu(int idx, float rightEdgeX, float anchorY){
+        Season s = store.seasons.get(idx);
+        view.showAnchoredMenu(rightEdgeX, anchorY,
+            new String[]{"Rinomina Stagione","Elimina Stagione"},
+            new int[]{Color.WHITE, red()},
+            new Runnable[]{ () -> { store.current = idx; renameSeason(); }, () -> confirmDeleteSeason(idx) });
+    }
+
+    void confirmDeleteSeason(int idx){
+        Season s = store.seasons.get(idx);
+        new AlertDialog.Builder(this).setTitle("Elimina \""+s.name+"\"")
+            .setMessage("Verranno eliminate definitivamente tutte le "+s.matches.size()+" partite e i deck di questa Stagione. Azione irreversibile.")
+            .setPositiveButton("Elimina", (dlg,w) -> {
+                store.seasons.remove(idx);
+                if (store.current>=store.seasons.size()) store.current = Math.max(0, store.seasons.size()-1);
+                else if (store.current>idx) store.current--;
+                store.save(); view.invalidate();
+            })
+            .setNegativeButton("Annulla", null)
+            .show();
+    }
+
     void confirmDeleteDeck(Season s, Deck d){
         int usedCount = 0;
         for (Match m: s.matches) if (d.name.equals(m.deck)) usedCount++;
@@ -786,6 +896,12 @@ public class MainActivity extends Activity {
 
     // Trova, all'interno della Stagione corrente, il Deck con questo nome (ogni Stagione ha i propri Deck:
     // uno stesso nome in due Stagioni diverse corrisponde a due oggetti Deck distinti, con screenshot distinti).
+    // Solo l'ULTIMA Stagione creata resta giocabile: crearne una nuova blocca automaticamente tutte le
+    // precedenti (rimangono visibili/consultabili, ma non puoi piu' registrare partite). Basato sulla
+    // posizione nell'elenco (non su un flag salvato): se l'ultima viene eliminata, quella "nuova ultima"
+    // torna giocabile in automatico, senza bisogno di gestire nulla a mano.
+    boolean isSeasonLocked(int idx){ return idx != store.seasons.size()-1; }
+
     Deck findDeck(Season s, String name){
         if (s==null || name==null) return null;
         for (Deck d : s.decks) if (d.name.equals(name)) return d;
@@ -1030,6 +1146,18 @@ public class MainActivity extends Activity {
         float dateBarPillLeftMargin=10;
         ArrayList<float[]> rangePillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di rangeLabels
         String dateBarScrollKey="";
+        // Messaggio di benvenuto (lista Stagioni): scelto una sola volta per sessione app, non ad ogni
+        // ridisegno — altrimenti cambierebbe a ogni frame durante uno scroll, sembrando un glitch.
+        String cachedGreeting=null;
+        String greetingMessage(){
+            if(cachedGreeting!=null) return cachedGreeting;
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            String[][] pool = (hour<6) ? GREETING_NIGHT : (hour<12) ? GREETING_MORNING : (hour<18) ? GREETING_AFTERNOON : GREETING_EVENING;
+            String[] pair = pool[new java.util.Random().nextInt(pool.length)];
+            boolean hasName = store.trainerName!=null && !store.trainerName.isEmpty();
+            cachedGreeting = hasName ? String.format(pair[0], store.trainerName) : pair[1];
+            return cachedGreeting;
+        }
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
         ArrayList<String> dateBarDayKeys=new ArrayList<>(); ArrayList<float[]> dateBarPillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di dateBarDayKeys
         java.util.HashMap<String,Float> dayYOffsetMap=new java.util.HashMap<>(); // dayKey -> offset Y (nel contenuto della lista) dove inizia quel gruppo
@@ -1041,6 +1169,9 @@ public class MainActivity extends Activity {
         }
         int bg=Color.rgb(7,11,18), card=Color.rgb(14,24,38), white=Color.WHITE, muted=Color.rgb(165,175,190), blue=Color.rgb(55,120,255), green=Color.rgb(70,205,75), red=Color.rgb(245,70,60);
         ArrayList<Hit> seasonHits=new ArrayList<>();
+        // Posizione dei "⋮" nella lista Stagioni, calcolata durante lo stesso disegno (non un numero
+        // duplicato a mano nel tocco — stessa lezione delle pillole del grafico).
+        ArrayList<float[]> seasonKebabPos=new ArrayList<>(); // [x,y,index]
         ArrayList<Hit> matchHits=new ArrayList<>();
         // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
@@ -1050,7 +1181,7 @@ public class MainActivity extends Activity {
         // mezzo che scorre se supera l'altezza disponibile. bodyTop/bodyBottom delimitano la zona scrollabile
         // per la schermata corrente; lastContentBottom e' impostato da ciascun metodo di disegno a fine
         // contenuto, per calcolare quanto si puo' scorrere.
-        float scrollY=0, maxScrollY=0, bodyTop=0, bodyBottom=0, lastContentBottom=0, resetLinkY=0;
+        float scrollY=0, maxScrollY=0, bodyTop=0, bodyBottom=0, lastContentBottom=0;
         String scrollKey="";
         void resetScrollIfNeeded(String key){ if(!key.equals(scrollKey)){ scrollY=0; scrollKey=key; } }
         // Scroll indipendente per la lista dentro la card "Partite": la card ha un'altezza fissa (non cresce
@@ -1153,6 +1284,22 @@ public class MainActivity extends Activity {
             c.drawCircle(cx,cy-gap,r,p);
             c.drawCircle(cx,cy,r,p);
             c.drawCircle(cx,cy+gap,r,p);
+        }
+
+        // Icona "ingranaggio" per l'accesso alle Impostazioni dalla lista Stagioni: un cerchio centrale con
+        // 8 dentini attorno, disegnati come piccoli rettangoli ruotati.
+        void drawGearIcon(Canvas c, float cx, float cy, float size, int color){
+            p.setColor(color); p.setStyle(Paint.Style.FILL);
+            float rOuter=size*0.42f, rInner=size*0.22f, toothW=size*0.16f, toothH=size*0.16f;
+            for(int i=0;i<8;i++){
+                double ang = i*(Math.PI/4);
+                c.save();
+                c.rotate((float)Math.toDegrees(ang), cx, cy);
+                c.drawRoundRect(cx-toothW/2, cy-rOuter-toothH/2, cx+toothW/2, cy-rOuter+toothH/2, 1.5f,1.5f, p);
+                c.restore();
+            }
+            c.drawCircle(cx,cy,rInner+size*0.12f,p);
+            p.setColor(bg); c.drawCircle(cx,cy,rInner,p);
         }
 
         // Icona "annulla": un arco curvo con la punta orientata nel verso di percorrenza (calcolata dalla
@@ -1287,6 +1434,7 @@ public class MainActivity extends Activity {
             float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
+            if (screen == SCREEN_SETTINGS) { settingsScreen(c,w,h); c.restore(); return; }
             Season s = store.seasons.get(store.current);
             // SCREEN_SEASON_DETAIL: header e barra tab in basso restano fissi, il contenuto in mezzo scorre.
             detailHeader(c,s,w);
@@ -1303,42 +1451,91 @@ public class MainActivity extends Activity {
         }
 
         void seasonList(Canvas c, float w, float h){
-            seasonHits.clear();
+            seasonHits.clear(); seasonKebabPos.clear();
             txt(c,"Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
-            txt(c,APP_VERSION,w-24,40,11,muted,Paint.Align.RIGHT);
-            txt(c,"STAGIONI",24,74,12,muted,Paint.Align.LEFT);
-            bodyTop=84; bodyBottom=h;
+            drawGearIcon(c, w-30, 34, 20, muted);
+            txt(c,greetingMessage(),24,64,14,white,Paint.Align.LEFT);
+            bodyTop=88; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
-            float y=92;
-            for(int i=0;i<store.seasons.size();i++){
-                Season s=store.seasons.get(i);
-                boolean isCurrent = i==store.current;
-                box(c,18,y,w-18,y+110, isCurrent?Color.rgb(20,44,80):card);
-                if(isCurrent) txt(c,"ATTUALE",w-34,y+22,10,blue,Paint.Align.RIGHT);
-                txt(c,s.name,34,y+28,18,white,Paint.Align.LEFT);
-                int[] wl=countWL(s.matches); int W=wl[0],L=wl[1];
+            float y=96;
+
+            int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
+            Season current = store.seasons.get(lastIdx);
+            txt(c,"STAGIONE ATTUALE",24,y+8,12,muted,Paint.Align.LEFT);
+            y+=16;
+            box(c,18,y,w-18,y+110, Color.rgb(20,44,80));
+            // Bordo arancione distintivo, solo su questa card — era usato in passato nell'app per segnalare
+            // la sessione attiva, lo recupero qui per lo stesso concetto ("questa e' quella su cui giochi").
+            strokeBox(c,18,y,w-18,y+110, Color.rgb(255,138,61));
+            drawKebabIcon(c, w-40, y+22, muted);
+            seasonKebabPos.add(new float[]{w-40, y+22, lastIdx});
+            txt(c,current.name,34,y+28,18,white,Paint.Align.LEFT);
+            {
+                int[] wl=countWL(current.matches); int W=wl[0],L=wl[1];
                 float wr=(W+L)==0?0:100f*W/(W+L);
-                txt(c,"Punti "+s.points+"   Vittorie consecutive "+s.streak,34,y+52,12,muted,Paint.Align.LEFT);
+                txt(c,"Punti "+current.points+"   Vittorie consecutive "+current.streak,34,y+52,12,muted,Paint.Align.LEFT);
                 txtRow(c,34,y+74,12,
                     new String[]{W+"W   ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
                     new int[]{green, red, wrColor(wr,W+L)});
-                txt(c,s.matches.size()+" partite",34,y+96,11,muted,Paint.Align.LEFT);
-                seasonHits.add(new Hit(y,y+110,i));
-                y+=120;
+                txt(c,current.matches.size()+" partite",34,y+96,11,muted,Paint.Align.LEFT);
             }
-            // Link discreto, ora parte del contenuto scrollabile (prima della prossima riga fissa): azione
-            // distruttiva, quindi richiede sempre conferma esplicita (vedi resetAllData()).
-            p.setTextSize(12); float resetTw=p.measureText("Cancella tutti i dati");
-            strokeBox(c,w/2-(resetTw+32)/2,y+4,w/2+(resetTw+32)/2,y+36,Color.rgb(200,90,85));
-            txt(c,"Cancella tutti i dati",w/2,y+24,12,Color.rgb(200,90,85),Paint.Align.CENTER);
-            resetLinkY = y+24;
-            lastContentBottom = y+60;
+            seasonHits.add(new Hit(y,y+110,lastIdx));
+            y+=110;
+
+            if(lastIdx>0){
+                y+=28;
+                txt(c,"STAGIONI PASSATE",24,y,12,muted,Paint.Align.LEFT);
+                y+=18;
+                // Righe piu' compatte delle Stagioni non giocabili: ordine dalla piu' recente alla piu'
+                // vecchia (indice decrescente), niente lucchetto — la sezione stessa in cui si trovano basta
+                // a comunicare che sono "chiuse".
+                for(int i=lastIdx-1;i>=0;i--){
+                    Season s=store.seasons.get(i);
+                    box(c,18,y,w-18,y+68, card);
+                    drawKebabIcon(c, w-40, y+22, muted);
+                    seasonKebabPos.add(new float[]{w-40, y+22, i});
+                    txt(c,s.name,34,y+27,15,white,Paint.Align.LEFT);
+                    int[] wl=countWL(s.matches); int W=wl[0],L=wl[1];
+                    float wr=(W+L)==0?0:100f*W/(W+L);
+                    txtRow(c,34,y+48,11,
+                        new String[]{W+"W  ", L+"L  ", "WR "+String.format(Locale.US,"%.1f%%",wr)+"  ", s.matches.size()+" partite"},
+                        new int[]{green, red, wrColor(wr,W+L), muted});
+                    seasonHits.add(new Hit(y,y+68,i));
+                    y+=78;
+                }
+            }
+            lastContentBottom = y+20;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
             // Pulsante "Nuova Stagione" in basso a destra (floating action button, sempre fisso): sempre
             // raggiungibile col pollice, non scorre via col resto del contenuto.
             box(c,w-166,h-104,w-18,h-54,blue); txt(c,"Nuova Stagione",w-92,h-73,14,white,Paint.Align.CENTER);
+        }
+
+        void settingsScreen(Canvas c, float w, float h){
+            float centerY=28;
+            drawChevronBack(c,24,centerY,20,white);
+            txt(c,"Impostazioni",44,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
+            bodyTop=52; bodyBottom=h;
+            resetScrollIfNeeded("settings");
+            c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
+
+            box(c,18,64,w-18,144,card);
+            txt(c,"NOME ALLENATORE",34,86,12,muted,Paint.Align.LEFT);
+            String nameLabel = (store.trainerName==null || store.trainerName.isEmpty()) ? "Nessun nome impostato" : store.trainerName;
+            txt(c,nameLabel,34,centeredBaseline(115,18),18, (store.trainerName==null||store.trainerName.isEmpty())?muted:white, Paint.Align.LEFT);
+            drawEditIcon(c, w-40, 115, 18, white);
+
+            box(c,18,158,w-18,206,Color.rgb(30,16,16));
+            strokeBox(c,18,158,w-18,206,red());
+            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(182,15),15,red(),Paint.Align.CENTER);
+
+            txt(c,APP_VERSION,w/2,230,11,muted,Paint.Align.CENTER);
+
+            lastContentBottom = 250;
+            c.restore();
+            finishScroll(); drawScrollbar(c,w);
         }
 
         void detailHeader(Canvas c, Season s, float w){
@@ -1409,17 +1606,25 @@ public class MainActivity extends Activity {
                 }
             }
 
-            // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra) e Annulla. =====
-            // ===== Pulsanti W/L e badge "Annulla" flottante: prima "Annulla" era una barra intera separata
-            // (spazio verticale + orizzontale sprecato). Ora e' un cerchietto che sporge leggermente sopra
-            // la riga W/L, posizionato sopra IL PULSANTE CHE VERREBBE ANNULLATO (sopra W se l'ultima e' stata
-            // una vittoria, sopra L se una sconfitta, al centro se e' una correzione manuale) — cosi' la sua
-            // posizione da' anche un indizio visivo su cosa sta per succedere. =====
+            boolean locked = isSeasonLocked(store.current);
+            // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra), o messaggio di chiusura
+            // se la Stagione e' bloccata (solo l'ultima creata resta giocabile). Le correzioni manuali
+            // restano SEMPRE permesse anche a Stagione bloccata (servono ad allineare i conti anche a
+            // posteriori); e' solo la registrazione di nuove PARTITE a essere bloccata. Anche il badge
+            // "Annulla" resta sempre attivo per lo stesso motivo (potresti voler annullare una correzione
+            // appena aggiunta a una Stagione chiusa). =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
-            box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
-            float[] wl2 = centerLines(354,6,22,13);
-            txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
-            txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+            if(locked){
+                box(c,18,322,w-18,386,card);
+                float[] lk = centerLines(354,6,15,11);
+                txt(c,"Questa stagione è terminata.",w/2,lk[0],15,white,Paint.Align.CENTER);
+                txt(c,"Sono possibili solo correzioni manuali, non partite.",w/2,lk[1],11,muted,Paint.Align.CENTER);
+            } else {
+                box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
+                float[] wl2 = centerLines(354,6,22,13);
+                txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+                txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
+            }
 
             boolean hasHistory = !all.isEmpty();
             boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
@@ -1431,7 +1636,8 @@ public class MainActivity extends Activity {
             // non centrato sopra: cosi' non copre piu' la lettera "W"/"L", e restando "dentro" il pulsante
             // (non a cavallo) non rischia di sovrapporsi all'altro pulsante o di uscire dallo schermo.
             undoBadgeCy = 322+cornerInset;
-            if(!hasHistory || lastIsCorrection) { undoBadgeCx = w/2; }
+            // Se bloccata non ci sono pulsanti W/L sopra cui allinearsi: il badge resta sempre centrato.
+            if(!hasHistory || lastIsCorrection || locked) { undoBadgeCx = w/2; }
             else { undoBadgeCx = (all.get(all.size()-1).win ? gR : rR) - cornerInset; }
             if(hasHistory){
                 p.setColor(Color.rgb(20,32,52)); p.setStyle(Paint.Style.FILL);
@@ -1440,6 +1646,7 @@ public class MainActivity extends Activity {
                 c.drawCircle(undoBadgeCx, undoBadgeCy, badgeR, p);
                 drawUndoIcon(c, undoBadgeCx, undoBadgeCy, 14, white);
             }
+
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
             float listCardTop=400, contentHeight=300;
@@ -1459,7 +1666,7 @@ public class MainActivity extends Activity {
             // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
             // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
             // dimensione dell'icona cambiava.
-            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 19, muted);
+            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 19, muted); // sempre attiva, correzioni permesse anche a Stagione bloccata
 
             if(partiteTab==0){
                 // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
@@ -1926,8 +2133,10 @@ public class MainActivity extends Activity {
                     txt(c, formatDateOnly(ms.get(idx).timestamp), gx, gridBottom+13, 9, muted, Paint.Align.CENTER);
                 }
             }
-            // Cambio DECK: rilevato confrontando il deck di ogni partita con quello precedente (le correzioni,
-            // che non hanno un deck significativo, vengono saltate nel confronto).
+            // Cambio DECK: la linea segna la posizione dell'ULTIMA partita del deck che finisce, non la
+            // prima del deck che inizia — cosi' se il cambio capita a essere l'ultimissima partita in
+            // assoluto, la linea non finisce incollata al bordo destro del grafico (dove poteva sembrare una
+            // linea finale sempre presente), ma resta un passo a sinistra, sulla vera partita di confine.
             {
                 p.setColor(Color.rgb(120,90,190)); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1);
                 String prevDeck = null;
@@ -1935,7 +2144,7 @@ public class MainActivity extends Activity {
                     Match m = ms.get(idx);
                     if(m.unknown) continue;
                     if(prevDeck!=null && !prevDeck.equals(m.deck)){
-                        float gx = l+12+(idx+1)*(rr-l-24)/Math.max(1,n);
+                        float gx = l+12+idx*(rr-l-24)/Math.max(1,n);
                         c.drawLine(gx,gridTop,gx,gridBottom,p);
                     }
                     prevDeck = m.deck;
@@ -2097,9 +2306,18 @@ public class MainActivity extends Activity {
 
             if(screen==SCREEN_SEASON_LIST){
                 if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
-                p.setTextSize(12); float resetTw=p.measureText("Cancella tutti i dati");
-                if(contentY>=resetLinkY-16 && contentY<=resetLinkY+16 && x>=w/2-(resetTw+32)/2 && x<=w/2+(resetTw+32)/2){ resetAllData(); return true; }
+                if(Math.hypot(x-(w-30), y-34) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
+                for(float[] kb: seasonKebabPos){
+                    if(Math.hypot(x-kb[0], contentY-kb[1]) <= 22){ seasonActionsMenu((int)kb[2], w-18, kb[1]-scrollY+16); return true; }
+                }
                 for(Hit hit: seasonHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
+                return true;
+            }
+
+            if(screen==SCREEN_SETTINGS){
+                if(y<52){ if(x<60){ screen=SCREEN_SEASON_LIST; invalidate(); return true; } return true; }
+                if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
+                if(contentY>=158&&contentY<=206){ resetAllData(); return true; }
                 return true;
             }
 
@@ -2113,19 +2331,20 @@ public class MainActivity extends Activity {
             }
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
+                boolean locked = isSeasonLocked(store.current);
                 // Badge "Annulla" flottante: controllato PRIMA delle altre zone, dato che sta a cavallo tra
                 // la card "Deck Selezionato" e la riga W/L (un cerchio, non un rettangolo, quindi serve un
                 // test di distanza invece di un normale confronto di range).
                 if(Math.hypot(x-undoBadgeCx, contentY-undoBadgeCy) <= 20){ confirmUndo(); return true; }
                 if(contentY>=186&&contentY<=266&&x>=w/2-32&&x<=w/2+32){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
-                if(contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
-                if(contentY>=322&&contentY<=386){ if(x<w/2) win(); else loss(); return true; }
+                if(!locked && contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
+                if(!locked && contentY>=322&&contentY<=386){ if(x<w/2) win(); else loss(); return true; }
                 if(contentY>=400&&contentY<=442){
                     // Zone di tocco allargate (erano 22-32 unita' di larghezza, sotto lo standard consigliato
                     // di ~44dp per un tocco affidabile — spiega perche' a volte serviva ritoccare piu' volte).
                     if(x>=w/2-43 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+3 && x<w/2+43){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w/2+70 && x<w/2+110){ addManualCorrection(); return true; } // icona modifica (solo tab Lista)
+                    if(partiteTab==1 && x>=w/2+70 && x<w/2+110){ addManualCorrection(); return true; } // icona modifica (solo tab Lista) — resta attiva anche a Stagione bloccata
                 }
                 if(partiteTab==0 && contentY>=rangePillsTop && contentY<=rangePillsBottom){
                     for(int ri=0; ri<rangePillBounds.size(); ri++){
