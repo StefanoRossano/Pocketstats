@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.150";
+    static final String APP_VERSION = "v0.2.152";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -315,7 +315,7 @@ public class MainActivity extends Activity {
         store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
         if (view == null) { view = new TrackerView(this); setContentView(view); attachInsets(view); }
         screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
-        pickDeckFor(s, "Scegli il Deck", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Scegli il Deck", "Salta", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
     }
 
 
@@ -328,7 +328,7 @@ public class MainActivity extends Activity {
     // Selettore di deck condiviso: usato sia per scegliere il deck "attuale" (quello che verra' assegnato alla
     // PROSSIMA partita registrata) sia per cambiare retroattivamente il deck di una partita GIA' giocata.
     // onPicked riceve il nome del deck scelto (o appena creato) e decide lui cosa farne.
-    void pickDeckFor(Season s, String headerText, java.util.function.Consumer<String> onPicked) {
+    void pickDeckFor(Season s, String headerText, String negativeLabel, java.util.function.Consumer<String> onPicked) {
         ArrayList<String> names = new ArrayList<>();
         for (Deck d : s.decks) names.add(d.name);
         Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
@@ -346,16 +346,21 @@ public class MainActivity extends Activity {
         String[] selected = {null};
         Runnable[] refreshSelector = new Runnable[1];
         Button deckSelector = new Button(this); styleSecondaryButton(deckSelector);
-        deckSelector.setEnabled(!names.isEmpty());
+        // Se non esiste ancora nessun deck (tipicamente: appena creata una nuova Stagione), il selettore non
+        // ha alcun senso — proponeva un pulsante disabilitato con "Nessun deck esistente" che non portava a
+        // nulla. In quel caso si mostra solo "Nuovo Deck".
+        boolean hasAnyDeck = !names.isEmpty();
         Bitmap downArrow = makeDownArrowIcon(Color.WHITE, dp(12));
         BitmapDrawable downArrowDrawable = new BitmapDrawable(getResources(), downArrow);
         downArrowDrawable.setBounds(0,0,dp(12),dp(12));
         deckSelector.setCompoundDrawables(null,null,downArrowDrawable,null);
         deckSelector.setCompoundDrawablePadding(dp(8));
-        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : (names.isEmpty() ? "Nessun deck esistente" : "Tocca per scegliere un deck"));
+        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : "Tocca per scegliere un deck");
         refreshSelector[0].run();
-        LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        box.addView(deckSelector, selLp);
+        if (hasAnyDeck) {
+            LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            box.addView(deckSelector, selLp);
+        }
 
         // "Nuovo Deck": si trasforma in un campo di testo con una "✕" sovrapposta per richiuderlo, invece
         // di aprire un secondo dialog separato — piu' rapido per la creazione al volo.
@@ -380,10 +385,11 @@ public class MainActivity extends Activity {
         closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
 
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
-            .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
+            .setPositiveButton("Conferma", null).setNegativeButton(negativeLabel, null).create();
         // Selezionare un deck ESISTENTE dalla lista conferma ed esce subito (chiude anche questo dialog
         // "genitore"): prima bisognava tornare qui e premere ancora "Conferma", un passaggio in piu' inutile
-        // visto che la scelta e' gia' inequivocabile. "Annulla" invece torna qui, come gia' faceva.
+        // visto che la scelta e' gia' inequivocabile. Il pulsante negativo (Annulla/Salta) invece torna qui,
+        // come gia' faceva.
         deckSelector.setOnClickListener(v -> {
             new AlertDialog.Builder(this).setTitle("Scegli un Deck").setItems(names.toArray(new String[0]),(d2,which)->{
                 dialog.dismiss();
@@ -431,14 +437,14 @@ public class MainActivity extends Activity {
     // Cambia il deck "attuale" (quello che verra' usato per la PROSSIMA partita registrata).
     void chooseCurrentDeck() {
         Season s = store.seasons.get(store.current);
-        pickDeckFor(s, "Scegli il Deck", name -> { s.currentDeck = name; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Scegli il Deck", "Annulla", name -> { s.currentDeck = name; store.save(); view.invalidate(); });
     }
 
     // Cambia retroattivamente il deck di una partita GIA' giocata: le statistiche per deck sono sempre
     // calcolate al volo dal campo 'deck' di ogni partita, quindi si aggiornano da sole.
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
-        pickDeckFor(s, "Che deck hai usato in questa partita?", name -> { m.deck = name; store.save(); view.invalidate(); });
+        pickDeckFor(s, "Che deck hai usato in questa partita?", "Annulla", name -> { m.deck = name; store.save(); view.invalidate(); });
     }
 
     void win() { play(true); }
@@ -1286,6 +1292,13 @@ public class MainActivity extends Activity {
             c.drawCircle(cx,cy+gap,r,p);
         }
 
+        // Icona di aiuto ("?" dentro un cerchio) per riproporre la guida introduttiva dalla lista Stagioni.
+        void drawHelpIcon(Canvas c, float cx, float cy, float size, int color){
+            p.setColor(color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.6f);
+            c.drawCircle(cx,cy,size*0.42f,p);
+            txt(c,"?",cx,centeredBaseline(cy,size*0.55f),size*0.55f,color,Paint.Align.CENTER);
+        }
+
         // Icona "ingranaggio" per l'accesso alle Impostazioni dalla lista Stagioni: un cerchio centrale con
         // 8 dentini attorno, disegnati come piccoli rettangoli ruotati.
         void drawGearIcon(Canvas c, float cx, float cy, float size, int color){
@@ -1471,11 +1484,13 @@ public class MainActivity extends Activity {
 
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear(); seasonKebabPos.clear();
-            drawGearIcon(c, w-30, 32, 20, muted);
+            drawGearIcon(c, w-30, 56, 20, muted);
+            drawHelpIcon(c, w-64, 56, 20, muted);
             // Niente piu' titolo "Pocket Tracker": il messaggio di benvenuto prende il suo posto e la sua
             // dimensione di font (20), con capo automatico se troppo lungo per una riga, centrato
-            // verticalmente in una fascia dedicata piu' in basso rispetto a dove stava il vecchio titolo.
-            float headerZoneTop=20, headerZoneBottom=104, headerCenterY=(headerZoneTop+headerZoneBottom)/2;
+            // verticalmente in una fascia dedicata — spostata piu' in basso (+24 su tutto, a cascata, rispetto
+            // alla versione precedente).
+            float headerZoneTop=44, headerZoneBottom=128, headerCenterY=(headerZoneTop+headerZoneBottom)/2;
             String[] greetLines = wrapText(greetingMessage(), w-64, 20);
             if (greetLines.length==1){
                 txt(c,greetLines[0],w/2,centeredBaseline(headerCenterY,20),20,white,Paint.Align.CENTER);
@@ -1484,10 +1499,10 @@ public class MainActivity extends Activity {
                 txt(c,greetLines[0],w/2,gl[0],20,white,Paint.Align.CENTER);
                 txt(c,greetLines[1],w/2,gl[1],20,white,Paint.Align.CENTER);
             }
-            bodyTop=114; bodyBottom=h;
+            bodyTop=138; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
-            float y=122;
+            float y=146;
 
             int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
             Season current = store.seasons.get(lastIdx);
@@ -1645,9 +1660,7 @@ public class MainActivity extends Activity {
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
             if(locked){
                 box(c,18,322,w-18,386,card);
-                float[] lk = centerLines(354,6,15,11);
-                txt(c,"Questa stagione è terminata.",w/2,lk[0],15,white,Paint.Align.CENTER);
-                txt(c,"Sono possibili solo correzioni manuali, non partite.",w/2,lk[1],11,muted,Paint.Align.CENTER);
+                txt(c,"Questa stagione è terminata.",w/2,centeredBaseline(354,15),15,white,Paint.Align.CENTER);
             } else {
                 box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
                 float[] wl2 = centerLines(354,6,22,13);
@@ -1655,7 +1668,9 @@ public class MainActivity extends Activity {
                 txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             }
 
-            boolean hasHistory = !all.isEmpty();
+            // Il badge "Annulla" non c'e' piu' su una Stagione bloccata: ci ho ripensato, se serve correggere
+            // qualcosa su una Stagione terminata si usano correzioni manuali, non l'annullamento.
+            boolean hasHistory = !all.isEmpty() && !locked;
             boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
             // Inset=8 verificato esplicitamente: sopra "L" il bordo destro del badge arriva a w-12, la
             // scrollbar principale della pagina inizia a w-7 → 5 unita' di margine, non la tocca. Con
@@ -1665,8 +1680,7 @@ public class MainActivity extends Activity {
             // non centrato sopra: cosi' non copre piu' la lettera "W"/"L", e restando "dentro" il pulsante
             // (non a cavallo) non rischia di sovrapporsi all'altro pulsante o di uscire dallo schermo.
             undoBadgeCy = 322+cornerInset;
-            // Se bloccata non ci sono pulsanti W/L sopra cui allinearsi: il badge resta sempre centrato.
-            if(!hasHistory || lastIsCorrection || locked) { undoBadgeCx = w/2; }
+            if(!hasHistory || lastIsCorrection) { undoBadgeCx = w/2; }
             else { undoBadgeCx = (all.get(all.size()-1).win ? gR : rR) - cornerInset; }
             if(hasHistory){
                 p.setColor(Color.rgb(20,32,52)); p.setStyle(Paint.Style.FILL);
@@ -2335,7 +2349,8 @@ public class MainActivity extends Activity {
 
             if(screen==SCREEN_SEASON_LIST){
                 if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
-                if(Math.hypot(x-(w-30), y-32) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
+                if(Math.hypot(x-(w-30), y-56) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
+                if(Math.hypot(x-(w-64), y-56) <= 24){ showWelcomeGuide(); return true; }
                 for(float[] kb: seasonKebabPos){
                     if(Math.hypot(x-kb[0], contentY-kb[1]) <= 22){ seasonActionsMenu((int)kb[2], w-18, kb[1]-scrollY+16); return true; }
                 }
@@ -2364,7 +2379,7 @@ public class MainActivity extends Activity {
                 // Badge "Annulla" flottante: controllato PRIMA delle altre zone, dato che sta a cavallo tra
                 // la card "Deck Selezionato" e la riga W/L (un cerchio, non un rettangolo, quindi serve un
                 // test di distanza invece di un normale confronto di range).
-                if(Math.hypot(x-undoBadgeCx, contentY-undoBadgeCy) <= 20){ confirmUndo(); return true; }
+                if(!locked && Math.hypot(x-undoBadgeCx, contentY-undoBadgeCy) <= 20){ confirmUndo(); return true; }
                 if(contentY>=186&&contentY<=266&&x>=w/2-32&&x<=w/2+32){ Deck curDeckObj=findDeck(s,s.currentDeck); if(curDeckObj!=null && !curDeckObj.images.isEmpty()){ showImageGallery(curDeckObj,0); return true; } }
                 if(!locked && contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
                 if(!locked && contentY>=322&&contentY<=386){ if(x<w/2) win(); else loss(); return true; }
