@@ -20,6 +20,9 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
+    // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
+    // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
+    static final String APP_VERSION = "v0.2.136";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1022,13 +1025,12 @@ public class MainActivity extends Activity {
         float dateBarPillLeftMargin=10;
         ArrayList<float[]> rangePillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di rangeLabels
         String dateBarScrollKey="";
-        String selectedDateBarDay=null; // dayKey della pillola scelta col tap; null = nessun tap ancora, evidenzia "oggi"
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
         ArrayList<String> dateBarDayKeys=new ArrayList<>(); ArrayList<float[]> dateBarPillBounds=new ArrayList<>(); // [x,width] logici, stesso ordine di dateBarDayKeys
         java.util.HashMap<String,Float> dayYOffsetMap=new java.util.HashMap<>(); // dayKey -> offset Y (nel contenuto della lista) dove inizia quel gruppo
         void resetDateBarIfNeeded(String key, float totalW, float visibleW){
             dateBarMaxScrollX = Math.max(0, totalW-visibleW);
-            if(!key.equals(dateBarScrollKey)){ dateBarScrollX = dateBarMaxScrollX; dateBarScrollKey = key; selectedDateBarDay = null; } // di default: mostra il piu' recente (a destra)
+            if(!key.equals(dateBarScrollKey)){ dateBarScrollX = dateBarMaxScrollX; dateBarScrollKey = key; } // di default: mostra il piu' recente (a destra)
             if(dateBarScrollX>dateBarMaxScrollX) dateBarScrollX=dateBarMaxScrollX;
             if(dateBarScrollX<0) dateBarScrollX=0;
         }
@@ -1298,6 +1300,7 @@ public class MainActivity extends Activity {
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear();
             txt(c,"Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
+            txt(c,APP_VERSION,w-24,40,11,muted,Paint.Align.RIGHT);
             txt(c,"STAGIONI",24,74,12,muted,Paint.Align.LEFT);
             bodyTop=84; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
@@ -1428,13 +1431,13 @@ public class MainActivity extends Activity {
             // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header, l'icona
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
-            float tabIconY = listCardTop+26;
+            float tabIconY = listCardTop+21; // vero centro della fascia (42 di altezza): prima era +26, 5 unita' piu' in basso del centro reale
             drawMiniChartTabIcon(c, w/2-23, tabIconY, 22, partiteTab==0?blue:muted);
             drawListTabIcon(c, w/2+23, tabIconY, 22, partiteTab==1?blue:muted);
             // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
             // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
             // dimensione dell'icona cambiava.
-            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 22, muted);
+            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 19, muted);
 
             if(partiteTab==0){
                 // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
@@ -1507,10 +1510,46 @@ public class MainActivity extends Activity {
                 // ===== Barra "salta al giorno": una pillola per ogni data distinta con almeno una voce,
                 // ordine ASCENDENTE (piu' vecchia a sinistra, oggi a destra) — di default scrollata tutta a
                 // destra, cosi' "oggi" e' subito visibile senza dover scorrere. Scroll orizzontale proprio,
-                // indipendente da quello verticale della lista sotto. =====
+                // indipendente da quello verticale della lista sotto.
+                //
+                // La pillola evidenziata NON e' piu' "quella toccata per ultima": segue lo scroll verticale
+                // della lista in tempo reale (se scorri manualmente su una partita di un altro giorno, la
+                // pillola di quel giorno si accende da sola). Toccare una pillola resta un modo per saltare
+                // subito a quel giorno — dopodiche' e' di nuovo lo scroll a decidere quale sia evidenziata. =====
                 float pillBandH=34, pillPadH=22, pillPadX=11, pillGap=6, pillLeftMargin=dateBarPillLeftMargin, pillRightMargin=10;
-                float bandBottomMargin=8; // margine visibile tra la fascia e la lista sotto (prima assente, si sovrapponevano)
+                float bandBottomMargin=8; // margine visibile tra la fascia e la lista sotto
                 float dateBarH = pillBandH + bandBottomMargin;
+                float listTop = contentTop+dateBarH, listHeight = contentHeight-dateBarH;
+
+                // Calcolo di altezze/offset per giorno PRIMA di disegnare la barra (serve a sapere, dato lo
+                // scroll attuale, quale giorno e' "in cima" alla vista — e quindi quale pillola accendere).
+                float headerH2=headerH, matchRowH2=matchRowH, corrRowH2=corrRowH, groupGap2=groupGap; // copie per la lambda (headerH ecc. sono gia' effettivamente final, ma teniamo nomi distinti per chiarezza)
+                java.util.function.IntToDoubleFunction rowHeightAt = idx -> all.get(idx).unknown ? corrRowH2 : matchRowH2;
+                dayYOffsetMap = new java.util.HashMap<>();
+                float totalRowsHeight = 0;
+                {
+                    int idx=all.size()-1;
+                    while(idx>=0){
+                        String dk=dayKey(all.get(idx).timestamp);
+                        dayYOffsetMap.put(dk, totalRowsHeight); // offset ALL'INIZIO di questo gruppo
+                        int j=idx; float groupRowsH=0;
+                        while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)){ groupRowsH+=(float)rowHeightAt.applyAsDouble(j); j--; }
+                        totalRowsHeight += headerH2 + groupRowsH + groupGap2;
+                        idx=j;
+                    }
+                }
+                resetMatchInnerScrollIfNeeded("matchinner:"+store.current);
+                matchInnerMaxScrollY = Math.max(0, totalRowsHeight-listHeight);
+                if(matchInnerScrollY>matchInnerMaxScrollY) matchInnerScrollY=matchInnerMaxScrollY;
+                if(matchInnerScrollY<0) matchInnerScrollY=0;
+                matchInnerListTop=listTop; matchInnerListBottom=listTop+listHeight;
+
+                String mostRecentDayKey = all.isEmpty() ? null : dayKey(all.get(all.size()-1).timestamp);
+                // Giorno "in cima" alla vista attuale: quello con l'offset piu' grande che sia ancora <= allo
+                // scroll corrente (lo stesso principio di una qualunque lista con intestazioni sticky).
+                String currentVisibleDay = mostRecentDayKey;
+                { float bestOffset=-1; for(java.util.Map.Entry<String,Float> en: dayYOffsetMap.entrySet()){ if(en.getValue()<=matchInnerScrollY+0.5f && en.getValue()>bestOffset){ bestOffset=en.getValue(); currentVisibleDay=en.getKey(); } } }
+
                 ArrayList<String> distinctDays = new ArrayList<>();
                 { String prevDk=null; for(int idx=0; idx<all.size(); idx++){ String dk=dayKey(all.get(idx).timestamp); if(!dk.equals(prevDk)){ distinctDays.add(dk); prevDk=dk; } } }
                 dateBarDayKeys = distinctDays; dateBarPillBounds = new ArrayList<>();
@@ -1527,8 +1566,6 @@ public class MainActivity extends Activity {
                 float bandTop = contentTop, bandBottom = contentTop+pillBandH;
                 dateBarTop = bandTop + (pillBandH-pillPadH)/2; dateBarBottom = dateBarTop+pillPadH;
 
-                String mostRecentDayKey = all.isEmpty() ? null : dayKey(all.get(all.size()-1).timestamp);
-                String highlightedDay = selectedDateBarDay!=null ? selectedDateBarDay : mostRecentDayKey;
                 // Sfondo distinto per l'intera riga della barra date (altrimenti si confondeva col resto):
                 // un rettangolo pieno, niente angoli arrotondati — non e' la prima ne' l'ultima sezione
                 // della card, sta in mezzo tra le icone tab e la lista. Occupa ESATTAMENTE [bandTop,
@@ -1540,7 +1577,7 @@ public class MainActivity extends Activity {
                 for(int di=0; di<distinctDays.size(); di++){
                     String dk = distinctDays.get(di);
                     float[] b = dateBarPillBounds.get(di);
-                    boolean isSelected = dk.equals(highlightedDay);
+                    boolean isSelected = dk.equals(currentVisibleDay);
                     String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
                     box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isSelected?blue:Color.rgb(10,18,30));
                     txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isSelected?Color.WHITE:muted, Paint.Align.CENTER);
@@ -1561,29 +1598,6 @@ public class MainActivity extends Activity {
                     c.drawRect(18,dateBarTop,42,dateBarTop+pillPadH,p);
                     p.setShader(null);
                 }
-
-                float listTop = contentTop+dateBarH, listHeight = contentHeight-dateBarH;
-
-                float finalCorrRowH=corrRowH, finalMatchRowH=matchRowH;
-                java.util.function.IntToDoubleFunction rowHeightAt = idx -> all.get(idx).unknown ? finalCorrRowH : finalMatchRowH;
-                dayYOffsetMap = new java.util.HashMap<>();
-                float totalRowsHeight = 0;
-                {
-                    int idx=all.size()-1;
-                    while(idx>=0){
-                        String dk=dayKey(all.get(idx).timestamp);
-                        dayYOffsetMap.put(dk, totalRowsHeight); // offset ALL'INIZIO di questo gruppo
-                        int j=idx; float groupRowsH=0;
-                        while(j>=0 && dayKey(all.get(j).timestamp).equals(dk)){ groupRowsH+=(float)rowHeightAt.applyAsDouble(j); j--; }
-                        totalRowsHeight += headerH + groupRowsH + groupGap;
-                        idx=j;
-                    }
-                }
-                resetMatchInnerScrollIfNeeded("matchinner:"+store.current);
-                matchInnerMaxScrollY = Math.max(0, totalRowsHeight-listHeight);
-                if(matchInnerScrollY>matchInnerMaxScrollY) matchInnerScrollY=matchInnerMaxScrollY;
-                if(matchInnerScrollY<0) matchInnerScrollY=0;
-                matchInnerListTop=listTop; matchInnerListBottom=listTop+listHeight;
 
                 c.save(); c.clipRect(18,listTop,w-18,listTop+listHeight); c.translate(0,-matchInnerScrollY);
                 float y=listTop+4;
@@ -2103,7 +2117,8 @@ public class MainActivity extends Activity {
                             float[] b = dateBarPillBounds.get(di);
                             if(tapXInBar>=b[0] && tapXInBar<=b[0]+b[1]){
                                 String dk = dateBarDayKeys.get(di);
-                                selectedDateBarDay = dk; // evidenzia la pillola toccata, non sempre l'ultima
+                                // "Jump" al giorno: la pillola evidenziata seguira' automaticamente lo scroll
+                                // che sta per succedere, non serve piu' impostarla qui a mano.
                                 Float off = dayYOffsetMap.get(dk);
                                 if(off!=null){ matchInnerScrollY = Math.max(0, Math.min(off, matchInnerMaxScrollY)); invalidate(); }
                                 return true;
