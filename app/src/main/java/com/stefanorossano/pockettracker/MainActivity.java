@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.152";
+    static final String APP_VERSION = "v0.2.154";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -956,6 +956,25 @@ public class MainActivity extends Activity {
 
     // Icona cestino disegnata su un piccolo Bitmap (per usarla in ImageView nei dialog nativi, dove non
     // possiamo disegnare direttamente su Canvas come nella UI principale dell'app).
+    // Icona "condividi": il classico glifo a 3 nodi collegati (un pallino a sinistra, due a destra, uniti
+    // da due linee), usato per condividere l'immagine corrente della galleria (es. su WhatsApp).
+    Bitmap makeShareIcon(int color, int sizePx){
+        Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas cc = new Canvas(bmp);
+        Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pp.setColor(color); pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(sizePx*0.09f); pp.setStrokeCap(Paint.Cap.ROUND);
+        float s=sizePx;
+        float leftX=s*0.22f, leftY=s*0.5f, topX=s*0.78f, topY=s*0.22f, botX=s*0.78f, botY=s*0.78f;
+        cc.drawLine(leftX,leftY,topX,topY,pp);
+        cc.drawLine(leftX,leftY,botX,botY,pp);
+        pp.setStyle(Paint.Style.FILL);
+        float r=s*0.13f;
+        cc.drawCircle(leftX,leftY,r,pp);
+        cc.drawCircle(topX,topY,r,pp);
+        cc.drawCircle(botX,botY,r,pp);
+        return bmp;
+    }
+
     Bitmap makeTrashIcon(int color, int sizePx){
         Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
         Canvas cc = new Canvas(bmp);
@@ -1086,11 +1105,15 @@ public class MainActivity extends Activity {
         bottomRow.setGravity(Gravity.CENTER_VERTICAL);
         bottomRow.setPadding(dp(18),dp(8),dp(14),dp(12));
         TextView counter = new TextView(this); counter.setTextColor(Color.WHITE); counter.setTextSize(13);
-        ImageView deleteIcon = new ImageView(this);
+        ImageView shareIcon = new ImageView(this);
         int iconSizePx = dp(20);
+        shareIcon.setImageBitmap(makeShareIcon(Color.WHITE, iconSizePx));
+        shareIcon.setPadding(dp(10),dp(6),dp(10),dp(6));
+        ImageView deleteIcon = new ImageView(this);
         deleteIcon.setImageBitmap(makeTrashIcon(red(), iconSizePx));
         deleteIcon.setPadding(dp(10),dp(6),dp(10),dp(6));
         bottomRow.addView(counter, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        bottomRow.addView(shareIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         bottomRow.addView(deleteIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(bottomRow);
 
@@ -1114,6 +1137,20 @@ public class MainActivity extends Activity {
         nextBtn.setOnClickListener(v -> { if(idx[0]<d.images.size()-1){ idx[0]++; load[0].run(); } });
         closeBtn.setOnClickListener(v -> dialog.dismiss());
         addBtn.setOnClickListener(v -> { dialog.dismiss(); pickImageFor(d); });
+        // Condivisione diretta (es. su WhatsApp): l'URI e' gia' un content:// restituito dal selettore di
+        // sistema, quindi non serve un FileProvider ne' alcun permesso runtime — l'app che riceve l'Intent
+        // ottiene un accesso di lettura temporaneo grazie al flag sotto, gestito dal sistema stesso.
+        shareIcon.setOnClickListener(v -> {
+            try {
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("image/*");
+                shareIntent.putExtra(Intent.EXTRA_STREAM, Uri.parse(d.images.get(idx[0])));
+                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(shareIntent, "Condividi immagine"));
+            } catch (Exception e) {
+                Toast.makeText(this,"Impossibile condividere questa immagine.",Toast.LENGTH_SHORT).show();
+            }
+        });
         deleteIcon.setOnClickListener(v -> {
             d.images.remove(idx[0]); store.save();
             if (d.images.isEmpty()) { dialog.dismiss(); view.invalidate(); return; }
@@ -1294,7 +1331,7 @@ public class MainActivity extends Activity {
 
         // Icona di aiuto ("?" dentro un cerchio) per riproporre la guida introduttiva dalla lista Stagioni.
         void drawHelpIcon(Canvas c, float cx, float cy, float size, int color){
-            p.setColor(color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.6f);
+            p.setColor(color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2.2f);
             c.drawCircle(cx,cy,size*0.42f,p);
             txt(c,"?",cx,centeredBaseline(cy,size*0.55f),size*0.55f,color,Paint.Align.CENTER);
         }
@@ -1490,7 +1527,7 @@ public class MainActivity extends Activity {
             // dimensione di font (20), con capo automatico se troppo lungo per una riga, centrato
             // verticalmente in una fascia dedicata — spostata piu' in basso (+24 su tutto, a cascata, rispetto
             // alla versione precedente).
-            float headerZoneTop=44, headerZoneBottom=128, headerCenterY=(headerZoneTop+headerZoneBottom)/2;
+            float headerZoneTop=76, headerZoneBottom=160, headerCenterY=(headerZoneTop+headerZoneBottom)/2;
             String[] greetLines = wrapText(greetingMessage(), w-64, 20);
             if (greetLines.length==1){
                 txt(c,greetLines[0],w/2,centeredBaseline(headerCenterY,20),20,white,Paint.Align.CENTER);
@@ -1499,10 +1536,10 @@ public class MainActivity extends Activity {
                 txt(c,greetLines[0],w/2,gl[0],20,white,Paint.Align.CENTER);
                 txt(c,greetLines[1],w/2,gl[1],20,white,Paint.Align.CENTER);
             }
-            bodyTop=138; bodyBottom=h;
+            bodyTop=170; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
-            float y=146;
+            float y=178;
 
             int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
             Season current = store.seasons.get(lastIdx);
