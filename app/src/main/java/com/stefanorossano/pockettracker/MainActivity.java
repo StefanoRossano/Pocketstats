@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.149";
+    static final String APP_VERSION = "v0.2.150";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -91,9 +91,9 @@ public class MainActivity extends Activity {
         if (store != null) store.save();
     }
 
-    /** Naviga di un livello indietro nella gerarchia Lista Season -> Dettaglio. */
+    /** Naviga di un livello indietro nella gerarchia Lista Season -> Dettaglio/Impostazioni. */
     void goBack() {
-        if (screen == SCREEN_SEASON_DETAIL) { screen = SCREEN_SEASON_LIST; }
+        if (screen == SCREEN_SEASON_DETAIL || screen == SCREEN_SETTINGS) { screen = SCREEN_SEASON_LIST; }
         view.invalidate();
     }
 
@@ -1290,16 +1290,18 @@ public class MainActivity extends Activity {
         // 8 dentini attorno, disegnati come piccoli rettangoli ruotati.
         void drawGearIcon(Canvas c, float cx, float cy, float size, int color){
             p.setColor(color); p.setStyle(Paint.Style.FILL);
-            float rOuter=size*0.42f, rInner=size*0.22f, toothW=size*0.16f, toothH=size*0.16f;
-            for(int i=0;i<8;i++){
-                double ang = i*(Math.PI/4);
+            // Dentini RETTANGOLARI ad angoli vivi (drawRect, non drawRoundRect): prima l'arrotondamento era
+            // quasi meta' della loro stessa larghezza, li faceva sembrare palline invece che rettangolini.
+            int teeth=8;
+            float ringR=size*0.30f, toothLen=size*0.16f, toothW=size*0.16f;
+            for(int i=0;i<teeth;i++){
                 c.save();
-                c.rotate((float)Math.toDegrees(ang), cx, cy);
-                c.drawRoundRect(cx-toothW/2, cy-rOuter-toothH/2, cx+toothW/2, cy-rOuter+toothH/2, 1.5f,1.5f, p);
+                c.rotate(i*(360f/teeth), cx, cy);
+                c.drawRect(cx-toothW/2, cy-ringR-toothLen, cx+toothW/2, cy-ringR+1, p);
                 c.restore();
             }
-            c.drawCircle(cx,cy,rInner+size*0.12f,p);
-            p.setColor(bg); c.drawCircle(cx,cy,rInner,p);
+            c.drawCircle(cx,cy,ringR,p);
+            p.setColor(bg); c.drawCircle(cx,cy,ringR*0.5f,p);
         }
 
         // Icona "annulla": un arco curvo con la punta orientata nel verso di percorrenza (calcolata dalla
@@ -1401,6 +1403,23 @@ public class MainActivity extends Activity {
             Color.rgb(190,110,130), // rosa tenue
         };
 
+        // Spezza un testo su 2 righe se non entra nella larghezza data, scegliendo lo spazio piu' vicino al
+        // centro come punto di rottura (mai a meta' di una parola). Se entra su una riga, o non c'e' nessuno
+        // spazio utile, lo restituisce invariato.
+        String[] wrapText(String text, float maxWidth, float textSize){
+            p.setTextSize(textSize);
+            if (p.measureText(text) <= maxWidth) return new String[]{text};
+            int mid = text.length()/2, bestSpace=-1, bestDist=Integer.MAX_VALUE;
+            for (int i=0;i<text.length();i++){
+                if (text.charAt(i)==' '){
+                    int dist = Math.abs(i-mid);
+                    if (dist<bestDist){ bestDist=dist; bestSpace=i; }
+                }
+            }
+            if (bestSpace==-1) return new String[]{text};
+            return new String[]{text.substring(0,bestSpace), text.substring(bestSpace+1)};
+        }
+
         float rowWidth(String[] parts,float size){ p.setTextSize(size); float w=0; for(String s:parts) w+=p.measureText(s); return w; }
         // Riga di testo composta da segmenti con colori diversi (es. "7W" verde + "3L" rosso + "70%" verde), allineata a sinistra.
         float txtRow(Canvas c,float x,float y,float size,String[] parts,int[] cols){
@@ -1452,13 +1471,23 @@ public class MainActivity extends Activity {
 
         void seasonList(Canvas c, float w, float h){
             seasonHits.clear(); seasonKebabPos.clear();
-            txt(c,"Pocket Tracker",24,40,20,white,Paint.Align.LEFT);
-            drawGearIcon(c, w-30, 34, 20, muted);
-            txt(c,greetingMessage(),24,64,14,white,Paint.Align.LEFT);
-            bodyTop=88; bodyBottom=h;
+            drawGearIcon(c, w-30, 32, 20, muted);
+            // Niente piu' titolo "Pocket Tracker": il messaggio di benvenuto prende il suo posto e la sua
+            // dimensione di font (20), con capo automatico se troppo lungo per una riga, centrato
+            // verticalmente in una fascia dedicata piu' in basso rispetto a dove stava il vecchio titolo.
+            float headerZoneTop=20, headerZoneBottom=104, headerCenterY=(headerZoneTop+headerZoneBottom)/2;
+            String[] greetLines = wrapText(greetingMessage(), w-64, 20);
+            if (greetLines.length==1){
+                txt(c,greetLines[0],w/2,centeredBaseline(headerCenterY,20),20,white,Paint.Align.CENTER);
+            } else {
+                float[] gl = centerLines(headerCenterY,6,20,20);
+                txt(c,greetLines[0],w/2,gl[0],20,white,Paint.Align.CENTER);
+                txt(c,greetLines[1],w/2,gl[1],20,white,Paint.Align.CENTER);
+            }
+            bodyTop=114; bodyBottom=h;
             resetScrollIfNeeded("seasonlist");
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
-            float y=96;
+            float y=122;
 
             int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
             Season current = store.seasons.get(lastIdx);
@@ -2306,7 +2335,7 @@ public class MainActivity extends Activity {
 
             if(screen==SCREEN_SEASON_LIST){
                 if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
-                if(Math.hypot(x-(w-30), y-34) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
+                if(Math.hypot(x-(w-30), y-32) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
                 for(float[] kb: seasonKebabPos){
                     if(Math.hypot(x-kb[0], contentY-kb[1]) <= 22){ seasonActionsMenu((int)kb[2], w-18, kb[1]-scrollY+16); return true; }
                 }
