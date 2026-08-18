@@ -1513,18 +1513,10 @@ public class MainActivity extends Activity {
                 float dateBarH = pillBandH + bandBottomMargin;
                 ArrayList<String> distinctDays = new ArrayList<>();
                 { String prevDk=null; for(int idx=0; idx<all.size(); idx++){ String dk=dayKey(all.get(idx).timestamp); if(!dk.equals(prevDk)){ distinctDays.add(dk); prevDk=dk; } } }
-                // === DEBUG TEMPORANEO: 10 pillole finte per testare scroll/gradiente senza dover popolare
-                // davvero 10 giorni di dati. RIMUOVERE questo blocco prima del rebuild finale. ===
-                boolean DEBUG_FAKE_PILLS = true;
-                if (DEBUG_FAKE_PILLS) {
-                    ArrayList<String> fake = new ArrayList<>();
-                    for (int di=1; di<=10; di++) fake.add("TEST"+String.format("%02d",di));
-                    distinctDays.addAll(0, fake);
-                }
                 dateBarDayKeys = distinctDays; dateBarPillBounds = new ArrayList<>();
                 float pillCursor=0;
                 for(String dk: distinctDays){
-                    String label = dk.equals("?") ? "?" : dk.startsWith("TEST") ? ("T"+dk.substring(4)) : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
                     p.setTextSize(11); float tw=p.measureText(label); float pw=tw+pillPadX*2;
                     dateBarPillBounds.add(new float[]{pillCursor,pw});
                     pillCursor += pw+pillGap;
@@ -1549,7 +1541,7 @@ public class MainActivity extends Activity {
                     String dk = distinctDays.get(di);
                     float[] b = dateBarPillBounds.get(di);
                     boolean isSelected = dk.equals(highlightedDay);
-                    String label = dk.equals("?") ? "?" : dk.startsWith("TEST") ? ("T"+dk.substring(4)) : dk.substring(6,8)+"/"+dk.substring(4,6);
+                    String label = dk.equals("?") ? "?" : dk.substring(6,8)+"/"+dk.substring(4,6);
                     box(c, b[0], dateBarTop, b[0]+b[1], dateBarTop+pillPadH, isSelected?blue:Color.rgb(10,18,30));
                     txt(c, label, b[0]+b[1]/2, centeredBaseline(dateBarTop+pillPadH/2f,11), 11, isSelected?Color.WHITE:muted, Paint.Align.CENTER);
                 }
