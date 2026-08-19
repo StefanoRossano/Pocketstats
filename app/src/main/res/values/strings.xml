@@ -144,6 +144,18 @@
     <string name="dialog_welcome_title_named">Welcome to Pocket Tracker, %1$s!</string>
     <string name="dialog_welcome_guide">Here\'s how it works, in short:\n\n- Create a Season to start tracking your scores.\n- In the Play tab, choose your deck and record every match with W or L: points and streak update automatically.\n- The Deck tab keeps stats for each deck, along with the Lists (screenshots) you upload.\n- The Stats tab shows you the overall picture of the Season.\n- Played some matches without logging them? Use "%1$s" to catch your totals up.\n\nHave fun, and may your win streaks be long!</string>
     <string name="label_season_default_name">Season %1$d</string>
+    <string name="label_range_1_day">1 day</string>
+    <string name="label_range_3_days">3 days</string>
+    <string name="label_range_all">All</string>
+    <string name="tab_play">Play</string>
+    <string name="tab_deck">Deck</string>
+    <string name="tab_stats">Stats</string>
+    <string name="dialog_select_deck_for_match">Select a different deck (match n.%1$d)</string>
+    <string name="label_matches_count">%1$d matches</string>
+    <string name="label_points_count">%1$d points</string>
+    <string name="label_points_count_signed">%1$s points</string>
+    <string name="label_win_streak_abbr">WS   </string>
+    <string name="label_max_win_streak">Max win streak </string>
     <!-- Fetta 4: messaggi motivazionali e di benvenuto -->
 
     <!-- Stili uniti qui dentro (prima in styles.xml separato): un unico file nella cartella values,
