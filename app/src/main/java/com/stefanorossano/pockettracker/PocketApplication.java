@@ -7,8 +7,9 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 // Gestore di crash TEMPORANEO per diagnosticare il crash all'avvio della build release: scrive lo stack
-// trace completo su file PRIMA che qualsiasi Activity (quindi anche prima di MainActivity.onCreate) venga
-// creata — questo e' il punto piu' precoce disponibile in un'app Android normale. Da rimuovere una volta
+// trace completo su un file nella cartella "esterna" specifica dell'app (accessibile da qualsiasi file
+// manager, senza permessi speciali) — questo e' il punto piu' precoce disponibile in un'app Android
+// normale, e non richiede di riaprire l'app che crasha per leggere l'errore. Da rimuovere una volta
 // trovata e risolta la causa del crash.
 public class PocketApplication extends Application {
     @Override public void onCreate() {
@@ -18,13 +19,18 @@ public class PocketApplication extends Application {
             try {
                 StringWriter sw = new StringWriter();
                 ex.printStackTrace(new PrintWriter(sw));
-                File f = new File(getFilesDir(), "crash_log.txt");
-                FileWriter fw = new FileWriter(f);
+                // Cartella esterna specifica dell'app: es. /storage/emulated/0/Android/data/
+                // com.stefanorossano.pockettracker/files/ — leggibile da qualsiasi file manager,
+                // senza bisogno di permessi di storage speciali su Android moderno.
+                File dir = getExternalFilesDir(null);
+                if (dir == null) dir = getFilesDir(); // fallback se lo storage esterno non e' disponibile
+                File f = new File(dir, "crash_log.txt");
+                FileWriter fw = new FileWriter(f, true); // append: se crasha piu' volte, si accumulano in ordine
+                fw.write("=== Crash " + new java.util.Date() + " ===\n");
                 fw.write(sw.toString());
+                fw.write("\n\n");
                 fw.close();
             } catch (Exception ignored) {}
-            // Richiama comunque il comportamento di default (mostra "l'app si e' arrestata" e chiude il
-            // processo) invece di forzare noi System.exit: piu' vicino al comportamento normale del sistema.
             if (defaultHandler != null) defaultHandler.uncaughtException(thread, ex);
         });
     }
