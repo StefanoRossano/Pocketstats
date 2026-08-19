@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.199";
+    static final String APP_VERSION = "v0.3.2";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1042,9 +1042,16 @@ public class MainActivity extends Activity {
     // getResources().getStringArray() restituisce un array NUOVO ad ogni chiamata: se lo richiamassimo
     // ogni volta, ogni pool sembrerebbe "nuovo" e la logica anti-ripetizione si romperebbe. Caricati
     // quindi una sola volta (pigro, alla prima vittoria/sconfitta registrata) e mantenuti in cache.
-    String[] winMsgsFirst = {"Test1","Test2"}, winMsgsLow = {"Test1","Test2"}, winMsgsHigh = {"Test1","Test2"},
-        lossMsgsLow = {"Test1","Test2"}, lossMsgsHigh = {"Test1","Test2"}, dayMsgsHot = {"Test1","Test2"};
-    void ensureMessagePools(){ /* TEST DIAGNOSTICO: array hardcoded, nessuna risorsa coinvolta */ }
+    String[] winMsgsFirst, winMsgsLow, winMsgsHigh, lossMsgsLow, lossMsgsHigh, dayMsgsHot;
+    void ensureMessagePools(){
+        if (winMsgsFirst != null) return;
+        winMsgsFirst = new String[]{getString(R.string.msgs_win_first_0), getString(R.string.msgs_win_first_1), getString(R.string.msgs_win_first_2), getString(R.string.msgs_win_first_3), getString(R.string.msgs_win_first_4)};
+        winMsgsLow = new String[]{getString(R.string.msgs_win_low_0), getString(R.string.msgs_win_low_1), getString(R.string.msgs_win_low_2), getString(R.string.msgs_win_low_3), getString(R.string.msgs_win_low_4)};
+        winMsgsHigh = new String[]{getString(R.string.msgs_win_high_0), getString(R.string.msgs_win_high_1), getString(R.string.msgs_win_high_2), getString(R.string.msgs_win_high_3), getString(R.string.msgs_win_high_4), getString(R.string.msgs_win_high_5), getString(R.string.msgs_win_high_6)};
+        lossMsgsLow = new String[]{getString(R.string.msgs_loss_low_0), getString(R.string.msgs_loss_low_1), getString(R.string.msgs_loss_low_2), getString(R.string.msgs_loss_low_3), getString(R.string.msgs_loss_low_4), getString(R.string.msgs_loss_low_5), getString(R.string.msgs_loss_low_6), getString(R.string.msgs_loss_low_7), getString(R.string.msgs_loss_low_8), getString(R.string.msgs_loss_low_9)};
+        lossMsgsHigh = new String[]{getString(R.string.msgs_loss_high_0), getString(R.string.msgs_loss_high_1), getString(R.string.msgs_loss_high_2), getString(R.string.msgs_loss_high_3), getString(R.string.msgs_loss_high_4), getString(R.string.msgs_loss_high_5), getString(R.string.msgs_loss_high_6)};
+        dayMsgsHot = new String[]{getString(R.string.msgs_day_hot_0), getString(R.string.msgs_day_hot_1), getString(R.string.msgs_day_hot_2), getString(R.string.msgs_day_hot_3), getString(R.string.msgs_day_hot_4), getString(R.string.msgs_day_hot_5)};
+    }
     // "Shuffle bag" per non ripetere le stesse frasi finche' non sono state usate tutte (poi si rimescola):
     // una coda separata per ciascuna fascia, tenuta in memoria per la durata della sessione dell'app.
     java.util.HashMap<Object, ArrayList<Integer>> messagePoolQueues = new java.util.HashMap<>();
@@ -1588,7 +1595,7 @@ public class MainActivity extends Activity {
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
         root.addView(title, titleLp);
 
-        String[] styleKeys = {"spine","gem","holo","waves","sun","tech"};
+        String[] styleKeys = {"spine","gem","mountains","waves","sun","bolt"};
         PreviewSwatchView[] swatches = new PreviewSwatchView[6];
         LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout gridRow = null;
@@ -1652,7 +1659,7 @@ public class MainActivity extends Activity {
         LinearLayout tabs = new LinearLayout(this); tabs.setOrientation(LinearLayout.VERTICAL);
         tabs.setPadding(dp(14),dp(14),dp(14),dp(10));
         TextView[] tabViews = new TextView[6];
-        String[] styleKeys = {"spine","gem","holo","waves","sun","tech"};
+        String[] styleKeys = {"spine","gem","mountains","waves","sun","bolt"};
         String[] styleLabels = {getString(R.string.style_1),getString(R.string.style_2),getString(R.string.style_3),getString(R.string.style_4),getString(R.string.style_5),getString(R.string.style_6)};
         Runnable[] refreshTabs = new Runnable[1];
         LinearLayout tabRow = null;
@@ -1890,10 +1897,10 @@ public class MainActivity extends Activity {
         Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
         switch (style==null?"spine":style) {
             case "gem": drawPreviewGem(c, pp, l,t,r,b, shades, rainbow); break;
-            case "holo": drawPreviewHolo(c, pp, l,t,r,b, shades, rainbow); break;
+            case "mountains": drawPreviewMountains(c, pp, l,t,r,b, shades, rainbow); break;
             case "waves": drawPreviewWaves(c, pp, l,t,r,b, shades, rainbow); break;
             case "sun": drawPreviewSun(c, pp, l,t,r,b, shades, rainbow); break;
-            case "tech": drawPreviewTech(c, pp, l,t,r,b, shades, rainbow); break;
+            case "bolt": drawPreviewBolt(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
         c.restore();
@@ -1934,17 +1941,34 @@ public class MainActivity extends Activity {
         c.restore();
     }
 
-    void drawPreviewHolo(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+    // Stile 3 "Mountains": due montagne leggermente frastagliate — quella piccola in primo piano a
+    // sinistra, quella grande dietro a destra — silhouette completamente diversa da tutte le altre.
+    void drawPreviewMountains(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); }
-        else { pp.setColor(shades[1]); }
+        else { pp.setColor(shades[2]); }
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
-        pp.setShader(new LinearGradient(l,t,r,b,
-            new int[]{Color.argb(0,255,255,255), Color.argb(0,255,255,255), Color.argb(95,255,255,255), Color.argb(20,255,255,255), Color.argb(0,255,255,255)},
-            new float[]{0f,0.30f,0.45f,0.55f,0.68f}, Shader.TileMode.CLAMP));
-        c.drawRect(l,t,r,b,pp); pp.setShader(null);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(36,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
-        c.drawRect(l,t,r,b,pp);
+        float w=r-l, h=b-t;
+        // Montagna grande, dietro, a destra (disegnata prima, cosi' resta sullo sfondo)
+        float[][] bigPts = {{0.30f,1.0f},{0.42f,0.35f},{0.50f,0.45f},{0.58f,0.20f},{0.66f,0.42f},{0.74f,0.28f},{0.82f,0.48f},{1.0f,1.0f}};
+        Path big = new Path();
+        for (int i=0;i<bigPts.length;i++){
+            float px=l+bigPts[i][0]*w, py=t+bigPts[i][1]*h;
+            if (i==0) big.moveTo(px,py); else big.lineTo(px,py);
+        }
+        big.close();
+        pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[1]);
+        c.drawPath(big, pp);
+        // Montagna piccola, in primo piano, a sinistra (disegnata dopo, cosi' sovrasta la grande)
+        float[][] smallPts = {{0.0f,1.0f},{0.10f,0.62f},{0.16f,0.70f},{0.22f,0.50f},{0.30f,0.68f},{0.38f,0.58f},{0.46f,1.0f}};
+        Path small = new Path();
+        for (int i=0;i<smallPts.length;i++){
+            float px=l+smallPts[i][0]*w, py=t+smallPts[i][1]*h;
+            if (i==0) small.moveTo(px,py); else small.lineTo(px,py);
+        }
+        small.close();
+        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        c.drawPath(small, pp);
     }
 
     // Stile 4 "Waves": onde orizzontali morbide (curve di Bezier), sovrapposte verso il basso della card —
@@ -1972,39 +1996,44 @@ public class MainActivity extends Activity {
 
     // Stile 5 "Sun": sfondo a gradiente verticale (chiaro in alto, scuro in basso, tipo "cielo"), un sole
     // pieno appena sopra la linea dell'orizzonte — silhouette semplice, riconoscibile a colpo d'occhio.
+    // Stile 5 "Sun": sfondo a gradiente verticale (chiaro in alto, scuro in basso, tipo "cielo"), un sole
+    // pieno posizionato ESATTAMENTE a metà sulla linea dell'orizzonte — il "terreno" sotto la linea copre
+    // davvero la meta' inferiore del sole (non solo una riga sopra), dando un vero effetto alba/tramonto.
     void drawPreviewSun(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); }
-        else { pp.setShader(new LinearGradient(0,t,0,b, shades[0], shades[2], Shader.TileMode.CLAMP)); }
+        else { pp.setShader(new LinearGradient(0,t,0,b, shades[0], shades[1], Shader.TileMode.CLAMP)); }
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
         float cx=(l+r)/2, w=r-l, h=b-t;
-        float horizonY = t+h*0.62f, sunR = w*0.22f;
-        pp.setColor(rainbow ? Color.WHITE : shades[1]);
-        c.drawCircle(cx, horizonY-sunR*0.3f, sunR, pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(90,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        float horizonY = t+h*0.62f, sunR = w*0.26f;
+        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        c.drawCircle(cx, horizonY, sunR, pp);
+        // "Terreno" sotto l'orizzonte: copre davvero la meta' inferiore del sole e dello sfondo, non solo
+        // una riga sopra — questo e' quello che prima mancava per un vero effetto alba/tramonto.
+        pp.setColor(rainbow ? Color.rgb(10,14,22) : shades[2]);
+        c.drawRect(l, horizonY, r, b, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(110,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
         c.drawLine(l,horizonY,r,horizonY,pp);
     }
 
-    // Stile 6 "Tech": tracce ortogonali stile circuito, con piccoli nodi (pallini) alle svolte — richiamo
-    // "tecnologico" minimal, silhouette ad angoli retti ben diversa da tutte le altre.
-    void drawPreviewTech(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+    // Stile 6 "Bolt": un fulmine stilizzato, silhouette a zigzag — energico e minimal, ben diverso da
+    // tutti gli altri stili (nessuna curva, nessun angolo retto, nessun cerchio).
+    void drawPreviewBolt(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
         else { pp.setColor(shades[2]); c.drawRect(l,t,r,b,pp); }
         float w=r-l, h=b-t;
-        pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(Math.max(1f, 1.2f*(r-l)/64f)); pp.setStrokeCap(Paint.Cap.ROUND);
-        pp.setColor(rainbow ? Color.argb(170,255,255,255) : shades[0]);
-        Path circuitA = new Path();
-        circuitA.moveTo(l+w*0.2f, t); circuitA.lineTo(l+w*0.2f, t+h*0.35f); circuitA.lineTo(l+w*0.55f, t+h*0.35f);
-        circuitA.lineTo(l+w*0.55f, t+h*0.7f); circuitA.lineTo(r, t+h*0.7f);
-        c.drawPath(circuitA, pp);
-        Path circuitB = new Path();
-        circuitB.moveTo(l, t+h*0.55f); circuitB.lineTo(l+w*0.35f, t+h*0.55f); circuitB.lineTo(l+w*0.35f, b);
-        c.drawPath(circuitB, pp);
-        pp.setStyle(Paint.Style.FILL); pp.setColor(rainbow ? Color.WHITE : shades[1]);
-        float dr = Math.max(1.5f, 2f*(r-l)/64f);
-        float[][] nodes = {{l+w*0.2f, t+h*0.35f},{l+w*0.55f, t+h*0.35f},{l+w*0.55f, t+h*0.7f},{l+w*0.35f, t+h*0.55f}};
-        for (float[] n: nodes) c.drawCircle(n[0], n[1], dr, pp);
+        float[][] pts = {{0.62f,0.02f},{0.26f,0.54f},{0.46f,0.54f},{0.34f,0.98f},{0.74f,0.42f},{0.54f,0.42f},{0.70f,0.02f}};
+        Path bolt = new Path();
+        for (int i=0;i<pts.length;i++){
+            float px=l+pts[i][0]*w, py=t+pts[i][1]*h;
+            if (i==0) bolt.moveTo(px,py); else bolt.lineTo(px,py);
+        }
+        bolt.close();
+        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        c.drawPath(bolt, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(100,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        c.drawPath(bolt, pp);
     }
 
     // Visualizzatore in stile galleria: header in alto (chiudi/titolo/aggiungi), frecce di navigazione come
@@ -2165,7 +2194,24 @@ public class MainActivity extends Activity {
         String cachedGreeting=null;
         String greetingMessage(){
             if(cachedGreeting!=null) return cachedGreeting;
-            cachedGreeting = "Test greeting"; // TEST DIAGNOSTICO: nessuna risorsa array coinvolta
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            String[] named, plain;
+            if(hour<6){
+                named = new String[]{getString(R.string.greeting_night_named_0), getString(R.string.greeting_night_named_1), getString(R.string.greeting_night_named_2)};
+                plain = new String[]{getString(R.string.greeting_night_plain_0), getString(R.string.greeting_night_plain_1), getString(R.string.greeting_night_plain_2)};
+            } else if(hour<12){
+                named = new String[]{getString(R.string.greeting_morning_named_0), getString(R.string.greeting_morning_named_1), getString(R.string.greeting_morning_named_2)};
+                plain = new String[]{getString(R.string.greeting_morning_plain_0), getString(R.string.greeting_morning_plain_1), getString(R.string.greeting_morning_plain_2)};
+            } else if(hour<18){
+                named = new String[]{getString(R.string.greeting_afternoon_named_0), getString(R.string.greeting_afternoon_named_1), getString(R.string.greeting_afternoon_named_2)};
+                plain = new String[]{getString(R.string.greeting_afternoon_plain_0), getString(R.string.greeting_afternoon_plain_1), getString(R.string.greeting_afternoon_plain_2)};
+            } else {
+                named = new String[]{getString(R.string.greeting_evening_named_0), getString(R.string.greeting_evening_named_1), getString(R.string.greeting_evening_named_2)};
+                plain = new String[]{getString(R.string.greeting_evening_plain_0), getString(R.string.greeting_evening_plain_1), getString(R.string.greeting_evening_plain_2)};
+            }
+            int idx = new java.util.Random().nextInt(plain.length); // stesso indice per la coppia [con nome, senza nome]
+            boolean hasName = store.trainerName!=null && !store.trainerName.isEmpty();
+            cachedGreeting = hasName ? String.format(named[idx], store.trainerName) : plain[idx];
             return cachedGreeting;
         }
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
@@ -2668,23 +2714,27 @@ public class MainActivity extends Activity {
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
-            // ===== Card getString(R.string.label_selected_deck): anteprima (preimpostata o personalizzata) sopra, nome sotto.
-            // Placeholder arcobaleno se nessun deck e' ancora selezionato. Il tap sull'anteprima ha un
-            // comportamento SPECIALE gestito nel touch handler (Scegli anteprima / Visualizza Lista), quello
-            // sul resto della card cambia ancora il deck (invariato). =====
+            // ===== Card deck selezionato: ora la STESSA card completa usata nel tab Deck (deckCardVisual),
+            // con tutte le statistiche — non piu' la card semplificata di prima. Uniche differenze: il menu
+            // "⋮" include anche "Cambia deck" (in piu' rispetto al menu standard), e non c'e' il riquadro
+            // arancione di selezione (qui non serve, non siamo dentro una lista di scelta). Altezza dimezzata
+            // rispetto a prima (92 invece di 150): tutto cio' che segue (pulsanti W/L, badge Annulla, card
+            // Partite) e' stato spostato in alto di conseguenza, a cascata. =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
-            box(c,18,152,w-18,302,card);
-            txt(c, noDeck?getString(R.string.label_no_deck_selected):getString(R.string.label_selected_deck), w/2,174,12,muted,Paint.Align.CENTER);
             Deck curDeckObjForMenu = noDeck ? null : findDeck(s, s.currentDeck);
-            if(curDeckObjForMenu!=null){ drawKebabIcon(c, w-34, 174, muted); currentDeckKebabX=w-34; currentDeckKebabY=174; }
-            else { currentDeckKebabX=-1000; currentDeckKebabY=-1000; } // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
-            float thumbW=64, thumbH=80, thumbX=w/2-thumbW/2, thumbY=186;
-            drawDeckPreview(c, curDeckObjForMenu, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
             if(noDeck){
-                txt(c,getString(R.string.hint_tap_select_deck),w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
+                box(c,18,152,w-18,244,Color.rgb(10,18,30));
+                txt(c,getString(R.string.label_no_deck_selected),34,178,17,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.hint_tap_select_deck),34,198,12,muted,Paint.Align.LEFT);
+                currentDeckKebabX=-1000; currentDeckKebabY=-1000; // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
             } else {
-                txt(c,s.currentDeck,w/2,centeredBaseline(284,18),18,white,Paint.Align.CENTER);
+                int[] curWl = deckWL(s, s.currentDeck);
+                int curBest = longestStreakForDeck(s, s.currentDeck);
+                int curGain = deckGain(s, s.currentDeck);
+                deckCardVisual(c, curDeckObjForMenu, s.currentDeck, false, curWl[0], curWl[1], curBest, curGain, 152, w, true);
+                currentDeckKebabX=w-36; currentDeckKebabY=152+22;
             }
+
 
             boolean locked = isSeasonLocked(store.current);
             // ===== Pulsanti W/L (registrano la partita col deck selezionato sopra), o messaggio di chiusura
@@ -2695,11 +2745,11 @@ public class MainActivity extends Activity {
             // appena aggiunta a una Stagione chiusa). =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
             if(locked){
-                box(c,18,322,w-18,386,card);
-                txt(c,getString(R.string.label_season_ended),w/2,centeredBaseline(354,15),15,white,Paint.Align.CENTER);
+                box(c,18,264,w-18,328,card);
+                txt(c,getString(R.string.label_season_ended),w/2,centeredBaseline(296,15),15,white,Paint.Align.CENTER);
             } else {
-                box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
-                float[] wl2 = centerLines(354,6,22,13);
+                box(c,gL,264,gR,328,green); box(c,rL,264,rR,328,red);
+                float[] wl2 = centerLines(296,6,22,13);
                 txt(c,"W",(gL+gR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(+"+reward(s.streak+1)+")",(gL+gR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
                 txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             }
@@ -2715,7 +2765,7 @@ public class MainActivity extends Activity {
             float badgeR = 14, cornerInset = 8; // ancorato all'angolo in alto a DESTRA del pulsante giusto,
             // non centrato sopra: cosi' non copre piu' la lettera "W"/"L", e restando "dentro" il pulsante
             // (non a cavallo) non rischia di sovrapporsi all'altro pulsante o di uscire dallo schermo.
-            undoBadgeCy = 322+cornerInset;
+            undoBadgeCy = 264+cornerInset;
             if(!hasHistory || lastIsCorrection) { undoBadgeCx = w/2; }
             else { undoBadgeCx = (all.get(all.size()-1).win ? gR : rR) - cornerInset; }
             if(hasHistory){
@@ -2728,7 +2778,7 @@ public class MainActivity extends Activity {
 
 
             // ===== Card "PARTITE": due tab al suo interno — Grafico e Lista — altezza FISSA condivisa. =====
-            float listCardTop=400, contentHeight=300;
+            float listCardTop=342, contentHeight=300;
             float contentTop=listCardTop+42+8, contentBottom=contentTop+contentHeight; // +8: margine sotto la fascia icone, prima assente
             float listCardBottom = contentBottom+14;
             box(c,18,listCardTop,w-18,listCardBottom,card);
@@ -2947,7 +2997,7 @@ public class MainActivity extends Activity {
                                 pointsColor = gain>0?green:(gain<0?red:muted);
                             }
                             txtRow(c, 50, ry+46, 12,
-                                new String[]{pointsStr+"   ", m.streak+getString(R.string.label_win_streak_abbr), "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
+                                new String[]{pointsStr+"   ", m.streak+getString(R.string.label_win_streak_abbr)+"   ", "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
                                 new int[]{pointsColor, muted, green, red});
                         } else {
                             if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
@@ -3093,7 +3143,7 @@ public class MainActivity extends Activity {
                     new int[]{green, red, wrColor(wr,W+L)});
             } else {
                 txtRow(c,textX,y+64,11,
-                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", getString(R.string.label_max_win_streak)+best},
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", getString(R.string.label_max_win_streak,best)},
                     new int[]{green, red, wrColor(wr,W+L), muted});
             }
             int gcol = gain>0?green:(gain<0?red:muted);
@@ -3123,7 +3173,7 @@ public class MainActivity extends Activity {
             // iniziava a y=90, appena 2 unita' dopo, sembravano attaccati.
             box(c,18,100,w-18,148,Color.rgb(20,32,48));
             strokeBox(c,18,100,w-18,148,FIELD_BORDER);
-            txt(c,getString(R.string.btn_new_deck),w/2,127,14,white,Paint.Align.CENTER);
+            txt(c,getString(R.string.btn_new_deck),w/2,centeredBaseline(124,14),14,white,Paint.Align.CENTER);
             float y=162;
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
@@ -3447,16 +3497,16 @@ public class MainActivity extends Activity {
                 if(Math.hypot(x-currentDeckKebabX, contentY-currentDeckKebabY) <= 22){
                     Deck curDeckObj=findDeck(s,s.currentDeck);
                     if(curDeckObj!=null){
-                        view.showAnchoredMenu(currentDeckKebabX, contentY-scrollY+16,
+                        view.showAnchoredMenu(currentDeckKebabX, currentDeckKebabY-scrollY+16,
                             new String[]{getString(R.string.action_change_deck),getString(R.string.action_rename_deck),getString(R.string.action_choose_preview),getString(R.string.action_add_lista),getString(R.string.action_delete_deck)},
                             new int[]{Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE, red()},
                             new Runnable[]{ () -> chooseCurrentDeck(), () -> renameDeckDialog(curDeckObj), () -> showPreviewPicker(curDeckObj), () -> openDeckImages(curDeckObj), () -> confirmDeleteDeck(s,curDeckObj) });
                         return true;
                     }
                 }
-                if(!locked && contentY>=152&&contentY<=302){ chooseCurrentDeck(); return true; }
-                if(!locked && contentY>=322&&contentY<=386){ if(x<w/2) win(); else loss(); return true; }
-                if(contentY>=400&&contentY<=442){
+                if(!locked && contentY>=152&&contentY<=244){ chooseCurrentDeck(); return true; }
+                if(!locked && contentY>=264&&contentY<=328){ if(x<w/2) win(); else loss(); return true; }
+                if(contentY>=342&&contentY<=384){
                     // Zone di tocco allargate (erano 22-32 unita' di larghezza, sotto lo standard consigliato
                     // di ~44dp per un tocco affidabile — spiega perche' a volte serviva ritoccare piu' volte).
                     if(x>=w/2-43 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
@@ -3529,7 +3579,7 @@ public class MainActivity extends Activity {
         // Anteprima preimpostata (stile+colore, disegnata direttamente sul canvas — nessuna immagine
         // personalizzata: quella possibilita' e' stata rimossa, causava troppi problemi). Default per ogni
         // nuovo deck: stile "spine", colore "grigiochiaro".
-        String previewStyle="spine";   // "spine" | "gem" | "holo" | "waves" | "sun" | "tech"
+        String previewStyle="spine";   // "spine" | "gem" | "mountains" | "waves" | "sun" | "bolt"
         String previewColor="grigiochiaro";
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
@@ -3601,7 +3651,7 @@ public class MainActivity extends Activity {
     static class Store {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
-        String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"holo")
+        String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"mountains"|...)
         String language="en"; // lingua dell'app: "en" (default) | "de" | "it" | "fr" | "es" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
         void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
