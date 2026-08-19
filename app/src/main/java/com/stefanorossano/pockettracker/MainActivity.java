@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.169";
+    static final String APP_VERSION = "v0.2.171";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -189,7 +189,7 @@ public class MainActivity extends Activity {
         deckSearchBar.setVisibility(View.VISIBLE);
         float logicalW = (view.getWidth()-view.getPaddingLeft()-view.getPaddingRight())/view.density;
         if (logicalW<=0) return; // non ancora misurata: verra' richiamato dal listener di layout
-        int top = view.getPaddingTop() + dp(44); // spostato su di 4dp: con l'altezza ora 44 (era 28), a dp(48) avrebbe leggermente sovrapposto "AGGIUNGI DECK" (che parte da y=90)
+        int top = view.getPaddingTop() + dp(44); // spostato su di 4dp: con l'altezza ora 44 (era 28), a dp(48) avrebbe leggermente sovrapposto "Nuovo Deck" (che parte da y=90)
         int left = view.getPaddingLeft() + dp(18);
         int height = dp(44); // 44dp: tocco comodo (era 28, sotto il minimo consigliato)
         int width = view.deckSearchActive ? Math.round((logicalW-36)*view.density) : dp(44);
@@ -638,7 +638,10 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    void renameDeckDialog(Deck d){
+    void renameDeckDialog(Deck d){ renameDeckDialog(d, null); }
+
+    // onChanged (opzionale): richiamato a rinomina avvenuta — vedi commento su showPreviewPicker per il motivo.
+    void renameDeckDialog(Deck d, Runnable onChanged){
         if (d==null) return;
         Season s = store.seasons.get(store.current);
         String oldName = d.name;
@@ -656,6 +659,7 @@ public class MainActivity extends Activity {
             for (Match m: s.matches) if (oldName.equals(m.deck)) m.deck = n;
             if (oldName.equals(s.currentDeck)) s.currentDeck = n;
             store.save(); view.invalidate();
+            if (onChanged!=null) onChanged.run();
             return true;
         }, "Nome Deck non valido o già esistente.");
         dialog.show();
@@ -726,10 +730,10 @@ public class MainActivity extends Activity {
         ArrayList<String> labels = new ArrayList<>(java.util.Arrays.asList("Rinomina deck","Scegli anteprima"));
         ArrayList<Integer> colors = new ArrayList<>(java.util.Arrays.asList(Color.WHITE, Color.WHITE));
         ArrayList<Runnable> actions = new ArrayList<>(java.util.Arrays.asList(
-            (Runnable)(() -> renameDeckDialog(d)), (Runnable)(() -> showPreviewPicker(d))));
+            (Runnable)(() -> renameDeckDialog(d, onChanged)), (Runnable)(() -> showPreviewPicker(d, onChanged))));
         if (hasLista) { labels.add("Vedi Lista"); colors.add(Color.WHITE); actions.add(() -> showImageGallery(d,0)); }
         labels.add("Aggiungi Lista"); colors.add(Color.WHITE); actions.add(() -> pickImageFor(d));
-        labels.add("Elimina deck"); colors.add(red()); actions.add(() -> confirmDeleteDeck(s,d));
+        labels.add("Elimina deck"); colors.add(red()); actions.add(() -> confirmDeleteDeck(s,d,onChanged));
         int[] colArr = new int[colors.size()]; for(int i=0;i<colArr.length;i++) colArr[i]=colors.get(i);
         showDialogMenu(anchorView, labels.toArray(new String[0]), colArr, actions.toArray(new Runnable[0]));
     }
@@ -743,10 +747,19 @@ public class MainActivity extends Activity {
         Deck[] selected = { findDeck(s, s.currentDeck) }; // null se "Unknown"/nessun deck ancora
         ArrayList<Deck> allDecks = view.sortedDecks(s);
         ArrayList<Deck> filtered = new ArrayList<>(allDecks);
+        // Dichiarato qui (assegnato piu' sotto): rebuildList lo referenzia nel listener del kebab, quindi
+        // deve esistere gia' come variabile prima — l'assegnazione effettiva puo' avvenire dopo, l'importante
+        // e' che sia pronta PRIMA che l'utente possa davvero toccare qualcosa (dialog.show() e' sempre l'ultimo passo).
+        Runnable[] refreshFromSource = new Runnable[1];
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText("Seleziona un deck"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(16);
+        root.addView(title, titleLp);
 
         // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
         LinearLayout searchBar = new LinearLayout(this); searchBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -773,7 +786,11 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(14),dp(4),dp(14),dp(4));
-        scroll.addView(list);
+        // LayoutParams espliciti (MATCH_PARENT): una ScrollView di default da' ai suoi figli WRAP_CONTENT in
+        // larghezza, non MATCH_PARENT — "list" (e quindi ogni card dentro) si misurava contro una larghezza
+        // piu' piccola di quella reale dello schermo, da qui le card sempre troppo strette anche dopo aver
+        // dato una larghezza esplicita alla finestra del dialog.
+        scroll.addView(list, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(400));
         root.addView(scroll, scrollLp);
 
@@ -794,7 +811,7 @@ public class MainActivity extends Activity {
                 list.addView(row, rowLp);
 
                 cardView.setOnClickListener(v -> { selected[0]=d; rebuildList[0].run(); });
-                kebabHotspot.setOnClickListener(v -> showDeckRowMenu(s, d, kebabHotspot, rebuildList[0]));
+                kebabHotspot.setOnClickListener(v -> showDeckRowMenu(s, d, kebabHotspot, refreshFromSource[0]));
             }
         };
         rebuildList[0].run();
@@ -805,6 +822,15 @@ public class MainActivity extends Activity {
             filtered.clear();
             for (Deck d: allDecks) if (q.isEmpty() || d.name.toLowerCase(Locale.ITALY).contains(q)) filtered.add(d);
             rebuildList[0].run();
+        };
+        // Aggiornamento completo dopo rinomina/anteprima/elimina/creazione: ri-deriva SEMPRE allDecks dalla
+        // fonte di verita' (s.decks), non solo un ridisegno — necessario per l'eliminazione (la riga va
+        // rimossa dalla lista, non solo ridisegnata) e per la rinomina (l'ordine puo' cambiare). Prima
+        // "Nuovo Deck" faceva questo a mano per conto suo; ora e' condiviso da tutte le azioni del menu "⋮".
+        refreshFromSource[0] = () -> {
+            allDecks.clear(); allDecks.addAll(view.sortedDecks(s));
+            if (selected[0]!=null && !allDecks.contains(selected[0])) selected[0]=null; // era il deck appena eliminato
+            doFilter[0].run();
         };
         searchBar.setOnClickListener(v -> {
             if (searchInput.getVisibility()==View.VISIBLE) return;
@@ -844,6 +870,10 @@ public class MainActivity extends Activity {
         root.addView(footer);
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
+        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
+        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(root);
         // Larghezza esplicita: senza, la finestra del dialog si dimensiona in modo ambiguo e le view a
         // MATCH_PARENT dentro si misurano storte (card strette, testo che sborda, tocchi che non registrano
@@ -852,9 +882,8 @@ public class MainActivity extends Activity {
         dialog.show();
 
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
-            allDecks.clear(); allDecks.addAll(view.sortedDecks(s));
             selected[0] = newDeck;
-            doFilter[0].run(); // ricostruisce anche filtered() e la lista, mantenendo la ricerca corrente
+            refreshFromSource[0].run();
         }));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
@@ -1281,7 +1310,11 @@ public class MainActivity extends Activity {
             .show();
     }
 
-    void confirmDeleteDeck(Season s, Deck d){
+    void confirmDeleteDeck(Season s, Deck d){ confirmDeleteDeck(s, d, null); }
+
+    // onChanged (opzionale): richiamato a eliminazione avvenuta — nel dialog "Cambia deck" serve per togliere
+    // subito la riga dalla lista, non solo dal tab Deck vero.
+    void confirmDeleteDeck(Season s, Deck d, Runnable onChanged){
         int usedCount = 0;
         for (Match m: s.matches) if (d.name.equals(m.deck)) usedCount++;
         String message = usedCount>0
@@ -1294,6 +1327,7 @@ public class MainActivity extends Activity {
                 if (d.name.equals(s.currentDeck)) s.currentDeck = "Unknown";
                 s.decks.remove(d);
                 store.save(); if (view!=null) view.invalidate();
+                if (onChanged!=null) onChanged.run();
             })
             .setNegativeButton("Annulla", null)
             .show();
@@ -1305,6 +1339,18 @@ public class MainActivity extends Activity {
     // dialog "Cambia deck" per aggiornare la lista e selezionare subito il nuovo deck.
     void addDeck(java.util.function.Consumer<Deck> onCreated){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
+        // Deck "in sospeso": non ancora creato/salvato, serve solo per tenere lo stile/colore scelto
+        // nell'anteprima finche' il salvataggio non lo trasferisce sul Deck vero.
+        Deck pendingDeck = new Deck("");
+
+        DeckPreviewThumbView thumb = new DeckPreviewThumbView(this, pendingDeck);
+        FrameLayout.LayoutParams thumbLp = new FrameLayout.LayoutParams(dp(64), dp(80));
+        FrameLayout thumbFrame = new FrameLayout(this); thumbFrame.addView(thumb, thumbLp);
+        LinearLayout.LayoutParams thumbBoxLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        thumbBoxLp.gravity = Gravity.CENTER_HORIZONTAL; thumbBoxLp.bottomMargin = dp(14);
+        box.addView(thumbFrame, thumbBoxLp);
+        thumb.setOnClickListener(v -> showPreviewPicker(pendingDeck, thumb::invalidate));
+
         // Tolta l'etichetta "Nome Deck" sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
         // ha comunque il placeholder "Nome Deck" — prima la scritta compariva 3 volte, troppa ripetizione.
         EditText e=field("Nome Deck"); box.addView(e);
@@ -1316,11 +1362,16 @@ public class MainActivity extends Activity {
         box.addView(img);
         img.setOnClickListener(v-> pickImageFor(null)); // null = immagine "in sospeso", verra' assegnata al Deck solo se il salvataggio va a buon fine
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(box)
-            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
+            .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
         showNonDismissing(dialog, () -> {
             String n=e.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) return false;
             Deck deck=new Deck(n);
+            // Trasferisce sul Deck vero l'anteprima scelta sul Deck "in sospeso".
+            deck.previewStyle = pendingDeck.previewStyle; deck.previewColor = pendingDeck.previewColor;
+            deck.previewCustomUri = pendingDeck.previewCustomUri;
+            deck.previewCropCx = pendingDeck.previewCropCx; deck.previewCropCy = pendingDeck.previewCropCy;
+            deck.previewCropWFrac = pendingDeck.previewCropWFrac;
             if(pendingImage!=null){
                 Uri imgUri = pendingImage; pendingImage=null;
                 deck.images.add(imgUri.toString());
@@ -1352,6 +1403,7 @@ public class MainActivity extends Activity {
     Uri pendingImage=null;            // immagine "in sospeso" per un Deck non ancora creato (flusso addDeck)
     Deck pendingImageTargetDeck=null; // Deck esistente a cui AGGIUNGERE l'immagine scelta (flusso di gestione screenshot)
     Deck pendingPreviewTargetDeck=null;         // Deck per cui si sta scegliendo un'anteprima PERSONALIZZATA
+    Runnable pendingPreviewOnChanged=null;      // richiamato a ritaglio confermato, se chi ha aperto il picker ne aveva bisogno (es. per aggiornare una riga in un altro dialog)
 
     void pickImageFor(Deck target){
         pendingImageTargetDeck = target;
@@ -1362,8 +1414,11 @@ public class MainActivity extends Activity {
     // Come pickImageFor, ma per l'anteprima personalizzata di un deck (richiesta code diversa, 102, per
     // distinguerla dal flusso Liste in onActivityResult). pickerToClose (opzionale): il dialog "Scegli
     // anteprima" sottostante, richiuso automaticamente a ritaglio confermato.
-    void pickImageForPreview(Deck target, Dialog pickerToClose){
+    void pickImageForPreview(Deck target, Dialog pickerToClose){ pickImageForPreview(target, pickerToClose, null); }
+
+    void pickImageForPreview(Deck target, Dialog pickerToClose, Runnable onChanged){
         pendingPreviewTargetDeck = target;
+        pendingPreviewOnChanged = onChanged;
         // Richiuso SUBITO, non solo a ritaglio confermato: lasciarlo aperto sotto mentre si apriva l'editor
         // di ritaglio (un secondo Dialog impilato sopra) causava un rendering completamente rotto (schermo
         // nero, controlli fuori posto) — due finestre Dialog sovrapposte contemporaneamente non e' un caso
@@ -1396,7 +1451,8 @@ public class MainActivity extends Activity {
             try{ getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION); }
             catch(Exception e){ Log.w(TAG, "Impossibile ottenere il permesso persistente sull'immagine", e); }
             Deck targetDeck = pendingPreviewTargetDeck; pendingPreviewTargetDeck=null;
-            if (targetDeck!=null) showCropEditor(uri, targetDeck, null); // il dialog "Scegli anteprima" e' gia' stato richiuso in pickImageForPreview()
+            Runnable onChanged = pendingPreviewOnChanged; pendingPreviewOnChanged=null;
+            if (targetDeck!=null) showCropEditor(uri, targetDeck, onChanged); // il dialog "Scegli anteprima" e' gia' stato richiuso in pickImageForPreview()
         }
     }
 
@@ -1408,6 +1464,18 @@ public class MainActivity extends Activity {
         if (d==null) return;
         if (d.images.isEmpty()) pickImageFor(d);
         else showImageGallery(d, 0);
+    }
+
+    // Piccola anteprima cliccabile per un Deck non ancora creato (dialog "Nuovo Deck"): disegna semplicemente
+    // l'anteprima corrente (preimpostata o personalizzata) di un oggetto Deck "in sospeso", usato solo per
+    // tenere la scelta finche' il salvataggio non la trasferisce sul Deck vero.
+    class DeckPreviewThumbView extends View {
+        Deck d;
+        DeckPreviewThumbView(Context c, Deck d){ super(c); this.d=d; }
+        @Override protected void onDraw(Canvas c){
+            super.onDraw(c);
+            drawDeckPreview(c, d, 0, 0, getWidth(), getHeight());
+        }
     }
 
     // Cella della griglia nel dialog "Scegli anteprima": disegna una card preimpostata (stile+colore
@@ -1433,7 +1501,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    void showPreviewPicker(Deck d){
+    void showPreviewPicker(Deck d){ showPreviewPicker(d, null); }
+
+    // onChanged (opzionale): richiamato a conferma avvenuta, per far ridisegnare la riga se il dialog che ha
+    // aperto questo picker (es. "Cambia deck") ha una sua vista separata che altrimenti non si aggiorna da
+    // sola — invalidate() sulla TrackerView principale non tocca le view native di ALTRI dialog aperti.
+    void showPreviewPicker(Deck d, Runnable onChanged){
         String[] activeStyle = { ("custom".equals(d.previewStyle) ? "spine" : d.previewStyle) };
         String[] selectedColor = { "custom".equals(d.previewStyle) ? null : d.previewColor };
 
@@ -1480,7 +1553,8 @@ public class MainActivity extends Activity {
             sw.setOnClickListener(v -> { selectedColor[0]=colorKey; for(PreviewSwatchView s: swatches) s.selected=(s.colorKey.equals(colorKey)); for(PreviewSwatchView s: swatches) s.invalidate(); });
         }
         for (int i=0;i<swatches.length;i++) swatches[i].selected = swatches[i].colorKey.equals(selectedColor[0]);
-        scroll.addView(grid);
+        // Stesso fix di larghezza esplicita usato in chooseCurrentDeck() (vedi commento lì).
+        scroll.addView(grid, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(410));
         root.addView(scroll, scrollLp);
 
@@ -1510,6 +1584,10 @@ public class MainActivity extends Activity {
         root.addView(footer);
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
+        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
+        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(root);
         // Larghezza esplicita: senza, la finestra del dialog si dimensiona in modo ambiguo e le view a
         // MATCH_PARENT dentro si misurano storte (card strette, testo che sborda, tocchi che non registrano
@@ -1517,13 +1595,14 @@ public class MainActivity extends Activity {
         if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
 
-        loadImgBtn.setOnClickListener(v -> pickImageForPreview(d, dialog));
+        loadImgBtn.setOnClickListener(v -> pickImageForPreview(d, dialog, onChanged));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selectedColor[0]!=null){
                 d.previewStyle = activeStyle[0]; d.previewColor = selectedColor[0];
                 d.cachedPreview = null; d.cachedPreviewSourceUri = null; // se prima era "custom", pulisce la cache
                 store.save(); if (view!=null) view.invalidate();
+                if (onChanged!=null) onChanged.run();
             }
             dialog.dismiss();
         });
@@ -1886,6 +1965,10 @@ public class MainActivity extends Activity {
         if (bmp == null) { Toast.makeText(this,"Impossibile aprire l'immagine.",Toast.LENGTH_SHORT).show(); return; }
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
+        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
+        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
 
@@ -1929,6 +2012,10 @@ public class MainActivity extends Activity {
         if (d.images.isEmpty()) return;
         final int[] idx = {Math.max(0, Math.min(startIndex, d.images.size()-1))};
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
+        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
+        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
 
@@ -2997,7 +3084,7 @@ public class MainActivity extends Activity {
             // "Ordina" non si disegna piu' quando la ricerca e' espansa: la pillola nativa (sovrapposta)
             // occupa visivamente la stessa zona, disegnarla sotto sarebbe ridondante.
             if (!deckSearchActive) { box(c,w-165,48,w-18,76,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-91,68,13,white,Paint.Align.CENTER); }
-            box(c,18,90,w-18,138,blue); txt(c,"AGGIUNGI DECK",w/2,117,14,white,Paint.Align.CENTER);
+            box(c,18,90,w-18,138,blue); txt(c,"Nuovo Deck",w/2,117,14,white,Paint.Align.CENTER);
             float y=152;
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
