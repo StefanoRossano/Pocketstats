@@ -114,7 +114,7 @@
 
     <!-- Fetta 3a: etichette statiche mancate nel primo giro -->
     <string name="label_variation_header">VARIATION</string>
-    <string name="label_wlp_header">W / L / %</string>
+    <string name="label_wlp_header">W / L / WR</string>
     <string name="label_maxima_header">MAXIMUMS</string>
     <string name="btn_yes">Yes</string>
     <string name="btn_no">No</string>
