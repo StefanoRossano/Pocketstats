@@ -662,7 +662,7 @@ public class MainActivity extends Activity {
 
         // "Nuovo Deck": si trasforma in un campo di testo con una "✕" sovrapposta per richiuderlo, invece
         // di aprire un secondo dialog separato — piu' rapido per la creazione al volo.
-        Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
+        Button newDeckBtn = new Button(this); newDeckBtn.setText(getString(R.string.btn_new_deck)); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         newBtnLp.topMargin = dp(10); box.addView(newDeckBtn, newBtnLp);
 
@@ -972,7 +972,7 @@ public class MainActivity extends Activity {
         });
 
         // "Nuovo Deck" resta in fondo alla lista, come nel vecchio dialog.
-        Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
+        Button newDeckBtn = new Button(this); newDeckBtn.setText(getString(R.string.btn_new_deck)); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(18); newBtnLp.rightMargin=dp(18); newBtnLp.bottomMargin=dp(10);
         root.addView(newDeckBtn, newBtnLp);
@@ -1025,7 +1025,7 @@ public class MainActivity extends Activity {
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
         int num = matchNumberOf(s, m);
-        showDeckSelectorDialog(s, "Seleziona un deck diverso (partita n."+num+")", findDeck(s, m.deck), chosen -> {
+        showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_for_match,num), findDeck(s, m.deck), chosen -> {
             m.deck = chosen.name; store.save(); view.invalidate();
         });
     }
@@ -1864,8 +1864,9 @@ public class MainActivity extends Activity {
         PREVIEW_COLORS.put("grigiochiaro",new int[]{Color.rgb(0xC7,0xCD,0xD6), Color.rgb(0x9A,0xA3,0xAE), Color.rgb(0x6B,0x74,0x80)});
     }
     static final String[] PREVIEW_COLOR_ORDER = {"verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro","arcobaleno"};
-    // PREVIEW_COLOR_LABELS rimosso: era codice morto (mai referenziato da nessuna parte) e causava un
-    // errore di compilazione reale (chiamava getString(), un metodo di istanza, da un contesto static).
+    // PREVIEW_COLOR_LABELS rimosso: era codice morto (mai referenziato da nessuna parte, a differenza di
+    // PREVIEW_COLOR_ORDER sopra) e causava un errore di compilazione reale (chiamava getString(), un
+    // metodo di istanza, da un contesto static — non permesso in Java).
     static final int[] RAINBOW_HUES = { Color.rgb(0xE8,0x74,0x6A), Color.rgb(0xE0,0xB0,0x23), Color.rgb(0x5F,0xCB,0x8A), Color.rgb(0x2F,0xA8,0xD9), Color.rgb(0x7B,0x4F,0xC9), Color.rgb(0xE8,0x74,0x6A) };
 
     // Punto d'ingresso unico per disegnare l'anteprima di un deck (o il placeholder "nessun deck"): sempre
@@ -2536,7 +2537,7 @@ public class MainActivity extends Activity {
                 txtRow(c,34,y+74,12,
                     new String[]{W+"W   ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
                     new int[]{green, red, wrColor(wr,W+L)});
-                txt(c,current.matches.size()+" partite",34,y+96,11,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.label_matches_count,current.matches.size()),34,y+96,11,muted,Paint.Align.LEFT);
             }
             seasonHits.add(new Hit(y,y+110,lastIdx));
             y+=110;
@@ -2557,7 +2558,7 @@ public class MainActivity extends Activity {
                     int[] wl=countWL(s.matches); int W=wl[0],L=wl[1];
                     float wr=(W+L)==0?0:100f*W/(W+L);
                     txtRow(c,34,y+48,11,
-                        new String[]{W+"W  ", L+"L  ", "WR "+String.format(Locale.US,"%.1f%%",wr)+"  ", s.matches.size()+" partite"},
+                        new String[]{W+"W  ", L+"L  ", "WR "+String.format(Locale.US,"%.1f%%",wr)+"  ", getString(R.string.label_matches_count,s.matches.size())},
                         new int[]{green, red, wrColor(wr,W+L), muted});
                     seasonHits.add(new Hit(y,y+68,i));
                     y+=78;
@@ -2749,7 +2750,7 @@ public class MainActivity extends Activity {
             if(partiteTab==0){
                 // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
                 // dura in genere circa 2 settimane, "7g/30g" da app di finanza non avevano senso qui).
-                String[] rangeLabels = {"1 giorno","3 giorni","Tutto"};
+                String[] rangeLabels = {getString(R.string.label_range_1_day),getString(R.string.label_range_3_days),getString(R.string.label_range_all)};
                 float pillY=contentTop+16, pillH=26;
                 rangePillsTop = pillY-pillH/2; rangePillsBottom = pillY+pillH/2;
                 float pillGap=8; float pillX=30;
@@ -2939,14 +2940,14 @@ public class MainActivity extends Activity {
                             // — e' una card diversa dalle partite, non deve seguire lo stesso schema
                             // "titolo a sinistra, valore isolato a destra".
                             String pointsStr; int pointsColor;
-                            if(k==0){ pointsStr = m.after+" punti"; pointsColor = white; }
+                            if(k==0){ pointsStr = getString(R.string.label_points_count,m.after); pointsColor = white; }
                             else {
                                 int gain = m.after-m.before;
-                                pointsStr = (gain>=0?"+":"")+gain+" punti";
+                                pointsStr = getString(R.string.label_points_count_signed,(gain>=0?"+":"")+gain);
                                 pointsColor = gain>0?green:(gain<0?red:muted);
                             }
                             txtRow(c, 50, ry+46, 12,
-                                new String[]{pointsStr+"   ", m.streak+"VC   ", "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
+                                new String[]{pointsStr+"   ", m.streak+getString(R.string.label_win_streak_abbr), "+"+m.correctionWins+"W  ", "+"+m.correctionLosses+"L"},
                                 new int[]{pointsColor, muted, green, red});
                         } else {
                             if(k!=dayEndIdx){ p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(46,ry,w-46,ry,p); }
@@ -3082,7 +3083,7 @@ public class MainActivity extends Activity {
             }
             txt(c, isUnknown?getString(R.string.label_unknown_deck):name, textX,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
             float wr=(W+L)==0?0:100f*W/(W+L);
-            txt(c,(W+L)+" partite",textX,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
+            txt(c,getString(R.string.label_matches_count,(W+L)),textX,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
             if (!isUnknown && showKebab) {
                 drawKebabIcon(c, w-18-10-8, y+22, muted);
             }
@@ -3092,7 +3093,7 @@ public class MainActivity extends Activity {
                     new int[]{green, red, wrColor(wr,W+L)});
             } else {
                 txtRow(c,textX,y+64,11,
-                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", "Max vittorie consecutive "+best},
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", getString(R.string.label_max_win_streak)+best},
                     new int[]{green, red, wrColor(wr,W+L), muted});
             }
             int gcol = gain>0?green:(gain<0?red:muted);
@@ -3122,7 +3123,7 @@ public class MainActivity extends Activity {
             // iniziava a y=90, appena 2 unita' dopo, sembravano attaccati.
             box(c,18,100,w-18,148,Color.rgb(20,32,48));
             strokeBox(c,18,100,w-18,148,FIELD_BORDER);
-            txt(c,"Nuovo Deck",w/2,127,14,white,Paint.Align.CENTER);
+            txt(c,getString(R.string.btn_new_deck),w/2,127,14,white,Paint.Align.CENTER);
             float y=162;
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
@@ -3335,7 +3336,7 @@ public class MainActivity extends Activity {
 
         void detailNav(Canvas c,float w,float h){
             float y=h-58; p.setColor(Color.rgb(9,15,25));p.setStyle(Paint.Style.FILL);c.drawRect(0,y,w,h,p);
-            String[] n={"Gioca","Deck","Stats"};
+            String[] n={getString(R.string.tab_play),getString(R.string.tab_deck),getString(R.string.tab_stats)};
             for(int i=0;i<3;i++){
                 int col=i==detailTab?blue:muted;
                 float cx=w*(i+.5f)/3, iconCy=y+18;
