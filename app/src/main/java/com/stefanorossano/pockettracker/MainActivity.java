@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.187";
+    static final String APP_VERSION = "v0.2.198";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText("Lingua / Language"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_language_title)); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
         root.addView(title, titleLp);
@@ -90,9 +90,9 @@ public class MainActivity extends Activity {
 
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
         cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
-        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
         confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
         footer.addView(cancelBtn); footer.addView(confirmBtn);
         root.addView(footer);
@@ -114,7 +114,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this,"Salvato, sto ricreando l'app...",Toast.LENGTH_SHORT).show();
                 recreate();
             } else {
-                Toast.makeText(this,"Nessun cambiamento: era già questa lingua.",Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,getString(R.string.msg_no_language_change),Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -147,6 +147,10 @@ public class MainActivity extends Activity {
             screen = b.getInt("screen", SCREEN_SEASON_LIST);
             if (screen==SCREEN_SEASON_DETAIL && store.seasons.isEmpty()) screen = SCREEN_SEASON_LIST;
         }
+        // Diagnostica temporanea: conferma se il Locale della nuova Activity (dopo recreate()) e' davvero
+        // cambiato, anche se lo "screen" ripristinato dallo stato salvato ti riporta esattamente dove eri
+        // (Impostazioni) — nascondendo visivamente che l'Activity si sia comunque ricreata.
+        Toast.makeText(this,"Locale attuale: "+getResources().getConfiguration().locale+" — store.language: "+store.language,Toast.LENGTH_LONG).show();
     }
 
     @Override protected void onSaveInstanceState(Bundle outState) {
@@ -192,7 +196,7 @@ public class MainActivity extends Activity {
         deckSearchInput = new EditText(this);
         deckSearchInput.setSingleLine(); deckSearchInput.setBackground(null);
         deckSearchInput.setTextColor(Color.WHITE); deckSearchInput.setHintTextColor(MUTED_TXT);
-        deckSearchInput.setHint("Cerca deck"); deckSearchInput.setTextSize(14);
+        deckSearchInput.setHint(getString(R.string.hint_search_deck)); deckSearchInput.setTextSize(14);
         deckSearchInput.setPadding(0,0,0,0);
         LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         deckSearchBar.addView(deckSearchInput, inputLp);
@@ -313,7 +317,7 @@ public class MainActivity extends Activity {
     // Non esiste piu' il concetto di sessione: la correzione iniziale e' semplicemente la prima "partita"
     // della lista, marcata come correzione (non una vittoria/sconfitta vera).
 
-    // ===== Onboarding "Come ti chiami, allenatore?": mostrato una sola volta, la primissima volta che l'app
+    // ===== Onboarding getString(R.string.dialog_ask_name_title): mostrato una sola volta, la primissima volta che l'app
     // viene aperta (anche se erano gia' presenti delle Stagioni salvate, se l'onboarding non era mai stato
     // fatto prima). Nome usato poi per personalizzare occasionalmente i messaggi motivazionali. =====
     // Lista minima di parole da evitare nel nome (italiano + inglese), controllo per sottostringa su
@@ -336,7 +340,7 @@ public class MainActivity extends Activity {
     void editTrainerNameDialog(){
         LinearLayout box = formBox();
         TextView header = new TextView(this);
-        header.setText("Nome allenatore"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setText(getString(R.string.label_trainer_name)); header.setTextColor(Color.WHITE); header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
         header.setPadding(0,dp(10),0,dp(14));
         box.addView(header);
@@ -346,10 +350,11 @@ public class MainActivity extends Activity {
         styleField(nameField);
         nameField.setText(store.trainerName);
         box.addView(nameField);
+        applyMaxLength(box, nameField, 15);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
-            .setPositiveButton("Salva", null)
-            .setNegativeButton("Annulla", null)
-            .setNeutralButton("Rimuovi nome", (d,w) -> {
+            .setPositiveButton(getString(R.string.btn_save), null)
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .setNeutralButton(getString(R.string.action_remove_name), (d,w) -> {
                 store.trainerName = ""; view.cachedGreeting=null; store.save(); view.invalidate();
             })
             .create();
@@ -359,14 +364,14 @@ public class MainActivity extends Activity {
             store.trainerName = n; view.cachedGreeting=null; // il messaggio di benvenuto va rigenerato col nuovo nome
             store.save(); view.invalidate();
             return true;
-        }, "Scegli un nome valido.");
+        }, getString(R.string.err_choose_valid_name));
         dialog.show();
     }
 
     void askTrainerName(){
         LinearLayout box = formBox();
         TextView header = new TextView(this);
-        header.setText("Come ti chiami, allenatore?"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setText(getString(R.string.dialog_ask_name_title)); header.setTextColor(Color.WHITE); header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
         header.setPadding(0,dp(10),0,dp(14));
         box.addView(header);
@@ -376,17 +381,18 @@ public class MainActivity extends Activity {
         nameField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         styleField(nameField);
         box.addView(nameField);
+        applyMaxLength(box, nameField, 15);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setCancelable(false)
             .setPositiveButton("OK", null)
-            .setNeutralButton("Preferisco non rispondere", (d,w) -> confirmTrainerName(""))
+            .setNeutralButton(getString(R.string.action_prefer_not_say), (d,w) -> confirmTrainerName(""))
             .create();
         showNonDismissing(dialog, () -> {
             String n = nameField.getText().toString().trim();
             if (n.isEmpty() || containsBadWord(n)) return false;
             confirmTrainerName(n);
             return true;
-        }, "Scegli un nome valido, oppure tocca \"Preferisco non rispondere\".");
+        }, getString(R.string.err_choose_valid_name_or_skip));
         dialog.show();
     }
 
@@ -396,62 +402,56 @@ public class MainActivity extends Activity {
             showWelcomeGuide();
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Conferma")
-            .setMessage("Ti chiami \""+name+"\", ho capito bene?")
+        new AlertDialog.Builder(this).setTitle(getString(R.string.btn_confirm))
+            .setMessage(getString(R.string.confirm_trainer_name_msg,name))
             .setCancelable(false)
-            .setPositiveButton("Sì", (d,w) -> {
+            .setPositiveButton(getString(R.string.btn_yes), (d,w) -> {
                 store.trainerName = name; store.onboardingDone = true; store.save();
                 showWelcomeGuide();
             })
-            .setNegativeButton("No", (d,w) -> askTrainerName())
+            .setNegativeButton(getString(R.string.btn_no), (d,w) -> askTrainerName())
             .show();
     }
 
     void showWelcomeGuide(){
-        String title = store.trainerName.isEmpty() ? "Benvenuto su Pocket Tracker!" : ("Benvenuto su Pocket Tracker, "+store.trainerName+"!");
-        String guide = "Ecco come funziona, in breve:\n\n"
-            + "• Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n"
-            + "• Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n"
-            + "• Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n"
-            + "• Il tab Stats ti mostra il quadro generale della Stagione.\n"
-            + "• Hai giocato senza registrare ogni partita? Usa \"Aggiungi correzione manuale\" per allineare i conti.\n\n"
-            + "Buon divertimento, e che le tue serie di vittorie siano lunghe!";
+        String title = store.trainerName.isEmpty() ? getString(R.string.dialog_welcome_title) : getString(R.string.dialog_welcome_title_named,store.trainerName);
+        String guide = getString(R.string.dialog_welcome_guide, getString(R.string.action_add_correction));
         new AlertDialog.Builder(this).setTitle(title)
             .setMessage(guide)
             .setCancelable(false)
-            .setPositiveButton("Iniziamo!", (d,w) -> { if (store.seasons.isEmpty()) wizardStep1(true, null); })
+            .setPositiveButton(getString(R.string.btn_lets_start), (d,w) -> { if (store.seasons.isEmpty()) wizardStep1(true, null); })
             .show();
     }
 
     void wizardStep1(boolean first, String prefillName){
         LinearLayout box = formBox();
-        String defaultName = first ? "Stagione 1" : ("Stagione " + (store.seasons.size()+1));
-        box.addView(label("Nome Stagione"));
+        String defaultName = first ? getString(R.string.label_season_default_name,1) : getString(R.string.label_season_default_name,store.seasons.size()+1);
+        box.addView(label(getString(R.string.hint_season_name)));
         EditText name = field(defaultName);
         if (prefillName != null) name.setText(prefillName);
         box.addView(name);
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? "Crea la prima Stagione" : "Nuova Stagione")
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? getString(R.string.dialog_create_first_season_title) : getString(R.string.btn_new_season))
             .setView(box).setCancelable(!first)
-            .setPositiveButton("Avanti", (d,w) -> {
+            .setPositiveButton(getString(R.string.btn_next), (d,w) -> {
                 String n = name.getText().toString().trim();
                 wizardStep2(first, n.isEmpty() ? defaultName : n);
             });
-        if (!first) b.setNegativeButton("Annulla", null); // solo se NON e' la primissima Stagione: qui c'e' gia' una lista a cui tornare
+        if (!first) b.setNegativeButton(getString(R.string.btn_cancel), null); // solo se NON e' la primissima Stagione: qui c'e' gia' una lista a cui tornare
         b.show();
     }
 
     void wizardStep2(boolean first, String name){
         new AlertDialog.Builder(this).setTitle(name)
-            .setMessage("Hai già giocato questa Stagione prima di usare il tracker?")
+            .setMessage(getString(R.string.dialog_already_played_question))
             .setCancelable(false)
-            .setNeutralButton("Indietro", (d,w) -> wizardStep1(first, name))
-            .setPositiveButton("Sì", (d,w) -> wizardStep3Yes(first, name))
-            .setNegativeButton("No", (d,w) -> wizardStep3No(first, name))
+            .setNeutralButton(getString(R.string.btn_back), (d,w) -> wizardStep1(first, name))
+            .setPositiveButton(getString(R.string.btn_yes), (d,w) -> wizardStep3Yes(first, name))
+            .setNegativeButton(getString(R.string.btn_no), (d,w) -> wizardStep3No(first, name))
             .show();
     }
 
-    // "Sì": chiede solo lo stato ATTUALE (il baseline resta lo standard 810/streak 0) e registra la
-    // differenza come un'unica partita di correzione (stesso meccanismo di "Aggiungi correzione manuale").
+    // getString(R.string.btn_yes): chiede solo lo stato ATTUALE (il baseline resta lo standard 810/streak 0) e registra la
+    // differenza come un'unica partita di correzione (stesso meccanismo di getString(R.string.action_add_correction)).
     // Alla creazione di una nuova Stagione, importa i NOMI dei deck della Stagione che sta per bloccarsi
     // (l'ultima esistente prima di questa) — comodo per non doverli riscrivere ogni volta. Le Liste
     // (screenshot) NON vengono importate: ogni Stagione ha le proprie, ripartono vuote.
@@ -463,18 +463,18 @@ public class MainActivity extends Activity {
 
     void wizardStep3Yes(boolean first, String name){
         LinearLayout box = formBox();
-        EditText points = numberField("Punti attuali", true);
-        EditText streak = numberField("Vittorie consecutive attuali", true);
-        EditText wins = numberField("Vittorie totali", false);
-        EditText losses = numberField("Sconfitte totali", false);
-        box.addView(label("Punti attuali")); box.addView(points);
-        box.addView(label("Vittorie consecutive attuali")); box.addView(streak);
-        box.addView(label("Vittorie totali")); box.addView(wins);
-        box.addView(label("Sconfitte totali")); box.addView(losses);
+        EditText points = numberField(getString(R.string.label_current_points_title), true);
+        EditText streak = numberField(getString(R.string.label_current_streak), true);
+        EditText wins = numberField(getString(R.string.label_total_wins), false);
+        EditText losses = numberField(getString(R.string.label_total_losses), false);
+        box.addView(label(getString(R.string.label_current_points_title))); box.addView(points);
+        box.addView(label(getString(R.string.label_current_streak))); box.addView(streak);
+        box.addView(label(getString(R.string.label_total_wins))); box.addView(wins);
+        box.addView(label(getString(R.string.label_total_losses))); box.addView(losses);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle(name)
             .setView(box).setCancelable(false)
-            .setPositiveButton("Crea Stagione", null)
-            .setNeutralButton("Indietro", (d,w) -> wizardStep2(first, name))
+            .setPositiveButton(getString(R.string.dialog_create_season_title), null)
+            .setNeutralButton(getString(R.string.btn_back), (d,w) -> wizardStep2(first, name))
             .create();
         showNonDismissing(dialog, () -> {
             try {
@@ -496,12 +496,12 @@ public class MainActivity extends Activity {
                 screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Inserisci valori validi (streak/vittorie/sconfitte >= 0).");
+        }, getString(R.string.err_invalid_values));
         dialog.show();
     }
 
-    // "No": si parte dallo standard 810/streak 0, e si passa dritti alla scelta del deck di partenza
-    // (con "Annulla" per decidere più avanti, come al solito).
+    // getString(R.string.btn_no): si parte dallo standard 810/streak 0, e si passa dritti alla scelta del deck di partenza
+    // (con getString(R.string.btn_cancel) per decidere più avanti, come al solito).
     void wizardStep3No(boolean first, String name){
         Season s = new Season(name);
         s.baseline = DEFAULT_BASELINE; s.initialStreak = 0;
@@ -511,7 +511,7 @@ public class MainActivity extends Activity {
         store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
         if (view == null) { setupTrackerView(); }
         screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
-        pickDeckFor(s, "Scegli il Deck", "Salta", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        pickDeckFor(s, getString(R.string.dialog_choose_deck_title), "Salta", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
     }
 
 
@@ -524,7 +524,7 @@ public class MainActivity extends Activity {
     // Selettore di deck condiviso: usato sia per scegliere il deck "attuale" (quello che verra' assegnato alla
     // PROSSIMA partita registrata) sia per cambiare retroattivamente il deck di una partita GIA' giocata.
     // onPicked riceve il nome del deck scelto (o appena creato) e decide lui cosa farne.
-    // Dialog "Scegli un Deck": lista con ricerca (stessa idea del tab Deck: lente che si espande in un
+    // Dialog getString(R.string.dialog_pick_deck_title): lista con ricerca (stessa idea del tab Deck: lente che si espande in un
     // campo di testo con "X" per azzerare) e altezza limitata a 6 righe visibili (poi scrollbar) — prima
     // era un semplice setItems() nativo, senza ricerca e senza limite, che con tanti deck diventava
     // scomodamente lungo. Header con sfondo scuro (rgb(21,34,56)), lo stesso usato per l'header
@@ -536,7 +536,7 @@ public class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.VERTICAL);
         header.setBackgroundColor(Color.rgb(21,34,56));
         header.setPadding(dp(20),dp(16),dp(20),dp(12));
-        TextView title = new TextView(this); title.setText("Scegli un Deck"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_pick_deck_title)); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title);
 
         // Barra di ricerca: pillola con lente, si espande in un campo di testo con "X" cerchiata per
@@ -550,7 +550,7 @@ public class MainActivity extends Activity {
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
-        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint("Cerca deck"); searchInput.setTextSize(14);
+        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0); searchInput.setVisibility(View.GONE);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         TextView clearBtn = new TextView(this); clearBtn.setText("✕"); clearBtn.setTextColor(MUTED_TXT); clearBtn.setGravity(Gravity.CENTER); clearBtn.setTextSize(13);
@@ -579,7 +579,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams listLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.min(filtered.size(),6)*rowHeightPx);
         root.addView(listView, listLp);
 
-        AlertDialog dialog = new AlertDialog.Builder(this).setView(root).setNegativeButton("Annulla", null).create();
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(root).setNegativeButton(getString(R.string.btn_cancel), null).create();
         listView.setOnItemClickListener((parent,v,position,id) -> { dialog.dismiss(); onPicked.accept(filtered.get(position)); });
 
         Runnable[] doFilter = new Runnable[1];
@@ -653,7 +653,7 @@ public class MainActivity extends Activity {
         downArrowDrawable.setBounds(0,0,dp(12),dp(12));
         deckSelector.setCompoundDrawables(null,null,downArrowDrawable,null);
         deckSelector.setCompoundDrawablePadding(dp(8));
-        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : "Tocca per scegliere un deck");
+        refreshSelector[0] = () -> deckSelector.setText(selected[0] != null ? selected[0] : getString(R.string.hint_tap_choose_deck));
         refreshSelector[0].run();
         if (hasAnyDeck) {
             LinearLayout.LayoutParams selLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -667,7 +667,7 @@ public class MainActivity extends Activity {
         newBtnLp.topMargin = dp(10); box.addView(newDeckBtn, newBtnLp);
 
         android.widget.FrameLayout newDeckSection = new android.widget.FrameLayout(this);
-        EditText newDeckName = field("Nome nuovo deck"); newDeckName.setPadding(dp(14),dp(12),dp(44),dp(12));
+        EditText newDeckName = field(getString(R.string.hint_new_deck_name)); newDeckName.setPadding(dp(14),dp(12),dp(44),dp(12));
         newDeckSection.addView(newDeckName, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT));
         TextView closeNewDeck = new TextView(this); closeNewDeck.setText("✕"); closeNewDeck.setTextColor(MUTED_TXT); closeNewDeck.setGravity(Gravity.CENTER);
         GradientDrawable closeCircle = new GradientDrawable(); closeCircle.setShape(GradientDrawable.OVAL); closeCircle.setColor(Color.rgb(24,36,52));
@@ -683,9 +683,9 @@ public class MainActivity extends Activity {
         closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
 
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
-            .setPositiveButton("Conferma", null).setNegativeButton(negativeLabel, null).create();
+            .setPositiveButton(getString(R.string.btn_confirm), null).setNegativeButton(negativeLabel, null).create();
         // Selezionare un deck ESISTENTE dalla lista conferma ed esce subito (chiude anche questo dialog
-        // "genitore"): prima bisognava tornare qui e premere ancora "Conferma", un passaggio in piu' inutile
+        // "genitore"): prima bisognava tornare qui e premere ancora getString(R.string.btn_confirm), un passaggio in piu' inutile
         // visto che la scelta e' gia' inequivocabile. Il pulsante negativo (Annulla/Salta) invece torna qui,
         // come gia' faceva.
         deckSelector.setOnClickListener(v -> {
@@ -705,7 +705,7 @@ public class MainActivity extends Activity {
             if (selected[0] == null) return false;
             onPicked.accept(selected[0]);
             return true;
-        }, "Seleziona un deck esistente o scrivi il nome di uno nuovo.");
+        }, getString(R.string.err_select_or_new_deck));
         dialog.show();
     }
 
@@ -717,14 +717,15 @@ public class MainActivity extends Activity {
         Season s = store.seasons.get(store.current);
         String oldName = d.name;
         LinearLayout box = formBox();
-        box.addView(label("Nome Deck"));
+        box.addView(label(getString(R.string.hint_deck_name)));
         EditText e = field(oldName); e.setText(oldName);
         box.addView(e);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rinomina Deck").setView(box)
-            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
+        applyMaxLength(box, e, 20);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_rename_deck_title)).setView(box)
+            .setPositiveButton(getString(R.string.btn_save), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
             String n = e.getText().toString().trim();
-            if (n.isEmpty() || n.equalsIgnoreCase("Deck sconosciuto") || n.equalsIgnoreCase("Unknown")) return false;
+            if (n.isEmpty() || n.equalsIgnoreCase(getString(R.string.label_unknown_deck)) || n.equalsIgnoreCase("Unknown")) return false;
             for (Deck other: s.decks) if (other!=d && other.name.equalsIgnoreCase(n)) return false;
             d.name = n;
             for (Match m: s.matches) if (oldName.equals(m.deck)) m.deck = n;
@@ -732,11 +733,11 @@ public class MainActivity extends Activity {
             store.save(); view.invalidate();
             if (onChanged!=null) onChanged.run();
             return true;
-        }, "Nome Deck non valido o già esistente.");
+        }, getString(R.string.err_deck_name_invalid));
         dialog.show();
     }
 
-    // Riga di una card deck dentro il dialog "Cambia deck": stesso disegno esatto delle card del tab Deck
+    // Riga di una card deck dentro il dialog getString(R.string.action_change_deck): stesso disegno esatto delle card del tab Deck
     // (deckCardVisual, nessun effetto collaterale sullo stato del tab Deck vero), con in piu' il bordo
     // arancione se e' il deck attualmente selezionato in QUESTO dialog (non ancora confermato).
     class DeckCardRowView extends View {
@@ -767,8 +768,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Menu "⋮" di una riga nel dialog "Cambia deck": stesse azioni disponibili altrove per un deck, con in
-    // piu' "Vedi Lista" separata da "Aggiungi Lista" (prima un'unica voce faceva entrambe le cose in base
+    // Menu "⋮" di una riga nel dialog getString(R.string.action_change_deck): stesse azioni disponibili altrove per un deck, con in
+    // piu' getString(R.string.action_view_lista) separata da getString(R.string.action_add_lista) (prima un'unica voce faceva entrambe le cose in base
     // allo stato). onChanged: richiamato per far ridisegnare la riga (es. dopo rinomina).
     // Menu "⋮" adatto ai dialog nativi (a differenza di TrackerView.showAnchoredMenu, pensato solo per il
     // canvas dell'app: ancorare li' un popup mentre e' aperto un Dialog lo fa apparire nella finestra
@@ -802,13 +803,13 @@ public class MainActivity extends Activity {
 
     void showDeckRowMenu(Season s, Deck d, View anchorView, Runnable onChanged){
         boolean hasLista = !d.images.isEmpty();
-        ArrayList<String> labels = new ArrayList<>(java.util.Arrays.asList("Rinomina deck","Scegli anteprima"));
+        ArrayList<String> labels = new ArrayList<>(java.util.Arrays.asList(getString(R.string.action_rename_deck),getString(R.string.action_choose_preview)));
         ArrayList<Integer> colors = new ArrayList<>(java.util.Arrays.asList(Color.WHITE, Color.WHITE));
         ArrayList<Runnable> actions = new ArrayList<>(java.util.Arrays.asList(
             (Runnable)(() -> renameDeckDialog(d, onChanged)), (Runnable)(() -> showPreviewPicker(d, onChanged))));
-        if (hasLista) { labels.add("Vedi Lista"); colors.add(Color.WHITE); actions.add(() -> showImageGallery(d,0)); }
-        labels.add("Aggiungi Lista"); colors.add(Color.WHITE); actions.add(() -> pickImageFor(d));
-        labels.add("Elimina deck"); colors.add(red()); actions.add(() -> confirmDeleteDeck(s,d,onChanged));
+        if (hasLista) { labels.add(getString(R.string.action_view_lista)); colors.add(Color.WHITE); actions.add(() -> showImageGallery(d,0)); }
+        labels.add(getString(R.string.action_add_lista)); colors.add(Color.WHITE); actions.add(() -> pickImageFor(d));
+        labels.add(getString(R.string.action_delete_deck)); colors.add(red()); actions.add(() -> confirmDeleteDeck(s,d,onChanged));
         int[] colArr = new int[colors.size()]; for(int i=0;i<colArr.length;i++) colArr[i]=colors.get(i);
         showDialogMenu(anchorView, labels.toArray(new String[0]), colArr, actions.toArray(new Runnable[0]));
     }
@@ -825,7 +826,7 @@ public class MainActivity extends Activity {
         return cnt;
     }
 
-    // Dialog "Seleziona un deck" generico, condiviso da chooseCurrentDeck() (cambia il deck attuale della
+    // Dialog getString(R.string.dialog_select_deck_title) generico, condiviso da chooseCurrentDeck() (cambia il deck attuale della
     // Stagione) e changeMatchDeck() (cambia il deck di UNA partita gia' giocata) — stesse card, ricerca,
     // "Nuovo Deck", Annulla/Conferma; cambia solo il titolo, la selezione di partenza e cosa fare col deck
     // scelto (parametrizzato con onConfirm).
@@ -860,7 +861,7 @@ public class MainActivity extends Activity {
         // Sempre visibile, niente piu' pulsante che si espande: la tastiera si apre semplicemente toccando
         // il campo (comportamento normale di ogni EditText).
         EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
-        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint("Cerca deck"); searchInput.setTextSize(14);
+        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         // "X" visibile SOLO quando c'e' del testo scritto (non il placeholder).
@@ -979,9 +980,9 @@ public class MainActivity extends Activity {
         // Footer: Annulla / Conferma.
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
         cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
-        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
         confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
         footer.addView(cancelBtn); footer.addView(confirmBtn);
         root.addView(footer);
@@ -1000,7 +1001,7 @@ public class MainActivity extends Activity {
 
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
             // Creare un nuovo deck qui e' un'azione completa: lo applica subito (senza passare da
-            // "Conferma") e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
+            // getString(R.string.btn_confirm)) e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
             // evidenziata in attesa di un'ulteriore conferma.
             onConfirm.accept(newDeck);
             dialog.dismiss();
@@ -1014,7 +1015,7 @@ public class MainActivity extends Activity {
 
     void chooseCurrentDeck() {
         Season s = store.seasons.get(store.current);
-        showDeckSelectorDialog(s, "Seleziona un deck", findDeck(s, s.currentDeck), chosen -> {
+        showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_title), findDeck(s, s.currentDeck), chosen -> {
             s.currentDeck = chosen.name; store.save(); view.invalidate();
         });
     }
@@ -1036,85 +1037,21 @@ public class MainActivity extends Activity {
     // vittoria con streak alto (3+, "inarrestabile"), sconfitta.
     // Fascia dedicata alla PRIMISSIMA vittoria della serie (streak==1): frasi che parlano esplicitamente di
     // "inizio", non hanno senso ripetute a streak 2+.
-    static final String[] WIN_MSGS_FIRST = {
-        "Solo la prima di una lunga serie!",
-        "Si parte bene!",
-        "Ottimo lavoro!",
-        "Una vittoria meritata!",
-        "Bel colpo!"
-    };
-    // Streak==2: la serie sta iniziando a formarsi, ma non e' piu' "la prima" — frasi diverse.
-    static final String[] WIN_MSGS_LOW = {
-        "Continua così!",
-        "Si comincia a carburare!",
-        "Ottimo lavoro!",
-        "Una vittoria meritata!",
-        "Bel colpo!"
-    };
-    static final String[] WIN_MSGS_HIGH = {
-        "Sei inarrestabile!",
-        "Che striscia di vittorie!",
-        "Nessuno può fermarti!",
-        "Stai dominando!",
-        "Vittoria dopo vittoria, complimenti!",
-        "Sei in stato di grazia!",
-        "Imbattibile in questo momento!"
-    };
-    static final String[] LOSS_MSGS_LOW = {
-        "Capita a tutti, rialzati!",
-        "La prossima è quella buona!",
-        "Non mollare!",
-        "Ricalibra e riparti!",
-        "Un passo indietro, due avanti!",
-        "Analizza e migliora!",
-        "Il campione si vede nelle sconfitte!",
-        "Testa alta, si riparte!",
-        "Ogni sconfitta insegna qualcosa!",
-        "Pazienza, il vento girerà!"
-    };
-    // Sconfitte consecutive (3+): il tono cambia, meglio suggerire una pausa che insistere.
-    static final String[] LOSS_MSGS_HIGH = {
-        "Forse è il momento di una pausa.",
-        "Stacca un attimo, si torna più lucidi.",
-        "Respira: una pausa non fa mai male.",
-        "Prenditi qualche minuto, poi si riparte.",
-        "Va benissimo fermarsi un attimo.",
-        "Una brutta giornata capita: rilassati un po'.",
-        "Ricaricare le energie non è mai tempo perso."
-    };
-    // Legata alla GIORNATA (non allo streak): quando il win rate di OGGI supera il 65%, con abbastanza
-    // partite giocate perche' la percentuale sia significativa.
-    static final String[] DAY_MSGS_HOT = {
-        "Oggi sei inarrestabile!",
-        "Oggi non ti ferma più nessuno!",
-        "Giornata da campione!",
-        "Stai dominando la giornata!",
-        "Che giornata, continua così!",
-        "Oggi hai il tocco magico!"
-    };
-    // Messaggio di benvenuto nella lista Stagioni, legato all'orario. Ogni riga e' una coppia [con nome,
-    // senza nome] — coppie separate (non un singolo template con %s tolto a mano) per evitare frasi zoppe
-    // tipo "Partitina notturna, ?" quando il nome non e' conosciuto.
-    static final String[][] GREETING_NIGHT = {
-        {"Partitina notturna, %s?", "Partitina notturna?"},
-        {"Gli allenatori più tenaci giocano di notte, %s.", "Gli allenatori più tenaci giocano di notte."},
-        {"A quest'ora, %s? Rispetto.", "A quest'ora? Rispetto."}
-    };
-    static final String[][] GREETING_MORNING = {
-        {"Buongiorno %s, si comincia!", "Buongiorno, si comincia!"},
-        {"Colazione e qualche partita, %s?", "Colazione e qualche partita?"},
-        {"Si parte presto oggi, %s!", "Si parte presto oggi!"}
-    };
-    static final String[][] GREETING_AFTERNOON = {
-        {"Pausa pranzo con qualche partita, %s?", "Pausa pranzo con qualche partita?"},
-        {"Buon pomeriggio, %s! Pronto a giocare?", "Buon pomeriggio! Pronto a giocare?"},
-        {"%s, si gioca nel pomeriggio!", "Si gioca nel pomeriggio!"}
-    };
-    static final String[][] GREETING_EVENING = {
-        {"Buonasera %s, si comincia?", "Buonasera, si comincia?"},
-        {"Serata di Pocket, %s?", "Serata di Pocket?"},
-        {"%s, pronto per qualche partita stasera?", "Pronto per qualche partita stasera?"}
-    };
+    // I 6 pool sotto sono usati con pickMessage()/messagePoolQueues, che identifica ogni pool tramite
+    // l'IDENTITA' dell'array stesso (non il contenuto) per ricordare quali frasi sono già state usate.
+    // getResources().getStringArray() restituisce un array NUOVO ad ogni chiamata: se lo richiamassimo
+    // ogni volta, ogni pool sembrerebbe "nuovo" e la logica anti-ripetizione si romperebbe. Caricati
+    // quindi una sola volta (pigro, alla prima vittoria/sconfitta registrata) e mantenuti in cache.
+    String[] winMsgsFirst, winMsgsLow, winMsgsHigh, lossMsgsLow, lossMsgsHigh, dayMsgsHot;
+    void ensureMessagePools(){
+        if (winMsgsFirst != null) return;
+        winMsgsFirst = getResources().getStringArray(R.array.msgs_win_first);
+        winMsgsLow = getResources().getStringArray(R.array.msgs_win_low);
+        winMsgsHigh = getResources().getStringArray(R.array.msgs_win_high);
+        lossMsgsLow = getResources().getStringArray(R.array.msgs_loss_low);
+        lossMsgsHigh = getResources().getStringArray(R.array.msgs_loss_high);
+        dayMsgsHot = getResources().getStringArray(R.array.msgs_day_hot);
+    }
     // "Shuffle bag" per non ripetere le stesse frasi finche' non sono state usate tutte (poi si rimescola):
     // una coda separata per ciascuna fascia, tenuta in memoria per la durata della sessione dell'app.
     java.util.HashMap<Object, ArrayList<Integer>> messagePoolQueues = new java.util.HashMap<>();
@@ -1130,6 +1067,13 @@ public class MainActivity extends Activity {
         return pool[idx];
     }
     void showMotivationalMessage(boolean win, int streak){
+        ensureMessagePools();
+        // "PENTAKILL!" a 5 vittorie consecutive ESATTE: ha la precedenza su tutto il resto (messaggio del
+        // giorno, pool normale), e' un traguardo preciso, non casuale — stessa parola in ogni lingua.
+        if (win && streak==5) {
+            Toast.makeText(this, getString(R.string.msg_pentakill), Toast.LENGTH_SHORT).show();
+            return;
+        }
         // Messaggio legato alla GIORNATA (non allo streak): se oggi il win rate supera il 65%, con almeno 5
         // partite giocate oggi perche' la percentuale sia significativa — non sempre, per non sovrapporsi
         // troppo spesso alla logica basata sullo streak.
@@ -1140,24 +1084,31 @@ public class MainActivity extends Activity {
             for(Match m: s.matches){ if(m.unknown) continue; if(dayKey(m.timestamp).equals(todayKey)){ if(m.win) tw++; else tl++; } }
             int totalToday = tw+tl;
             if(totalToday>=5 && (100f*tw/totalToday)>65f && new java.util.Random().nextInt(5)<2){
-                Toast.makeText(this, pickMessage(DAY_MSGS_HOT), Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, pickMessage(dayMsgsHot), Toast.LENGTH_SHORT).show();
                 return;
             }
         }
         String[] pool;
-        if(win) pool = (streak==1) ? WIN_MSGS_FIRST : (streak>=3 ? WIN_MSGS_HIGH : WIN_MSGS_LOW);
-        else pool = streak>=3 ? LOSS_MSGS_HIGH : LOSS_MSGS_LOW;
+        if(win) pool = (streak==1) ? winMsgsFirst : (streak>=3 ? winMsgsHigh : winMsgsLow);
+        else pool = streak>=3 ? lossMsgsHigh : lossMsgsLow;
         String msg;
         // "Distruggili tutti, NOME!" solo per streak alte (3+) e nome conosciuto, occasionalmente — il nome
         // e' parte della frase stessa, non solo anteposto come nel caso generico sotto.
         if (win && streak>=3 && !store.trainerName.isEmpty() && new java.util.Random().nextInt(4)==0) {
-            msg = "Distruggili tutti, "+store.trainerName+"!";
+            msg = getString(R.string.msg_destroy_them_all,store.trainerName);
         } else {
             msg = pickMessage(pool);
             // Se conosciamo il nome dell'allenatore, ogni tanto (non sempre, per non risultare ripetitivo)
-            // personalizza il messaggio anteponendolo, es. "Marco, continua così!".
+            // personalizza il messaggio col nome — a volte anteponendolo ("Marco, continua così!"), a
+            // volte in coda ("Continua così, Marco!"): sempre davanti suonava meno naturale, un po' ripetitivo.
             if (!store.trainerName.isEmpty() && new java.util.Random().nextInt(3)==0) {
-                msg = store.trainerName+", "+Character.toLowerCase(msg.charAt(0))+msg.substring(1);
+                if (new java.util.Random().nextBoolean()) {
+                    char last = msg.charAt(msg.length()-1);
+                    if (last=='!'||last=='.'||last=='?') msg = msg.substring(0,msg.length()-1)+", "+store.trainerName+last;
+                    else msg = msg+", "+store.trainerName;
+                } else {
+                    msg = store.trainerName+", "+Character.toLowerCase(msg.charAt(0))+msg.substring(1);
+                }
             }
         }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
@@ -1199,21 +1150,21 @@ public class MainActivity extends Activity {
     // premendo W o L.
     void confirmUndo(){
         Season s = store.seasons.get(store.current);
-        if (s.matches.isEmpty()) { Toast.makeText(this,"Nessuna partita da annullare.",Toast.LENGTH_SHORT).show(); return; }
+        if (s.matches.isEmpty()) { Toast.makeText(this,getString(R.string.msg_no_match_to_undo),Toast.LENGTH_SHORT).show(); return; }
         Match last = s.matches.get(s.matches.size()-1);
         String title, message, button;
         if (last.unknown) {
             // Una correzione: nessun senso parlare di "registrare di nuovo con W o L", non e' una partita.
-            title = "Annullare la correzione?";
-            message = "La correzione manuale verrà eliminata definitivamente.";
-            button = "Annulla correzione";
+            title = getString(R.string.dialog_undo_correction_msg);
+            message = getString(R.string.msg_correction_will_be_deleted);
+            button = getString(R.string.dialog_undo_correction_title);
         } else {
             // Sappiamo gia' se era una vittoria o una sconfitta: lo diciamo esplicitamente invece del generico
             // "registra di nuovo con W o L".
-            String outcome = last.win ? "una vittoria (W)" : "una sconfitta (L)";
-            title = "Annullare l'ultima partita?";
-            message = "Hai registrato "+outcome+": verrà eliminata definitivamente. Se hai sbagliato ad annullare, registra di nuovo "+outcome+".";
-            button = "Annulla partita";
+            String outcome = last.win ? getString(R.string.label_outcome_win) : getString(R.string.label_outcome_loss);
+            title = getString(R.string.dialog_undo_last_match_title);
+            message = getString(R.string.confirm_undo_match_msg,outcome);
+            button = getString(R.string.dialog_undo_match_title);
         }
         new AlertDialog.Builder(this).setTitle(title)
             .setMessage(message)
@@ -1222,7 +1173,7 @@ public class MainActivity extends Activity {
                 recomputeSeasonState(s);
                 store.save(); view.invalidate();
             })
-            .setNegativeButton("Chiudi", null)
+            .setNegativeButton(getString(R.string.btn_close), null)
             .show();
     }
 
@@ -1236,13 +1187,13 @@ public class MainActivity extends Activity {
         EditText st = numberField(""+s.streak, true); st.setText(""+s.streak);
         EditText wf = numberField(""+curWL[0], false); wf.setText(""+curWL[0]);
         EditText lf = numberField(""+curWL[1], false); lf.setText(""+curWL[1]);
-        box.addView(label("Punti attuali")); box.addView(p);
-        box.addView(label("Vittorie consecutive attuali")); box.addView(st);
-        box.addView(label("Vittorie totali")); box.addView(wf);
-        box.addView(label("Sconfitte totali")); box.addView(lf);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Aggiungi correzione manuale")
-            .setMessage("Usala per allineare i punti quando hai giocato senza registrare le singole partite. Inserisci i totali ATTUALI (non solo quelli di questo periodo): calcolo io la differenza.")
-            .setView(box).setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
+        box.addView(label(getString(R.string.label_current_points_title))); box.addView(p);
+        box.addView(label(getString(R.string.label_current_streak))); box.addView(st);
+        box.addView(label(getString(R.string.label_total_wins))); box.addView(wf);
+        box.addView(label(getString(R.string.label_total_losses))); box.addView(lf);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.action_add_correction))
+            .setMessage(getString(R.string.info_manual_correction_help))
+            .setView(box).setPositiveButton(getString(R.string.btn_confirm), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
             try {
                 int np = Integer.parseInt(p.getText().toString());
@@ -1259,7 +1210,7 @@ public class MainActivity extends Activity {
                 store.save(); view.invalidate();
                 return true;
             } catch (Exception e) { return false; }
-        }, "Valori non validi (i totali di vittorie/sconfitte non possono diminuire).");
+        }, getString(R.string.err_invalid_totals));
         dialog.show();
     }
 
@@ -1295,6 +1246,16 @@ public class MainActivity extends Activity {
     // qui lo ingrandiamo SOLO lui (l'ultimo carattere), lasciando il resto del testo alla dimensione normale.
 
     LinearLayout formBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(6),dp(20),0);return l;}
+
+    // Applica un limite di caratteri a un campo (impedisce di digitarne oltre, invece di validare dopo) e
+    // aggiunge un piccolo suggerimento sotto che lo dichiara, subito dopo il campo nel box del dialog.
+    void applyMaxLength(LinearLayout box, EditText field, int maxLen){
+        field.setFilters(new android.text.InputFilter[]{ new android.text.InputFilter.LengthFilter(maxLen) });
+        TextView hint = new TextView(this); hint.setText(getString(R.string.hint_max_chars, maxLen));
+        hint.setTextColor(MUTED_TXT); hint.setTextSize(11);
+        hint.setPadding(0,dp(4),0,0);
+        box.addView(hint);
+    }
     TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(MUTED_TXT);t.setTextSize(12);t.setPadding(0,dp(10),0,dp(4));return t;}
     EditText field(String hint){EditText e=new EditText(this);e.setHint(hint);e.setSingleLine();e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);styleField(e);return e;}
     EditText multilineField(String hint, String initial){
@@ -1318,7 +1279,7 @@ public class MainActivity extends Activity {
     }
     // Solo la data, senza l'orario: usata nel grafico e nei raggruppamenti giornalieri.
     String formatDateOnly(long ts){
-        if (ts<=0) return "Data sconosciuta";
+        if (ts<=0) return getString(R.string.label_unknown_date);
         return new java.text.SimpleDateFormat("dd/MM/yy", Locale.ITALY).format(new java.util.Date(ts));
     }
     // Solo l'ora, usata nelle singole righe partita (la data e' gia' nell'intestazione del gruppo giornaliero).
@@ -1373,16 +1334,16 @@ public class MainActivity extends Activity {
     // dato che e' un'azione distruttiva e irreversibile. Dopo la cancellazione, l'app si comporta come al
     // primissimo avvio: riparte dal wizard obbligatorio di creazione della prima Stagione.
     void resetAllData(){
-        new AlertDialog.Builder(this).setTitle("Cancellare tutti i dati?")
-            .setMessage("Questo eliminerà definitivamente ogni Stagione, partita e deck. L'azione non può essere annullata.")
-            .setPositiveButton("Elimina tutto", (d,w) -> {
+        new AlertDialog.Builder(this).setTitle(getString(R.string.confirm_delete_all_title))
+            .setMessage(getString(R.string.confirm_delete_all_msg))
+            .setPositiveButton(getString(R.string.action_delete_all), (d,w) -> {
                 store.seasons.clear();
                 store.current = 0;
                 store.save();
                 if (view != null) view.invalidate();
                 wizardStep1(true, null);
             })
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton(getString(R.string.btn_cancel), null)
             .show();
     }
 
@@ -1390,29 +1351,29 @@ public class MainActivity extends Activity {
         Season s=store.seasons.get(store.current);
         LinearLayout box = formBox();
         TextView header = new TextView(this);
-        header.setText("Rinomina Stagione"); header.setTextColor(Color.WHITE); header.setTextSize(18);
+        header.setText(getString(R.string.dialog_rename_season_title)); header.setTextColor(Color.WHITE); header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
         header.setPadding(0,dp(10),0,dp(14));
         box.addView(header);
         EditText e=field(s.name); e.setText(s.name);
         box.addView(e);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
-            .setPositiveButton("Salva", null).setNegativeButton("Annulla", null).create();
+            .setPositiveButton(getString(R.string.btn_save), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
             String n = e.getText().toString().trim();
             if (n.isEmpty()) return false;
             s.name = n; store.save(); view.invalidate();
             return true;
-        }, "Il nome della Stagione non può essere vuoto.");
+        }, getString(R.string.err_season_name_empty));
         dialog.show();
     }
 
     // Elimina un deck: se e' usato in una o piu' partite, avvisa prima e, se confermato, imposta quelle
-    // partite su "Deck sconosciuto" (Unknown) invece di lasciarle con un riferimento a un deck inesistente.
+    // partite su getString(R.string.label_unknown_deck) (Unknown) invece di lasciarle con un riferimento a un deck inesistente.
     // Menu "⋮" della card di un deck: rinomina, aggiungi immagine, elimina (in rosso, sempre con conferma).
     void deckActionsMenu(Season s, Deck d, float rightEdgeX, float anchorY){
         view.showAnchoredMenu(rightEdgeX, anchorY,
-            new String[]{"Rinomina deck","Scegli anteprima","Aggiungi Lista","Elimina deck"},
+            new String[]{getString(R.string.action_rename_deck),getString(R.string.action_choose_preview),getString(R.string.action_add_lista),getString(R.string.action_delete_deck)},
             new int[]{Color.WHITE, Color.WHITE, Color.WHITE, red()},
             new Runnable[]{ () -> renameDeckDialog(d), () -> showPreviewPicker(d), () -> openDeckImages(d), () -> confirmDeleteDeck(s,d) });
     }
@@ -1421,45 +1382,45 @@ public class MainActivity extends Activity {
     void seasonActionsMenu(int idx, float rightEdgeX, float anchorY){
         Season s = store.seasons.get(idx);
         view.showAnchoredMenu(rightEdgeX, anchorY,
-            new String[]{"Rinomina Stagione","Elimina Stagione"},
+            new String[]{getString(R.string.dialog_rename_season_title),getString(R.string.action_delete_season)},
             new int[]{Color.WHITE, red()},
             new Runnable[]{ () -> { store.current = idx; renameSeason(); }, () -> confirmDeleteSeason(idx) });
     }
 
     void confirmDeleteSeason(int idx){
         Season s = store.seasons.get(idx);
-        new AlertDialog.Builder(this).setTitle("Elimina \""+s.name+"\"")
-            .setMessage("Verranno eliminate definitivamente tutte le "+s.matches.size()+" partite e i deck di questa Stagione. Azione irreversibile.")
-            .setPositiveButton("Elimina", (dlg,w) -> {
+        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_delete_season_title_fmt, s.name))
+            .setMessage(getString(R.string.confirm_delete_season_msg, s.matches.size()))
+            .setPositiveButton(getString(R.string.btn_delete), (dlg,w) -> {
                 store.seasons.remove(idx);
                 if (store.current>=store.seasons.size()) store.current = Math.max(0, store.seasons.size()-1);
                 else if (store.current>idx) store.current--;
                 store.save(); view.invalidate();
             })
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton(getString(R.string.btn_cancel), null)
             .show();
     }
 
     void confirmDeleteDeck(Season s, Deck d){ confirmDeleteDeck(s, d, null); }
 
-    // onChanged (opzionale): richiamato a eliminazione avvenuta — nel dialog "Cambia deck" serve per togliere
+    // onChanged (opzionale): richiamato a eliminazione avvenuta — nel dialog getString(R.string.action_change_deck) serve per togliere
     // subito la riga dalla lista, non solo dal tab Deck vero.
     void confirmDeleteDeck(Season s, Deck d, Runnable onChanged){
         int usedCount = 0;
         for (Match m: s.matches) if (d.name.equals(m.deck)) usedCount++;
         String message = usedCount>0
-            ? "Questo deck e' usato in "+usedCount+" "+(usedCount==1?"partita":"partite")+". Eliminandolo, "+(usedCount==1?"verra' impostata":"verranno impostate")+" su \"Deck sconosciuto\"."
-            : "Eliminare definitivamente questo deck?";
-        new AlertDialog.Builder(this).setTitle("Elimina "+d.name)
+            ? getString(usedCount==1 ? R.string.confirm_delete_deck_used_singular : R.string.confirm_delete_deck_used_plural, usedCount)
+            : getString(R.string.confirm_delete_deck_msg);
+        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_delete_deck_title_fmt, d.name))
             .setMessage(message)
-            .setPositiveButton("Elimina", (dlg,w)-> {
+            .setPositiveButton(getString(R.string.btn_delete), (dlg,w)-> {
                 for (Match m: s.matches) if (d.name.equals(m.deck)) m.deck = "Unknown";
                 if (d.name.equals(s.currentDeck)) s.currentDeck = "Unknown";
                 s.decks.remove(d);
                 store.save(); if (view!=null) view.invalidate();
                 if (onChanged!=null) onChanged.run();
             })
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton(getString(R.string.btn_cancel), null)
             .show();
     }
 
@@ -1477,7 +1438,7 @@ public class MainActivity extends Activity {
     void addDeck(){ addDeck(null); }
 
     // onCreated (opzionale): richiamato col Deck appena creato, se il salvataggio va a buon fine — usato dal
-    // dialog "Cambia deck" per aggiornare la lista e selezionare subito il nuovo deck.
+    // dialog getString(R.string.action_change_deck) per aggiornare la lista e selezionare subito il nuovo deck.
     void addDeck(java.util.function.Consumer<Deck> onCreated){
         Season s=store.seasons.get(store.current); LinearLayout box=formBox();
         // Deck "in sospeso": non ancora creato/salvato, serve solo per tenere lo stile/colore scelto
@@ -1493,18 +1454,19 @@ public class MainActivity extends Activity {
         box.addView(thumbFrame, thumbBoxLp);
         thumb.setOnClickListener(v -> showPreviewPicker(pendingDeck, thumb::invalidate));
 
-        // Tolta l'etichetta "Nome Deck" sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
-        // ha comunque il placeholder "Nome Deck" — prima la scritta compariva 3 volte, troppa ripetizione.
-        EditText e=field("Nome Deck"); box.addView(e);
-        Button img=new Button(this); img.setText("Aggiungi Lista (opzionale)"); styleSecondaryButton(img);
+        // Tolta l'etichetta getString(R.string.hint_deck_name) sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
+        // ha comunque il placeholder getString(R.string.hint_deck_name) — prima la scritta compariva 3 volte, troppa ripetizione.
+        EditText e=field(getString(R.string.hint_deck_name)); box.addView(e);
+        applyMaxLength(box, e, 20);
+        Button img=new Button(this); img.setText(getString(R.string.action_add_lista_optional)); styleSecondaryButton(img);
         // Margine e larghezza piena come negli altri dialog (prima il pulsante era attaccato al campo sopra,
         // senza respiro, e piu' stretto del contenuto — risultava piu' "povero" rispetto al dialog Nuova Sessione.
         LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         imgLp.topMargin = dp(14); img.setLayoutParams(imgLp);
         box.addView(img);
         img.setOnClickListener(v-> pickImageFor(null)); // null = immagine "in sospeso", verra' assegnata al Deck solo se il salvataggio va a buon fine
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Nuovo Deck").setView(box)
-            .setPositiveButton("Conferma", null).setNegativeButton("Annulla", null).create();
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.btn_new_deck)).setView(box)
+            .setPositiveButton(getString(R.string.btn_confirm), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
             String n=e.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) return false;
@@ -1521,7 +1483,7 @@ public class MainActivity extends Activity {
             s.decks.add(deck);store.save();view.invalidate();
             if (onCreated!=null) onCreated.accept(deck);
             return true;
-        }, "Nome Deck non valido o già esistente.");
+        }, getString(R.string.err_deck_name_invalid));
         dialog.show();
     }
 
@@ -1545,7 +1507,7 @@ public class MainActivity extends Activity {
     void pickImageFor(Deck target){
         pendingImageTargetDeck = target;
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("image/*"); i.addCategory(Intent.CATEGORY_OPENABLE);
-        try { startActivityForResult(i,101); } catch(Exception ex) { Toast.makeText(this,"Nessuna app disponibile per selezionare la Lista.",Toast.LENGTH_SHORT).show(); }
+        try { startActivityForResult(i,101); } catch(Exception ex) { Toast.makeText(this,getString(R.string.err_no_app_for_lista),Toast.LENGTH_SHORT).show(); }
     }
 
     @Override protected void onActivityResult(int req,int result,Intent data){
@@ -1591,7 +1553,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Cella della griglia nel dialog "Scegli anteprima": disegna una card preimpostata (stile+colore
+    // Cella della griglia nel dialog getString(R.string.action_choose_preview): disegna una card preimpostata (stile+colore
     // correnti) e, se selezionata, il bordo arancione — stesso arancione usato per la card Stagione attuale.
     class PreviewSwatchView extends View {
         String style; String colorKey; boolean selected=false;
@@ -1628,12 +1590,12 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText("Stile preferito per le card"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_preferred_style_title)); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
         root.addView(title, titleLp);
 
-        String[] styleKeys = {"spine","gem","holo","prism","ring","fold"};
+        String[] styleKeys = {"spine","gem","holo","waves","sun","tech"};
         PreviewSwatchView[] swatches = new PreviewSwatchView[6];
         LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout gridRow = null;
@@ -1659,9 +1621,9 @@ public class MainActivity extends Activity {
 
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
         cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
-        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
         confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
         footer.addView(cancelBtn); footer.addView(confirmBtn);
         root.addView(footer);
@@ -1683,7 +1645,7 @@ public class MainActivity extends Activity {
     void showPreviewPicker(Deck d){ showPreviewPicker(d, null); }
 
     // onChanged (opzionale): richiamato a conferma avvenuta, per far ridisegnare la riga se il dialog che ha
-    // aperto questo picker (es. "Cambia deck") ha una sua vista separata che altrimenti non si aggiorna da
+    // aperto questo picker (es. getString(R.string.action_change_deck)) ha una sua vista separata che altrimenti non si aggiorna da
     // sola — invalidate() sulla TrackerView principale non tocca le view native di ALTRI dialog aperti.
     void showPreviewPicker(Deck d, Runnable onChanged){
         String[] activeStyle = { d.previewStyle };
@@ -1697,8 +1659,8 @@ public class MainActivity extends Activity {
         LinearLayout tabs = new LinearLayout(this); tabs.setOrientation(LinearLayout.VERTICAL);
         tabs.setPadding(dp(14),dp(14),dp(14),dp(10));
         TextView[] tabViews = new TextView[6];
-        String[] styleKeys = {"spine","gem","holo","prism","ring","fold"};
-        String[] styleLabels = {"Stile 1","Stile 2","Stile 3","Stile 4","Stile 5","Stile 6"};
+        String[] styleKeys = {"spine","gem","holo","waves","sun","tech"};
+        String[] styleLabels = {getString(R.string.style_1),getString(R.string.style_2),getString(R.string.style_3),getString(R.string.style_4),getString(R.string.style_5),getString(R.string.style_6)};
         Runnable[] refreshTabs = new Runnable[1];
         LinearLayout tabRow = null;
         for (int i=0;i<6;i++){
@@ -1761,9 +1723,9 @@ public class MainActivity extends Activity {
         // esiste piu', restano solo le card preimpostate.)
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
         cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
-        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
         confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
         footer.addView(cancelBtn); footer.addView(confirmBtn);
         root.addView(footer);
@@ -1797,8 +1759,8 @@ public class MainActivity extends Activity {
         if (d==null) return;
         if (!d.images.isEmpty()) {
             new AlertDialog.Builder(this).setTitle(d.name)
-                .setPositiveButton("Scegli anteprima", (dlg,w) -> showPreviewPicker(d))
-                .setNegativeButton("Visualizza Lista", (dlg,w) -> showImageGallery(d,0))
+                .setPositiveButton(getString(R.string.action_choose_preview), (dlg,w) -> showPreviewPicker(d))
+                .setNegativeButton(getString(R.string.action_view_lista2), (dlg,w) -> showImageGallery(d,0))
                 .show();
         } else {
             showPreviewPicker(d);
@@ -1909,7 +1871,7 @@ public class MainActivity extends Activity {
         PREVIEW_COLORS.put("grigiochiaro",new int[]{Color.rgb(0xC7,0xCD,0xD6), Color.rgb(0x9A,0xA3,0xAE), Color.rgb(0x6B,0x74,0x80)});
     }
     static final String[] PREVIEW_COLOR_ORDER = {"verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro","arcobaleno"};
-    static final String[] PREVIEW_COLOR_LABELS = {"Verde","Rosso","Azzurro","Giallo","Viola","Marrone","Grigio scuro","Oro","Grigio chiaro","Arcobaleno"};
+    static final String[] PREVIEW_COLOR_LABELS = {"Verde","Rosso","Azzurro","Giallo","Viola","Marrone",getString(R.string.color_dark_gray),"Oro",getString(R.string.color_light_gray),"Arcobaleno"};
     static final int[] RAINBOW_HUES = { Color.rgb(0xE8,0x74,0x6A), Color.rgb(0xE0,0xB0,0x23), Color.rgb(0x5F,0xCB,0x8A), Color.rgb(0x2F,0xA8,0xD9), Color.rgb(0x7B,0x4F,0xC9), Color.rgb(0xE8,0x74,0x6A) };
 
     // Punto d'ingresso unico per disegnare l'anteprima di un deck (o il placeholder "nessun deck"): sempre
@@ -1934,9 +1896,9 @@ public class MainActivity extends Activity {
         switch (style==null?"spine":style) {
             case "gem": drawPreviewGem(c, pp, l,t,r,b, shades, rainbow); break;
             case "holo": drawPreviewHolo(c, pp, l,t,r,b, shades, rainbow); break;
-            case "prism": drawPreviewPrism(c, pp, l,t,r,b, shades, rainbow); break;
-            case "ring": drawPreviewRing(c, pp, l,t,r,b, shades, rainbow); break;
-            case "fold": drawPreviewFold(c, pp, l,t,r,b, shades, rainbow); break;
+            case "waves": drawPreviewWaves(c, pp, l,t,r,b, shades, rainbow); break;
+            case "sun": drawPreviewSun(c, pp, l,t,r,b, shades, rainbow); break;
+            case "tech": drawPreviewTech(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
         c.restore();
@@ -1990,59 +1952,64 @@ public class MainActivity extends Activity {
         c.drawRect(l,t,r,b,pp);
     }
 
-    // Stile 4 "Prism": la card divisa in due da un taglio diagonale netto (chiaro in alto/sinistra, scuro in
-    // basso/destra), con una sottile cucitura chiara lungo il taglio — piu' angolare e deciso del rombo
-    // centrale di "Gem".
-    void drawPreviewPrism(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+    // Stile 4 "Waves": onde orizzontali morbide (curve di Bezier), sovrapposte verso il basso della card —
+    // richiamo acquatico minimal, ben distinto dai taglio netti degli altri stili.
+    void drawPreviewWaves(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
-        else { pp.setColor(shades[1]); c.drawRect(l,t,r,b,pp); }
-        Path lightHalf = new Path(); lightHalf.moveTo(l,t); lightHalf.lineTo(r,t); lightHalf.lineTo(l,b); lightHalf.close();
-        pp.setColor(rainbow ? Color.argb(70,255,255,255) : shades[0]);
-        c.drawPath(lightHalf, pp);
-        Path deepHalf = new Path(); deepHalf.moveTo(r,t); deepHalf.lineTo(r,b); deepHalf.lineTo(l,b); deepHalf.close();
-        pp.setColor(rainbow ? Color.argb(100,10,14,20) : shades[2]);
-        c.drawPath(deepHalf, pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(130,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
-        c.drawLine(l,t,r,b,pp);
+        else { pp.setColor(shades[2]); c.drawRect(l,t,r,b,pp); }
+        float w=r-l, h=b-t;
+        float[] waveY = {t+h*0.55f, t+h*0.72f, t+h*0.88f};
+        int[] waveCol = rainbow
+            ? new int[]{Color.argb(60,255,255,255), Color.argb(90,255,255,255), Color.argb(130,255,255,255)}
+            : new int[]{shades[1], shades[0], shades[1]};
+        for (int i=0;i<3;i++){
+            float wy = waveY[i];
+            Path wave = new Path();
+            wave.moveTo(l, wy);
+            wave.cubicTo(l+w*0.25f, wy-h*0.055f, l+w*0.25f, wy+h*0.055f, l+w*0.5f, wy);
+            wave.cubicTo(l+w*0.75f, wy-h*0.055f, l+w*0.75f, wy+h*0.055f, r, wy);
+            wave.lineTo(r,b); wave.lineTo(l,b); wave.close();
+            pp.setColor(waveCol[i]);
+            c.drawPath(wave, pp);
+        }
     }
 
-    // Stile 5 "Ring": un medaglione — anello sottile chiaro attorno a un disco centrale, su sfondo scuro
-    // (il colore/arcobaleno vive solo nell'anello) — silhouette circolare, ben distinta dai rettangoli di
-    // "Spine" e dal rombo di "Gem".
-    void drawPreviewRing(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
-        float cx=(l+r)/2, cy=(t+b)/2, side=Math.min(r-l,b-t);
-        pp.setStyle(Paint.Style.FILL); pp.setColor(rainbow ? Color.rgb(18,24,34) : shades[2]);
-        c.drawRect(l,t,r,b,pp);
-        float outerR=side*0.38f, innerR=outerR*0.58f;
-        if (rainbow) pp.setShader(new SweepGradient(cx,cy,RAINBOW_HUES,null)); else pp.setColor(shades[1]);
-        c.drawCircle(cx,cy,outerR,pp); pp.setShader(null);
-        pp.setColor(rainbow ? Color.rgb(18,24,34) : shades[2]);
-        c.drawCircle(cx,cy,innerR,pp);
-        pp.setColor(rainbow ? Color.WHITE : shades[0]);
-        c.drawCircle(cx,cy,innerR*0.4f,pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(80,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
-        c.drawCircle(cx,cy,outerR,pp);
+    // Stile 5 "Sun": sfondo a gradiente verticale (chiaro in alto, scuro in basso, tipo "cielo"), un sole
+    // pieno appena sopra la linea dell'orizzonte — silhouette semplice, riconoscibile a colpo d'occhio.
+    void drawPreviewSun(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+        pp.setStyle(Paint.Style.FILL);
+        if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); }
+        else { pp.setShader(new LinearGradient(0,t,0,b, shades[0], shades[2], Shader.TileMode.CLAMP)); }
+        c.drawRect(l,t,r,b,pp); pp.setShader(null);
+        float cx=(l+r)/2, w=r-l, h=b-t;
+        float horizonY = t+h*0.62f, sunR = w*0.22f;
+        pp.setColor(rainbow ? Color.WHITE : shades[1]);
+        c.drawCircle(cx, horizonY-sunR*0.3f, sunR, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(90,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        c.drawLine(l,horizonY,r,horizonY,pp);
     }
 
-    // Stile 6 "Fold": un angolo "piegato" in alto a destra (come una pagina d'archivio con l'angolo
-    // ripiegato), colore chiaro sulla piega con una leggera ombra lungo la piega stessa — silhouette
-    // asimmetrica, diversa da tutte le altre.
-    void drawPreviewFold(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+    // Stile 6 "Tech": tracce ortogonali stile circuito, con piccoli nodi (pallini) alle svolte — richiamo
+    // "tecnologico" minimal, silhouette ad angoli retti ben diversa da tutte le altre.
+    void drawPreviewTech(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
-        else { pp.setColor(shades[1]); c.drawRect(l,t,r,b,pp); }
-        float foldSize = (r-l)*0.42f;
-        Path shadow = new Path();
-        shadow.moveTo(r-foldSize,t); shadow.lineTo(r,t+foldSize); shadow.lineTo(r-foldSize,t+foldSize); shadow.close();
-        pp.setColor(Color.argb(60,0,0,0));
-        c.drawPath(shadow, pp);
-        Path fold = new Path();
-        fold.moveTo(r-foldSize,t); fold.lineTo(r,t); fold.lineTo(r,t+foldSize); fold.close();
-        pp.setColor(rainbow ? Color.argb(210,255,255,255) : shades[0]);
-        c.drawPath(fold, pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(50,0,0,0)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
-        c.drawLine(r-foldSize,t,r,t+foldSize,pp);
+        else { pp.setColor(shades[2]); c.drawRect(l,t,r,b,pp); }
+        float w=r-l, h=b-t;
+        pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(Math.max(1f, 1.2f*(r-l)/64f)); pp.setStrokeCap(Paint.Cap.ROUND);
+        pp.setColor(rainbow ? Color.argb(170,255,255,255) : shades[0]);
+        Path circuitA = new Path();
+        circuitA.moveTo(l+w*0.2f, t); circuitA.lineTo(l+w*0.2f, t+h*0.35f); circuitA.lineTo(l+w*0.55f, t+h*0.35f);
+        circuitA.lineTo(l+w*0.55f, t+h*0.7f); circuitA.lineTo(r, t+h*0.7f);
+        c.drawPath(circuitA, pp);
+        Path circuitB = new Path();
+        circuitB.moveTo(l, t+h*0.55f); circuitB.lineTo(l+w*0.35f, t+h*0.55f); circuitB.lineTo(l+w*0.35f, b);
+        c.drawPath(circuitB, pp);
+        pp.setStyle(Paint.Style.FILL); pp.setColor(rainbow ? Color.WHITE : shades[1]);
+        float dr = Math.max(1.5f, 2f*(r-l)/64f);
+        float[][] nodes = {{l+w*0.2f, t+h*0.35f},{l+w*0.55f, t+h*0.35f},{l+w*0.55f, t+h*0.7f},{l+w*0.35f, t+h*0.55f}};
+        for (float[] n: nodes) c.drawCircle(n[0], n[1], dr, pp);
     }
 
     // Visualizzatore in stile galleria: header in alto (chiudi/titolo/aggiungi), frecce di navigazione come
@@ -2136,7 +2103,7 @@ public class MainActivity extends Activity {
                 iv.setImageBitmap(newH>0 ? Bitmap.createBitmap(full,0,cropTop,full.getWidth(),newH) : full);
             } catch(Exception e) {
                 iv.setImageBitmap(null);
-                Toast.makeText(this,"Impossibile caricare la Lista (file non più disponibile).",Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,getString(R.string.err_lista_load_failed),Toast.LENGTH_SHORT).show();
             }
             counter.setText((idx[0]+1)+" / "+d.images.size());
             prevBtn.setVisibility(idx[0]>0 ? View.VISIBLE : View.INVISIBLE);
@@ -2155,9 +2122,9 @@ public class MainActivity extends Activity {
                 shareIntent.setType("image/*");
                 shareIntent.putExtra(Intent.EXTRA_STREAM, Uri.parse(d.images.get(idx[0])));
                 shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(Intent.createChooser(shareIntent, "Condividi Lista"));
+                startActivity(Intent.createChooser(shareIntent, getString(R.string.share_lista_title)));
             } catch (Exception e) {
-                Toast.makeText(this,"Impossibile condividere questa Lista.",Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,getString(R.string.err_lista_share_failed),Toast.LENGTH_SHORT).show();
             }
         });
         deleteIcon.setOnClickListener(v -> {
@@ -2190,7 +2157,7 @@ public class MainActivity extends Activity {
         // volta scorsa e' rimasto vecchio quando ho cambiato il calcolo di contentTop, causando un bug di
         // tocco reale (la zona cliccabile non corrispondeva piu' a dove le pillole erano davvero disegnate).
         float rangePillsTop=0, rangePillsBottom=0;
-        // Posizione del badge "Annulla" flottante, calcolata durante il disegno e letta dal tocco — stesso
+        // Posizione del badge getString(R.string.btn_cancel) flottante, calcolata durante il disegno e letta dal tocco — stesso
         // principio delle altre coordinate condivise, per non ripetere lo stesso bug di sfasamento.
         float undoBadgeCx=0, undoBadgeCy=0;
         // Stesso principio: margine sinistro della barra date condiviso tra disegno e tocco (era un numero
@@ -2204,10 +2171,16 @@ public class MainActivity extends Activity {
         String greetingMessage(){
             if(cachedGreeting!=null) return cachedGreeting;
             int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-            String[][] pool = (hour<6) ? GREETING_NIGHT : (hour<12) ? GREETING_MORNING : (hour<18) ? GREETING_AFTERNOON : GREETING_EVENING;
-            String[] pair = pool[new java.util.Random().nextInt(pool.length)];
+            int namedArr, plainArr;
+            if(hour<6){ namedArr=R.array.greeting_night_named; plainArr=R.array.greeting_night_plain; }
+            else if(hour<12){ namedArr=R.array.greeting_morning_named; plainArr=R.array.greeting_morning_plain; }
+            else if(hour<18){ namedArr=R.array.greeting_afternoon_named; plainArr=R.array.greeting_afternoon_plain; }
+            else { namedArr=R.array.greeting_evening_named; plainArr=R.array.greeting_evening_plain; }
+            String[] named = getResources().getStringArray(namedArr);
+            String[] plain = getResources().getStringArray(plainArr);
+            int idx = new java.util.Random().nextInt(plain.length); // stesso indice per la coppia [con nome, senza nome]
             boolean hasName = store.trainerName!=null && !store.trainerName.isEmpty();
-            cachedGreeting = hasName ? String.format(pair[0], store.trainerName) : pair[1];
+            cachedGreeting = hasName ? String.format(named[idx], store.trainerName) : plain[idx];
             return cachedGreeting;
         }
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
@@ -2454,7 +2427,7 @@ public class MainActivity extends Activity {
 
         // Colore del win rate: verde se >50%, rosso se <50%, colore neutro (muted) se == 50% o 0 partite.
         int wrColor(float wr,int total){ return total==0?muted:(wr>50?green:(wr<50?red:muted)); }
-        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? "Deck sconosciuto" : deckName; }
+        String deckDisplayShort(String deckName){ return "Unknown".equals(deckName) ? getString(R.string.label_unknown_deck) : deckName; }
 
         // Palette di colori accento per deck: stesso deck = sempre stesso colore (hash deterministico del
         // nome), deck diversi = colori diversi nella maggior parte dei casi. Cosi' due serie ADIACENTI ma di
@@ -2563,7 +2536,7 @@ public class MainActivity extends Activity {
 
             int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
             Season current = store.seasons.get(lastIdx);
-            txt(c,"STAGIONE ATTUALE",24,y+8,12,muted,Paint.Align.LEFT);
+            txt(c,getString(R.string.label_current_season),24,y+8,12,muted,Paint.Align.LEFT);
             y+=16;
             box(c,18,y,w-18,y+110, Color.rgb(20,44,80));
             // Bordo arancione distintivo, solo su questa card — era usato in passato nell'app per segnalare
@@ -2575,7 +2548,7 @@ public class MainActivity extends Activity {
             {
                 int[] wl=countWL(current.matches); int W=wl[0],L=wl[1];
                 float wr=(W+L)==0?0:100f*W/(W+L);
-                txt(c,"Punti "+current.points+"   Vittorie consecutive "+current.streak,34,y+52,12,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.label_points_and_streak,current.points,current.streak),34,y+52,12,muted,Paint.Align.LEFT);
                 txtRow(c,34,y+74,12,
                     new String[]{W+"W   ", L+"L   ", "WR "+String.format(Locale.US,"%.1f%%",wr)},
                     new int[]{green, red, wrColor(wr,W+L)});
@@ -2586,7 +2559,7 @@ public class MainActivity extends Activity {
 
             if(lastIdx>0){
                 y+=28;
-                txt(c,"STAGIONI PASSATE",24,y,12,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.label_past_seasons),24,y,12,muted,Paint.Align.LEFT);
                 y+=18;
                 // Righe piu' compatte delle Stagioni non giocabili: ordine dalla piu' recente alla piu'
                 // vecchia (indice decrescente), niente lucchetto — la sezione stessa in cui si trovano basta
@@ -2609,22 +2582,22 @@ public class MainActivity extends Activity {
             lastContentBottom = y+20;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
-            // Pulsante "Nuova Stagione" in basso a destra (floating action button, sempre fisso): sempre
+            // Pulsante getString(R.string.btn_new_season) in basso a destra (floating action button, sempre fisso): sempre
             // raggiungibile col pollice, non scorre via col resto del contenuto.
-            box(c,w-166,h-104,w-18,h-54,blue); txt(c,"Nuova Stagione",w-92,h-73,14,white,Paint.Align.CENTER);
+            box(c,w-166,h-104,w-18,h-54,blue); txt(c,getString(R.string.btn_new_season),w-92,h-73,14,white,Paint.Align.CENTER);
         }
 
         void settingsScreen(Canvas c, float w, float h){
             float centerY=28;
             drawChevronBack(c,24,centerY,20,white);
-            txt(c,"Impostazioni",44,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
+            txt(c,getString(R.string.settings_title),44,centeredBaseline(centerY,20),20,white,Paint.Align.LEFT);
             bodyTop=52; bodyBottom=h;
             resetScrollIfNeeded("settings");
             c.save(); c.clipRect(0,bodyTop,w,bodyBottom); c.translate(0,-scrollY);
 
             box(c,18,64,w-18,144,card);
-            txt(c,"NOME ALLENATORE",34,86,12,muted,Paint.Align.LEFT);
-            String nameLabel = (store.trainerName==null || store.trainerName.isEmpty()) ? "Nessun nome impostato" : store.trainerName;
+            txt(c,getString(R.string.settings_trainer_name),34,86,12,muted,Paint.Align.LEFT);
+            String nameLabel = (store.trainerName==null || store.trainerName.isEmpty()) ? getString(R.string.settings_no_name_set) : store.trainerName;
             txt(c,nameLabel,34,centeredBaseline(115,18),18, (store.trainerName==null||store.trainerName.isEmpty())?muted:white, Paint.Align.LEFT);
             drawEditIcon(c, w-40, 115, 18, white);
 
@@ -2632,19 +2605,19 @@ public class MainActivity extends Activity {
             // neutro (lo stesso usato di default), il tocco apre la scelta tra i 3 stili. Card ridotta (158-
             // 282, non piu' 158-308): tolto il tip "Tocca per cambiare" sotto, restava spazio vuoto inutile.
             box(c,18,158,w-18,282,card);
-            txt(c,"STILE PREFERITO CARD",w/2,180,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.settings_preferred_style),w/2,180,12,muted,Paint.Align.CENTER);
             drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro");
 
-            // Lingua: stessa impostazione grafica di "Nome allenatore" sopra (etichetta + valore + matita).
+            // Lingua: stessa impostazione grafica di getString(R.string.label_trainer_name) sopra (etichetta + valore + matita).
             box(c,18,296,w-18,376,card);
-            txt(c,"LINGUA",34,318,12,muted,Paint.Align.LEFT);
+            txt(c,getString(R.string.settings_language),34,318,12,muted,Paint.Align.LEFT);
             int langIdx = java.util.Arrays.asList(LANGUAGE_CODES).indexOf(store.language);
             txt(c, langIdx>=0?LANGUAGE_LABELS[langIdx]:"English", 34, centeredBaseline(347,18), 18, white, Paint.Align.LEFT);
             drawEditIcon(c, w-40, 347, 18, white);
 
             box(c,18,390,w-18,438,Color.rgb(30,16,16));
             strokeBox(c,18,390,w-18,438,red());
-            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(414,15),15,red(),Paint.Align.CENTER);
+            txt(c,getString(R.string.settings_delete_all_data),w/2,centeredBaseline(414,15),15,red(),Paint.Align.CENTER);
 
             txt(c,APP_VERSION,w/2,462,11,muted,Paint.Align.CENTER);
 
@@ -2684,15 +2657,15 @@ public class MainActivity extends Activity {
             int[] wl=countWL(all); int W=wl[0],L=wl[1];
             float wr=(W+L)==0?0:100f*W/(W+L);
 
-            // ===== "PUNTI ATTUALI" / "PARTITE TOTALI": stessa altezza (80) delle equivalenti in Statistiche
+            // ===== getString(R.string.label_current_points) / getString(R.string.label_total_matches): stessa altezza (80) delle equivalenti in Statistiche
             // — prima erano 92, causando un brutto salto di dimensione visibile cambiando tab. Titoli ora
             // centrati orizzontalmente, come in tutte le altre card. =====
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
             box(c,c1L,58,c1R,138,card);
-            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_current_points),(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
-            txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER); // riga 1: SEMPRE qui, sia con 2 che con 3 righe — stessa posizione della card gemella "PUNTI ATTUALI"
+            txt(c,getString(R.string.label_total_matches),(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER); // riga 1: SEMPRE qui, sia con 2 che con 3 righe — stessa posizione della card gemella getString(R.string.label_current_points)
             // Margine reale (non baseline grezzo) tra il top della card e il vero bordo visivo della riga 1
             // (con le metriche del font, non indovinato a mano) — rispecchiato esattamente sul bordo inferiore
             // della riga 3. La riga 2 va centrata esattamente nello spazio tra il fondo della riga 1 e la
@@ -2710,20 +2683,20 @@ public class MainActivity extends Activity {
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
-            // ===== Card "DECK SELEZIONATO": anteprima (preimpostata o personalizzata) sopra, nome sotto.
+            // ===== Card getString(R.string.label_selected_deck): anteprima (preimpostata o personalizzata) sopra, nome sotto.
             // Placeholder arcobaleno se nessun deck e' ancora selezionato. Il tap sull'anteprima ha un
             // comportamento SPECIALE gestito nel touch handler (Scegli anteprima / Visualizza Lista), quello
             // sul resto della card cambia ancora il deck (invariato). =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
             box(c,18,152,w-18,302,card);
-            txt(c, noDeck?"NESSUN DECK SELEZIONATO":"DECK SELEZIONATO", w/2,174,12,muted,Paint.Align.CENTER);
+            txt(c, noDeck?getString(R.string.label_no_deck_selected):getString(R.string.label_selected_deck), w/2,174,12,muted,Paint.Align.CENTER);
             Deck curDeckObjForMenu = noDeck ? null : findDeck(s, s.currentDeck);
             if(curDeckObjForMenu!=null){ drawKebabIcon(c, w-34, 174, muted); currentDeckKebabX=w-34; currentDeckKebabY=174; }
             else { currentDeckKebabX=-1000; currentDeckKebabY=-1000; } // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
             float thumbW=64, thumbH=80, thumbX=w/2-thumbW/2, thumbY=186;
             drawDeckPreview(c, curDeckObjForMenu, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
             if(noDeck){
-                txt(c,"Tocca per selezionare un deck",w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
+                txt(c,getString(R.string.hint_tap_select_deck),w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
             } else {
                 txt(c,s.currentDeck,w/2,centeredBaseline(284,18),18,white,Paint.Align.CENTER);
             }
@@ -2733,12 +2706,12 @@ public class MainActivity extends Activity {
             // se la Stagione e' bloccata (solo l'ultima creata resta giocabile). Le correzioni manuali
             // restano SEMPRE permesse anche a Stagione bloccata (servono ad allineare i conti anche a
             // posteriori); e' solo la registrazione di nuove PARTITE a essere bloccata. Anche il badge
-            // "Annulla" resta sempre attivo per lo stesso motivo (potresti voler annullare una correzione
+            // getString(R.string.btn_cancel) resta sempre attivo per lo stesso motivo (potresti voler annullare una correzione
             // appena aggiunta a una Stagione chiusa). =====
             float gL=18, gR=w/2-8, rL=w/2+8, rR=w-18;
             if(locked){
                 box(c,18,322,w-18,386,card);
-                txt(c,"Questa stagione è terminata.",w/2,centeredBaseline(354,15),15,white,Paint.Align.CENTER);
+                txt(c,getString(R.string.label_season_ended),w/2,centeredBaseline(354,15),15,white,Paint.Align.CENTER);
             } else {
                 box(c,gL,322,gR,386,green); box(c,rL,322,rR,386,red);
                 float[] wl2 = centerLines(354,6,22,13);
@@ -2746,7 +2719,7 @@ public class MainActivity extends Activity {
                 txt(c,"L",(rL+rR)/2,wl2[0],22,Color.WHITE,Paint.Align.CENTER); txt(c,"(−10)",(rL+rR)/2,wl2[1],13,Color.WHITE,Paint.Align.CENTER);
             }
 
-            // Il badge "Annulla" non c'e' piu' su una Stagione bloccata: ci ho ripensato, se serve correggere
+            // Il badge getString(R.string.btn_cancel) non c'e' piu' su una Stagione bloccata: ci ho ripensato, se serve correggere
             // qualcosa su una Stagione terminata si usano correzioni manuali, non l'annullamento.
             boolean hasHistory = !all.isEmpty() && !locked;
             boolean lastIsCorrection = hasHistory && all.get(all.size()-1).unknown;
@@ -2975,7 +2948,7 @@ public class MainActivity extends Activity {
                     for(int k=dayEndIdx;k>=dayStartIdx;k--){
                         Match m = all.get(k);
                         if(m.unknown){
-                            String title = (k==0) ? "Punti di partenza" : "Correzione manuale";
+                            String title = (k==0) ? getString(R.string.label_starting_points) : getString(R.string.label_manual_correction);
                             box(c,38,ry+4,w-38,ry+corrRowH-4,Color.rgb(20,32,52));
                             txt(c, title, 50, ry+26, 15, white, Paint.Align.LEFT);
                             // Seconda riga: TUTTE le variazioni insieme (punti, vittorie consecutive, W, L)
@@ -3005,7 +2978,7 @@ public class MainActivity extends Activity {
                             } else {
                                 txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
                             }
-                            txt(c, "Partita "+matchNumber[k]+"  •  "+formatTimeOnly(m.timestamp), 46,ry+48,12,muted,Paint.Align.LEFT);
+                            txt(c, getString(R.string.label_match_number_time,matchNumber[k],formatTimeOnly(m.timestamp)), 46,ry+48,12,muted,Paint.Align.LEFT);
                             txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
                             int gain = m.after-m.before;
                             int gcol = gain>0?green:(gain<0?red:muted);
@@ -3036,20 +3009,20 @@ public class MainActivity extends Activity {
 
         String deckSortLabel(){
             if (deckSortMode==3) return "Nome "+(deckSortAsc?"A→Z":"Z→A");
-            String name = deckSortMode==0?"Win rate":deckSortMode==1?"Partite":"Miglior serie";
+            String name = deckSortMode==0?getString(R.string.label_win_rate):deckSortMode==1?"Partite":getString(R.string.label_best_streak);
             return name+" "+(deckSortAsc?"↑":"↓");
         }
         // Menu a tendina con tutte le combinazioni criterio+direzione (invece di ciclare "alla cieca").
         void showDeckSortMenu(){
             String[] items = {
-                "Win rate (dal più alto)","Win rate (dal più basso)",
-                "Partite (dal più alto)","Partite (dal più basso)",
-                "Miglior serie (dal più alto)","Miglior serie (dal più basso)",
-                "Nome (A→Z)","Nome (Z→A)"
+                getString(R.string.sort_winrate_desc),getString(R.string.sort_winrate_asc),
+                getString(R.string.sort_matches_desc),getString(R.string.sort_matches_asc),
+                getString(R.string.sort_best_streak_desc),getString(R.string.sort_best_streak_asc),
+                getString(R.string.sort_name_az),getString(R.string.sort_name_za)
             };
             int[] modes = {0,0,1,1,2,2,3,3};
             boolean[] ascs = {false,true,false,true,false,true,true,false};
-            new AlertDialog.Builder(MainActivity.this).setTitle("Ordina deck per").setItems(items,(d,which)->{
+            new AlertDialog.Builder(MainActivity.this).setTitle(getString(R.string.label_sort_decks_by)).setItems(items,(d,which)->{
                 deckSortMode = modes[which]; deckSortAsc = ascs[which];
                 view.invalidate();
             }).show();
@@ -3110,7 +3083,7 @@ public class MainActivity extends Activity {
         // Card di un deck: usata SIA nel tab Deck SIA nella sezione "DECK" delle Statistiche, cosi'
         // l'aspetto e' identico in entrambi i posti. Ritorna la nuova posizione y dopo aver disegnato la card.
         // Disegno "puro" della card deck: nessun effetto collaterale (non registra alcuna zona di tocco) —
-        // riusabile sia dal tab Deck (che poi registra le sue zone) sia dal nuovo dialog "Cambia deck" (che
+        // riusabile sia dal tab Deck (che poi registra le sue zone) sia dal nuovo dialog getString(R.string.action_change_deck) (che
         // gestisce le sue zone in modo indipendente, senza sporcare lo stato del tab Deck vero).
         float deckCardVisual(Canvas c, Deck deckObj, String name, boolean isUnknown, int W, int L, int best, int gain, float y, float w, boolean showKebab){
             // Margine ridotto da 30 a 18: prima le card erano piu' strette del pulsante "Nuovo Deck" (margine
@@ -3123,7 +3096,7 @@ public class MainActivity extends Activity {
                 drawDeckPreview(c, deckObj, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
                 textX = thumbX+thumbW+14;
             }
-            txt(c, isUnknown?"Deck sconosciuto":name, textX,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
+            txt(c, isUnknown?getString(R.string.label_unknown_deck):name, textX,y+26,17, isUnknown?muted:white, Paint.Align.LEFT);
             float wr=(W+L)==0?0:100f*W/(W+L);
             txt(c,(W+L)+" partite",textX,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
             if (!isUnknown && showKebab) {
@@ -3139,13 +3112,13 @@ public class MainActivity extends Activity {
                     new int[]{green, red, wrColor(wr,W+L), muted});
             }
             int gcol = gain>0?green:(gain<0?red:muted);
-            txt(c, "Variazione: "+(gain>0?"+":"")+gain, textX, y+82, 11, gcol, Paint.Align.LEFT);
+            txt(c, getString(R.string.label_variation,(gain>0?"+":"")+gain), textX, y+82, 11, gcol, Paint.Align.LEFT);
             return y+104;
         }
 
         // Wrapper usato dal tab Deck vero: disegna la card E registra la zona di tocco dell'anteprima nella
         // lista condivisa che il touch handler del tab Deck legge — separato dal disegno puro sopra, cosi'
-        // il nuovo dialog "Cambia deck" (che chiama solo deckCardVisual) non la sporca con le sue posizioni.
+        // il nuovo dialog getString(R.string.action_change_deck) (che chiama solo deckCardVisual) non la sporca con le sue posizioni.
         float deckCard(Canvas c, Deck deckObj, String name, boolean isUnknown, int W, int L, int best, int gain, float y, float w, boolean showDelete){
             float result = deckCardVisual(c, deckObj, name, isUnknown, W, L, best, gain, y, w, showDelete);
             if (!isUnknown) {
@@ -3159,7 +3132,7 @@ public class MainActivity extends Activity {
             deckPreviewTapZones.clear();
             // Pillola "Ordina" rimossa del tutto: con la barra di ricerca ora sempre visibile (non piu' un
             // pulsante che si espande) non c'e' piu' spazio per farla convivere senza dare fastidio.
-            // Stesso colore/bordo del pulsante "Nuovo Deck" nel dialog "Seleziona un deck" (styleSecondaryButton),
+            // Stesso colore/bordo del pulsante "Nuovo Deck" nel dialog getString(R.string.dialog_select_deck_title) (styleSecondaryButton),
             // al posto del riempimento blu pieno di prima, per coerenza visiva tra i due.
             // Margine aumentato dalla barra di ricerca sopra (che finisce a y=88): prima "Nuovo Deck"
             // iniziava a y=90, appena 2 unita' dopo, sembravano attaccati.
@@ -3202,26 +3175,26 @@ public class MainActivity extends Activity {
             // Ogni riga ridotta a 80 di altezza (era 100, sproporzionata per una sola riga di contenuto sotto
             // il titolo): stesso schema label(top+22)/contenuto centrato usato nel tab Gioca.
             box(c,c1L,58,c1R,138,card);
-            txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_current_points),(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
-            txt(c,"VARIAZIONE",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_variation_header),(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c, (gain>0?"+":"")+gain,(c2L+c2R)/2,centeredBaseline(108,22),22, gain>0?green:(gain<0?red:white),Paint.Align.CENTER);
 
             box(c,c1L,152,c1R,232,card);
-            txt(c,"PARTITE TOTALI",(c1L+c1R)/2,174,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_total_matches),(c1L+c1R)/2,174,12,muted,Paint.Align.CENTER);
             txt(c,""+(W+L),(c1L+c1R)/2,centeredBaseline(202,20),20,white,Paint.Align.CENTER);
             box(c,c2L,152,c2R,232,card);
-            txt(c,"W / L / %",(c2L+c2R)/2,174,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_wlp_header),(c2L+c2R)/2,174,12,muted,Paint.Align.CENTER);
             txtRowCentered(c,(c2L+c2R)/2,centeredBaseline(202,15),15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
             box(c,c1L,246,c1R,326,card);
-            txt(c,"VITTORIE CONSECUTIVE",(c1L+c1R)/2,268,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_win_streak),(c1L+c1R)/2,268,12,muted,Paint.Align.CENTER);
             txt(c,""+s.streak,(c1L+c1R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
             box(c,c2L,246,c2R,326,card);
-            txt(c,"MASSIME",(c2L+c2R)/2,268,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_maxima_header),(c2L+c2R)/2,268,12,muted,Paint.Align.CENTER);
             txt(c,""+maxStreak,(c2L+c2R)/2,centeredBaseline(296,22),22,white,Paint.Align.CENTER);
 
             String mostPlayedName = "-"; int mostPlayedCount = 0;
@@ -3229,12 +3202,12 @@ public class MainActivity extends Activity {
                 int[] dwl = deckWL(s,d.name); int total=dwl[0]+dwl[1];
                 if(total>mostPlayedCount){ mostPlayedCount=total; mostPlayedName=d.name; }
             }
-            if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName="Deck sconosciuto"; }
+            if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName=getString(R.string.label_unknown_deck); }
             box(c,c1L,340,c1R,420,card);
-            txt(c,"DECK GIOCATI",(c1L+c1R)/2,362,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_decks_played),(c1L+c1R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
             box(c,c2L,340,c2R,420,card);
-            txt(c,"DECK PIU' GIOCATO",(c2L+c2R)/2,362,12,muted,Paint.Align.CENTER);
+            txt(c,getString(R.string.label_most_played_deck),(c2L+c2R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
 
             lastContentBottom = 420+20;
@@ -3254,10 +3227,10 @@ public class MainActivity extends Activity {
                 float gy = gridTop + i*(gridBottom-gridTop)/(gridLines+1);
                 c.drawLine(l+8,gy,rr-8,gy,p);
             }
-            txt(c,"Punti iniziali: "+(ms.isEmpty()?0:ms.get(0).before),l+10,t+16,12,white,Paint.Align.LEFT);
-            txt(c,"Punti attuali: "+(ms.isEmpty()?0:ms.get(ms.size()-1).after),l+10,t+34,12,white,Paint.Align.LEFT);
+            txt(c,getString(R.string.label_starting_points_fmt,(ms.isEmpty()?0:ms.get(0).before)),l+10,t+16,12,white,Paint.Align.LEFT);
+            txt(c,getString(R.string.label_current_points_fmt,(ms.isEmpty()?0:ms.get(ms.size()-1).after)),l+10,t+34,12,white,Paint.Align.LEFT);
             if(ms.isEmpty()){
-                txt(c,"Nessuna partita ancora",(l+rr)/2,(gridTop+gridBottom)/2,13,muted,Paint.Align.CENTER);
+                txt(c,getString(R.string.label_no_matches_yet),(l+rr)/2,(gridTop+gridBottom)/2,13,muted,Paint.Align.CENTER);
                 return;
             }
             float min=ms.get(0).before,max=ms.get(0).before;for(Match m:ms){min=Math.min(min,m.after);max=Math.max(max,m.after);}
@@ -3479,7 +3452,7 @@ public class MainActivity extends Activity {
             if(y>h-58){ detailTab=Math.min(2,(int)(x/(w/3))); invalidate(); return true; }
             if(detailTab==0){
                 boolean locked = isSeasonLocked(store.current);
-                // Badge "Annulla" flottante: controllato PRIMA delle altre zone, dato che sta a cavallo tra
+                // Badge getString(R.string.btn_cancel) flottante: controllato PRIMA delle altre zone, dato che sta a cavallo tra
                 // la card "Deck Selezionato" e la riga W/L (un cerchio, non un rettangolo, quindi serve un
                 // test di distanza invece di un normale confronto di range).
                 if(!locked && Math.hypot(x-undoBadgeCx, contentY-undoBadgeCy) <= 20){ confirmUndo(); return true; }
@@ -3490,7 +3463,7 @@ public class MainActivity extends Activity {
                     Deck curDeckObj=findDeck(s,s.currentDeck);
                     if(curDeckObj!=null){
                         view.showAnchoredMenu(currentDeckKebabX, contentY-scrollY+16,
-                            new String[]{"Cambia deck","Rinomina deck","Scegli anteprima","Aggiungi Lista","Elimina deck"},
+                            new String[]{getString(R.string.action_change_deck),getString(R.string.action_rename_deck),getString(R.string.action_choose_preview),getString(R.string.action_add_lista),getString(R.string.action_delete_deck)},
                             new int[]{Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE, red()},
                             new Runnable[]{ () -> chooseCurrentDeck(), () -> renameDeckDialog(curDeckObj), () -> showPreviewPicker(curDeckObj), () -> openDeckImages(curDeckObj), () -> confirmDeleteDeck(s,curDeckObj) });
                         return true;
@@ -3571,7 +3544,7 @@ public class MainActivity extends Activity {
         // Anteprima preimpostata (stile+colore, disegnata direttamente sul canvas — nessuna immagine
         // personalizzata: quella possibilita' e' stata rimossa, causava troppi problemi). Default per ogni
         // nuovo deck: stile "spine", colore "grigiochiaro".
-        String previewStyle="spine";   // "spine" | "gem" | "holo" | "prism" | "ring" | "fold"
+        String previewStyle="spine";   // "spine" | "gem" | "holo" | "waves" | "sun" | "tech"
         String previewColor="grigiochiaro";
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
@@ -3646,13 +3619,13 @@ public class MainActivity extends Activity {
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"holo")
         String language="en"; // lingua dell'app: "en" (default) | "de" | "it" | "fr" | "es" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,getString(R.string.log_save_error),e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
             language = pref.getString("language","en");
-            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
+            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,getString(R.string.log_load_error),e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
