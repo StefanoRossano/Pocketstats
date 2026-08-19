@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.171";
+    static final String APP_VERSION = "v0.2.172";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1886,12 +1886,22 @@ public class MainActivity extends Activity {
             super(c);
             sourceBitmap = bmp; cropCx = initCx; cropCy = initCy;
             frameWpx = dp(64); frameHpx = dp(80);
+            // Clamp di sicurezza: una frazione troppo piccola farebbe esplodere baseScale (e quindi la
+            // dimensione dell'immagine da disegnare) fino a superare quello che il canvas riesce a
+            // gestire, con schermo nero come risultato — non dovrebbe piu' succedere dopo il fix sopra,
+            // ma meglio non fidarsi ciecamente di qualunque valore arrivi da dati salvati.
+            initWFrac = Math.max(0.05f, Math.min(0.9f, initWFrac));
             int[] rect0 = computePreviewCropRect(bmp.getWidth(), bmp.getHeight(), initCx, initCy, initWFrac);
             baseScale = frameWpx / rect0[2]; // a zoom=1, rect0[2] px immagine occupano esattamente frameWpx px schermo
             minZoom = Math.max(frameWpx/(bmp.getWidth()*baseScale), frameHpx/(bmp.getHeight()*baseScale));
-            // Leggero ingrandimento di default (non il minimo): elimina l'area superflua di partenza, soprattutto
-            // sotto, senza dover pizzicare manualmente ogni volta.
-            zoom = Math.max(minZoom, 1.25f);
+            // NIENTE PIU' moltiplicatore di zoom fisso qui: partiva sempre da 1.25x SOPRA il valore già salvato
+            // (initWFrac), quindi ogni volta che si riapriva e risalvava lo stesso deck lo zoom si moltiplicava
+            // di nuovo — dopo un paio di modifiche la scala diventava enorme (decine di migliaia di pixel) e
+            // il canvas falliva silenziosamente il disegno (schermo nero). Ora si parte sempre da zoom=1,
+            // che riproduce esattamente initWFrac cosi' com'e' (gia' salvato in precedenza, o il default per
+            // un deck nuovo) — il "leggero ingrandimento di default" e' nel valore di default stesso del
+            // campo (vedi previewCropWFrac in Deck), non piu' applicato di nuovo ad ogni apertura.
+            zoom = Math.max(minZoom, 1f);
             scaleDetector = new ScaleGestureDetector(c, new ScaleGestureDetector.SimpleOnScaleGestureListener(){
                 @Override public boolean onScale(ScaleGestureDetector d){
                     zoom = Math.max(minZoom, Math.min(maxZoom, zoom*d.getScaleFactor()));
@@ -3493,7 +3503,7 @@ public class MainActivity extends Activity {
         // con l'editor — il riquadro sullo schermo ha dimensione FISSA, e' la frazione di immagine che ci
         // finisce dentro (previewCropWFrac) a variare con lo zoom scelto dall'utente (pizzico con due dita).
         float previewCropCx=0.213f, previewCropCy=0.26f;
-        float previewCropWFrac=0.24f; // frazione della LARGHEZZA immagine catturata nel riquadro (default = comportamento della vecchia versione senza zoom, per compatibilita' con i deck non ancora passati dal nuovo editor)
+        float previewCropWFrac=0.192f; // 0.24/1.25: leggero ingrandimento di default per un deck NUOVO (mai ritagliato prima) — applicato una sola volta qui nel default, non piu' come moltiplicatore a runtime (che si accumulava ad ogni riapertura, causando lo schermo nero)
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
             JSONArray imgs=new JSONArray(); for(String i:images) imgs.put(i); o.put("imgs",imgs);
