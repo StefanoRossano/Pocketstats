@@ -3603,13 +3603,13 @@ public class MainActivity extends Activity {
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"holo")
         String language="en"; // lingua dell'app: "en" (default) | "de" | "it" | "fr" | "es" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,getString(R.string.log_save_error),e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
             language = pref.getString("language","en");
-            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,getString(R.string.log_load_error),e);}
+            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
