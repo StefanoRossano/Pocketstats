@@ -61,8 +61,8 @@
     <string name="hint_tap_choose_deck">Tocca per scegliere un deck</string>
     <string name="hint_tap_select_deck">Tocca per selezionare un deck</string>
     <string name="label_sort_decks_by">Ordina deck per</string>
-    <string name="sort_name_az">Nome (A→Z)</string>
-    <string name="sort_name_za">Nome (Z→A)</string>
+    <string name="sort_name_az">Nome (A-Z)</string>
+    <string name="sort_name_za">Nome (Z-A)</string>
     <string name="sort_best_streak_desc">Miglior serie (dal più alto)</string>
     <string name="sort_best_streak_asc">Miglior serie (dal più basso)</string>
     <string name="sort_matches_desc">Partite (dal più alto)</string>
@@ -130,7 +130,7 @@
     <string name="confirm_delete_season_msg">Verranno eliminate definitivamente tutte le %1$d partite e i deck di questa Stagione. Azione irreversibile.</string>
     <string name="confirm_delete_all_msg">Questo eliminerà definitivamente ogni Stagione, partita e deck. L\'azione non può essere annullata.</string>
     <string name="label_points_and_streak">Punti %1$d   Vittorie consecutive %2$d</string>
-    <string name="label_match_number_time">Partita %1$d  •  %2$s</string>
+    <string name="label_match_number_time">Partita %1$d - %2$s</string>
     <string name="label_variation">Variazione: %1$s</string>
     <string name="label_starting_points_fmt">Punti iniziali: %1$d</string>
     <string name="label_current_points_fmt">Punti attuali: %1$d</string>
@@ -140,7 +140,7 @@
     <string name="confirm_undo_match_msg">Hai registrato %1$s: verrà eliminata definitivamente. Se hai sbagliato ad annullare, registra di nuovo %1$s.</string>
     <string name="dialog_welcome_title">Benvenuto su Pocket Tracker!</string>
     <string name="dialog_welcome_title_named">Benvenuto su Pocket Tracker, %1$s!</string>
-    <string name="dialog_welcome_guide">Ecco come funziona, in breve:\n\n• Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n• Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n• Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n• Il tab Stats ti mostra il quadro generale della Stagione.\n• Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
+    <string name="dialog_welcome_guide">Ecco come funziona, in breve:\n\n- Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n- Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n- Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n- Il tab Stats ti mostra il quadro generale della Stagione.\n- Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
     <string name="label_season_default_name">Stagione %1$d</string>
     <!-- Fetta 4: messaggi motivazionali e di benvenuto -->
     <string-array name="msgs_win_first">
