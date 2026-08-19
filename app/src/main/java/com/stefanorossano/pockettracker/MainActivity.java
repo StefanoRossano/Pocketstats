@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.183";
+    static final String APP_VERSION = "v0.2.186";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -40,6 +40,78 @@ public class MainActivity extends Activity {
     EditText deckSearchInput;
     TextView deckSearchClearBtn;
     Store store;
+
+    // Lingue supportate: inglese di default (non l'italiano, e non la lingua di sistema) finche' l'utente
+    // non sceglie diversamente da Impostazioni. "semplice, senza bandiera": solo il nome, niente icone.
+    static final String[] LANGUAGE_CODES = {"en","de","it","fr","es"};
+    static final String[] LANGUAGE_LABELS = {"English","Deutsch","Italiano","Français","Español"};
+
+    // Applica la lingua salvata PRIMA che l'Activity venga creata (attachBaseContext e' chiamato prima di
+    // onCreate) — legge le SharedPreferences direttamente, dato che l'oggetto Store normale non esiste
+    // ancora a questo punto del ciclo di vita.
+    @Override protected void attachBaseContext(Context base) {
+        SharedPreferences prefs = base.getSharedPreferences("tracker", 0);
+        String lang = prefs.getString("language", "en");
+        java.util.Locale locale = new java.util.Locale(lang);
+        android.content.res.Configuration config = new android.content.res.Configuration(base.getResources().getConfiguration());
+        config.setLocale(locale);
+        Context context = base.createConfigurationContext(config);
+        super.attachBaseContext(context);
+    }
+
+    // Dialog di scelta lingua (Impostazioni): elenco semplice (nessuna bandiera), Annulla/Conferma. Se la
+    // lingua scelta e' diversa da quella attuale, salva e richiama recreate() — l'unico modo pulito per far
+    // riapplicare attachBaseContext() con la nuova configurazione senza uscire e rientrare dall'app a mano.
+    void showLanguageDialog(){
+        String[] selectedLang = { store.language };
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText("Lingua / Language"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
+        root.addView(title, titleLp);
+
+        TextView[] rows = new TextView[LANGUAGE_CODES.length];
+        for (int i=0;i<LANGUAGE_CODES.length;i++){
+            final String code = LANGUAGE_CODES[i];
+            TextView t = new TextView(this); t.setText(LANGUAGE_LABELS[i]); t.setTextSize(16);
+            t.setPadding(dp(18),dp(14),dp(18),dp(14));
+            rows[i]=t;
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            root.addView(t, tlp);
+            t.setOnClickListener(v -> {
+                selectedLang[0]=code;
+                for (int j=0;j<rows.length;j++) rows[j].setTextColor(LANGUAGE_CODES[j].equals(code)?blueColor():Color.WHITE);
+            });
+        }
+        for (int i=0;i<rows.length;i++) rows[i].setTextColor(LANGUAGE_CODES[i].equals(selectedLang[0])?blueColor():Color.WHITE);
+
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
+        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(cancelBtn); footer.addView(confirmBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        confirmBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (!selectedLang[0].equals(store.language)) {
+                store.language = selectedLang[0]; store.save();
+                recreate();
+            }
+        });
+    }
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -2557,13 +2629,20 @@ public class MainActivity extends Activity {
             txt(c,"STILE PREFERITO CARD",w/2,180,12,muted,Paint.Align.CENTER);
             drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro");
 
-            box(c,18,296,w-18,344,Color.rgb(30,16,16));
-            strokeBox(c,18,296,w-18,344,red());
-            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(320,15),15,red(),Paint.Align.CENTER);
+            // Lingua: stessa impostazione grafica di "Nome allenatore" sopra (etichetta + valore + matita).
+            box(c,18,296,w-18,376,card);
+            txt(c,"LINGUA",34,318,12,muted,Paint.Align.LEFT);
+            int langIdx = java.util.Arrays.asList(LANGUAGE_CODES).indexOf(store.language);
+            txt(c, langIdx>=0?LANGUAGE_LABELS[langIdx]:"English", 34, centeredBaseline(347,18), 18, white, Paint.Align.LEFT);
+            drawEditIcon(c, w-40, 347, 18, white);
 
-            txt(c,APP_VERSION,w/2,368,11,muted,Paint.Align.CENTER);
+            box(c,18,390,w-18,438,Color.rgb(30,16,16));
+            strokeBox(c,18,390,w-18,438,red());
+            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(414,15),15,red(),Paint.Align.CENTER);
 
-            lastContentBottom = 388;
+            txt(c,APP_VERSION,w/2,462,11,muted,Paint.Align.CENTER);
+
+            lastContentBottom = 482;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
         }
@@ -2607,12 +2686,21 @@ public class MainActivity extends Activity {
             txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
-            txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
-            // Simmetria esatta rispetto alla card (58-138): riga 1 (etichetta) e' a 80, cioe' 22 dal top (58).
-            // Riga 3 (W/L/%) messa a 116, cioe' 22 dal bottom (138) — stessa distanza, dal lato opposto.
-            // Riga 2 (numero) esattamente a meta' tra le due: (80+116)/2 = 98.
-            txt(c,""+(W+L),(c2L+c2R)/2,98,20,white,Paint.Align.CENTER);
-            txtRowCentered(c,(c2L+c2R)/2,116,15,
+            txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER); // riga 1: SEMPRE qui, sia con 2 che con 3 righe — stessa posizione della card gemella "PUNTI ATTUALI"
+            // Margine reale (non baseline grezzo) tra il top della card e il vero bordo visivo della riga 1
+            // (con le metriche del font, non indovinato a mano) — rispecchiato esattamente sul bordo inferiore
+            // della riga 3. La riga 2 va centrata esattamente nello spazio tra il fondo della riga 1 e la
+            // cima della riga 3.
+            p.setTextSize(12); Paint.FontMetrics fm1 = p.getFontMetrics();
+            float row1VisualBottom = 80 + fm1.descent;
+            float topGap = (80 + fm1.ascent) - 58;
+            p.setTextSize(15); Paint.FontMetrics fm3 = p.getFontMetrics();
+            float row3VisualBottom = 138 - topGap;
+            float row3Baseline = row3VisualBottom - fm3.descent;
+            float row3VisualTop = row3Baseline + fm3.ascent;
+            float row2Baseline = centeredBaseline((row1VisualBottom+row3VisualTop)/2, 20);
+            txt(c,""+(W+L),(c2L+c2R)/2,row2Baseline,20,white,Paint.Align.CENTER);
+            txtRowCentered(c,(c2L+c2R)/2,row3Baseline,15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
@@ -3369,7 +3457,8 @@ public class MainActivity extends Activity {
                 if(y<52){ if(x<60){ screen=SCREEN_SEASON_LIST; invalidate(); return true; } return true; }
                 if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
                 if(contentY>=158&&contentY<=282){ showCardStylePreferenceDialog(); return true; }
-                if(contentY>=296&&contentY<=344){ resetAllData(); return true; }
+                if(contentY>=296&&contentY<=376){ showLanguageDialog(); return true; }
+                if(contentY>=390&&contentY<=438){ resetAllData(); return true; }
                 return true;
             }
 
@@ -3549,12 +3638,14 @@ public class MainActivity extends Activity {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"holo")
+        String language="en"; // lingua dell'app: "en" (default) | "de" | "it" | "fr" | "es" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
+            language = pref.getString("language","en");
             try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
