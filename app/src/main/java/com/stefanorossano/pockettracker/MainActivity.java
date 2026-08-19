@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.166";
+    static final String APP_VERSION = "v0.2.169";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -136,7 +136,7 @@ public class MainActivity extends Activity {
             public void afterTextChanged(android.text.Editable s){}
         });
 
-        rootContainer.addView(deckSearchBar, new FrameLayout.LayoutParams(dp(44), dp(28)));
+        rootContainer.addView(deckSearchBar, new FrameLayout.LayoutParams(dp(44), dp(44)));
     }
 
     void expandDeckSearch(){
@@ -189,9 +189,9 @@ public class MainActivity extends Activity {
         deckSearchBar.setVisibility(View.VISIBLE);
         float logicalW = (view.getWidth()-view.getPaddingLeft()-view.getPaddingRight())/view.density;
         if (logicalW<=0) return; // non ancora misurata: verra' richiamato dal listener di layout
-        int top = view.getPaddingTop() + dp(48);
+        int top = view.getPaddingTop() + dp(44); // spostato su di 4dp: con l'altezza ora 44 (era 28), a dp(48) avrebbe leggermente sovrapposto "AGGIUNGI DECK" (che parte da y=90)
         int left = view.getPaddingLeft() + dp(18);
-        int height = dp(28);
+        int height = dp(44); // 44dp: tocco comodo (era 28, sotto il minimo consigliato)
         int width = view.deckSearchActive ? Math.round((logicalW-36)*view.density) : dp(44);
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) deckSearchBar.getLayoutParams();
         lp.width = width; lp.height = height; lp.leftMargin = left; lp.topMargin = top;
@@ -481,7 +481,7 @@ public class MainActivity extends Activity {
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable searchBg = new GradientDrawable(); searchBg.setColor(Color.rgb(10,18,30)); searchBg.setCornerRadius(dp(16));
         searchBar.setBackground(searchBg);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp(44), dp(28)); searchLp.topMargin = dp(12);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp(44), dp(44)); searchLp.topMargin = dp(12);
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -681,7 +681,8 @@ public class MainActivity extends Activity {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
                 p.setColor(Color.rgb(255,138,61)); // stesso arancione usato per la Stagione attuale
-                c.drawRoundRect(new RectF(30,1.5f,w-30,90.5f), 12,12, p);
+                // Stesso raggio (18) usato da box() per lo sfondo della card — prima era 12, non corrispondente.
+                c.drawRoundRect(new RectF(30,1.5f,w-30,90.5f), 18,18, p);
             }
             c.restore();
         }
@@ -690,9 +691,37 @@ public class MainActivity extends Activity {
     // Menu "⋮" di una riga nel dialog "Cambia deck": stesse azioni disponibili altrove per un deck, con in
     // piu' "Vedi Lista" separata da "Aggiungi Lista" (prima un'unica voce faceva entrambe le cose in base
     // allo stato). onChanged: richiamato per far ridisegnare la riga (es. dopo rinomina).
+    // Menu "⋮" adatto ai dialog nativi (a differenza di TrackerView.showAnchoredMenu, pensato solo per il
+    // canvas dell'app: ancorare li' un popup mentre e' aperto un Dialog lo fa apparire nella finestra
+    // sbagliata — dietro al dialog, invisibile e non toccabile. Qui il popup e' ancorato con showAsDropDown
+    // DIRETTAMENTE alla view che l'ha aperto, quindi resta nella stessa finestra del dialog.
+    void showDialogMenu(View anchorView, String[] labels, int[] colors, Runnable[] actions){
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.rgb(14,24,38));
+        bg.setStroke(dp(1), Color.rgb(40,55,75)); bg.setCornerRadius(dp(10));
+        box.setBackground(bg);
+        box.setPadding(dp(4),dp(4),dp(4),dp(4));
+        final PopupWindow[] popupRef = new PopupWindow[1];
+        for(int i=0;i<labels.length;i++){
+            final int idx=i;
+            TextView t = new TextView(this);
+            t.setText(labels[i]); t.setTextColor(colors[i]); t.setTextSize(15);
+            t.setPadding(dp(20),dp(14),dp(20),dp(14));
+            t.setOnClickListener(v -> { popupRef[0].dismiss(); actions[idx].run(); });
+            box.addView(t);
+        }
+        PopupWindow popup = new PopupWindow(box, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, true);
+        popupRef[0]=popup;
+        popup.setElevation(dp(8));
+        box.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int menuW = box.getMeasuredWidth();
+        // Allinea il bordo destro del menu al bordo destro dell'icona toccata (che sta vicino al margine
+        // destro della card): xOff negativo sposta il menu a sinistra di quanto serve per non uscire schermo.
+        int xOff = anchorView.getWidth() - menuW;
+        popup.showAsDropDown(anchorView, xOff, 0);
+    }
+
     void showDeckRowMenu(Season s, Deck d, View anchorView, Runnable onChanged){
-        int[] loc = new int[2]; anchorView.getLocationOnScreen(loc);
-        float anchorYLogical = (loc[1] + anchorView.getHeight()/2f - view.getPaddingTop()) / view.density;
         boolean hasLista = !d.images.isEmpty();
         ArrayList<String> labels = new ArrayList<>(java.util.Arrays.asList("Rinomina deck","Scegli anteprima"));
         ArrayList<Integer> colors = new ArrayList<>(java.util.Arrays.asList(Color.WHITE, Color.WHITE));
@@ -702,8 +731,7 @@ public class MainActivity extends Activity {
         labels.add("Aggiungi Lista"); colors.add(Color.WHITE); actions.add(() -> pickImageFor(d));
         labels.add("Elimina deck"); colors.add(red()); actions.add(() -> confirmDeleteDeck(s,d));
         int[] colArr = new int[colors.size()]; for(int i=0;i<colArr.length;i++) colArr[i]=colors.get(i);
-        view.showAnchoredMenu(view.getWidth()/view.density - 18, anchorYLogical,
-            labels.toArray(new String[0]), colArr, actions.toArray(new Runnable[0]));
+        showDialogMenu(anchorView, labels.toArray(new String[0]), colArr, actions.toArray(new Runnable[0]));
     }
 
     // Cambia il deck "attuale" (quello che verra' usato per la PROSSIMA partita registrata). Un unico dialog
@@ -737,7 +765,7 @@ public class MainActivity extends Activity {
         clearBtn.setBackground(clearCircle); clearBtn.setVisibility(View.GONE);
         LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(22), dp(22)); clearLp.leftMargin=dp(6); clearLp.rightMargin=dp(6);
         searchBar.addView(clearBtn, clearLp);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp(44), dp(28));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp(44), dp(44));
         searchLp.topMargin=dp(14); searchLp.leftMargin=dp(14); searchLp.rightMargin=dp(14); searchLp.bottomMargin=dp(10);
         root.addView(searchBar, searchLp);
 
@@ -817,6 +845,10 @@ public class MainActivity extends Activity {
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
         dialog.setContentView(root);
+        // Larghezza esplicita: senza, la finestra del dialog si dimensiona in modo ambiguo e le view a
+        // MATCH_PARENT dentro si misurano storte (card strette, testo che sborda, tocchi che non registrano
+        // sempre correttamente).
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
 
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
@@ -1320,7 +1352,6 @@ public class MainActivity extends Activity {
     Uri pendingImage=null;            // immagine "in sospeso" per un Deck non ancora creato (flusso addDeck)
     Deck pendingImageTargetDeck=null; // Deck esistente a cui AGGIUNGERE l'immagine scelta (flusso di gestione screenshot)
     Deck pendingPreviewTargetDeck=null;         // Deck per cui si sta scegliendo un'anteprima PERSONALIZZATA
-    Dialog pendingPreviewPickerToClose=null;    // dialog "Scegli anteprima" da richiudere a ritaglio confermato
 
     void pickImageFor(Deck target){
         pendingImageTargetDeck = target;
@@ -1333,7 +1364,11 @@ public class MainActivity extends Activity {
     // anteprima" sottostante, richiuso automaticamente a ritaglio confermato.
     void pickImageForPreview(Deck target, Dialog pickerToClose){
         pendingPreviewTargetDeck = target;
-        pendingPreviewPickerToClose = pickerToClose;
+        // Richiuso SUBITO, non solo a ritaglio confermato: lasciarlo aperto sotto mentre si apriva l'editor
+        // di ritaglio (un secondo Dialog impilato sopra) causava un rendering completamente rotto (schermo
+        // nero, controlli fuori posto) — due finestre Dialog sovrapposte contemporaneamente non e' un caso
+        // ben supportato qui.
+        if (pickerToClose!=null) pickerToClose.dismiss();
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("image/*"); i.addCategory(Intent.CATEGORY_OPENABLE);
         try { startActivityForResult(i,102); } catch(Exception ex) { Toast.makeText(this,"Nessuna app disponibile per selezionare l'immagine.",Toast.LENGTH_SHORT).show(); }
     }
@@ -1361,8 +1396,7 @@ public class MainActivity extends Activity {
             try{ getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION); }
             catch(Exception e){ Log.w(TAG, "Impossibile ottenere il permesso persistente sull'immagine", e); }
             Deck targetDeck = pendingPreviewTargetDeck; pendingPreviewTargetDeck=null;
-            Dialog toClose = pendingPreviewPickerToClose; pendingPreviewPickerToClose=null;
-            if (targetDeck!=null) showCropEditor(uri, targetDeck, () -> { if (toClose!=null) toClose.dismiss(); });
+            if (targetDeck!=null) showCropEditor(uri, targetDeck, null); // il dialog "Scegli anteprima" e' gia' stato richiuso in pickImageForPreview()
         }
     }
 
@@ -1390,7 +1424,11 @@ public class MainActivity extends Activity {
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3));
                 p.setColor(Color.rgb(255,138,61)); // arancione: stesso usato per lo stroke della Stagione attuale
                 float half=dp(1.5f);
-                c.drawRoundRect(new RectF(half,half,getWidth()-half,getHeight()-half), dp(10), dp(10), p);
+                // Stesso raggio (proporzionale) usato da drawPresetPreviewCard per la card stessa — prima era
+                // un dp(10) fisso, che non corrispondeva al raggio reale della card sotto.
+                float cardW = getWidth()-2*pad;
+                float cr = 8f*cardW/64f;
+                c.drawRoundRect(new RectF(half,half,getWidth()-half,getHeight()-half), cr, cr, p);
             }
         }
     }
@@ -1473,6 +1511,10 @@ public class MainActivity extends Activity {
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
         dialog.setContentView(root);
+        // Larghezza esplicita: senza, la finestra del dialog si dimensiona in modo ambiguo e le view a
+        // MATCH_PARENT dentro si misurano storte (card strette, testo che sborda, tocchi che non registrano
+        // sempre correttamente).
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
 
         loadImgBtn.setOnClickListener(v -> pickImageForPreview(d, dialog));
@@ -2330,7 +2372,7 @@ public class MainActivity extends Activity {
 
         void strokeBox(Canvas c,float l,float t,float rr,float b,int col){
             p.setColor(col); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2);
-            c.drawRoundRect(l,t,rr,b,16,16,p);
+            c.drawRoundRect(l,t,rr,b,18,18,p); // 18, come box(): prima era 16, non corrispondeva al raggio dello sfondo che circonda
             p.setStyle(Paint.Style.FILL);
         }
 
