@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.175";
+    static final String APP_VERSION = "v0.2.179";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -716,9 +716,9 @@ public class MainActivity extends Activity {
         popup.setElevation(dp(8));
         box.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         int menuW = box.getMeasuredWidth();
-        // Allinea il bordo destro del menu al bordo destro dell'icona toccata (che sta vicino al margine
-        // destro della card): xOff negativo sposta il menu a sinistra di quanto serve per non uscire schermo.
-        int xOff = anchorView.getWidth() - menuW;
+        // Regola per tutti i sottomenu "⋮": il bordo destro del menu deve combaciare col CENTRO orizzontale
+        // dell'icona (non il bordo destro della zona di tocco, piu' larga dell'icona vera e propria).
+        int xOff = anchorView.getWidth()/2 - menuW;
         popup.showAsDropDown(anchorView, xOff, 0);
     }
 
@@ -739,9 +739,20 @@ public class MainActivity extends Activity {
     // (niente piu' doppio passaggio): ricerca in alto, card deck selezionabili — le stesse del tab Deck,
     // comprensive di statistiche e anteprima — con bordo arancione sul deck scelto, "Nuovo Deck" in fondo
     // alla lista, Annulla/Conferma sotto.
-    void chooseCurrentDeck() {
-        Season s = store.seasons.get(store.current);
-        Deck[] selected = { findDeck(s, s.currentDeck) }; // null se "Unknown"/nessun deck ancora
+    // Numero progressivo di una partita (conta solo le partite vere, non le correzioni manuali) — stesso
+    // criterio usato per "Partita N" nella lista.
+    int matchNumberOf(Season s, Match m){
+        int cnt=0;
+        for (Match x: s.matches){ if(!x.unknown) cnt++; if(x==m) return cnt; }
+        return cnt;
+    }
+
+    // Dialog "Seleziona un deck" generico, condiviso da chooseCurrentDeck() (cambia il deck attuale della
+    // Stagione) e changeMatchDeck() (cambia il deck di UNA partita gia' giocata) — stesse card, ricerca,
+    // "Nuovo Deck", Annulla/Conferma; cambia solo il titolo, la selezione di partenza e cosa fare col deck
+    // scelto (parametrizzato con onConfirm).
+    void showDeckSelectorDialog(Season s, String headerText, Deck initialSelection, java.util.function.Consumer<Deck> onConfirm) {
+        Deck[] selected = { initialSelection };
         ArrayList<Deck> allDecks = view.sortedDecks(s);
         ArrayList<Deck> filtered = new ArrayList<>(allDecks);
         // Dichiarato qui (assegnato piu' sotto): rebuildList lo referenzia nel listener del kebab, quindi
@@ -753,7 +764,7 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText("Seleziona un deck"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView title = new TextView(this); title.setText(headerText); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18);
         root.addView(title, titleLp);
@@ -896,16 +907,23 @@ public class MainActivity extends Activity {
         dialog.show();
 
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
-            // Creare un nuovo deck qui e' un'azione completa: seleziona subito il deck (senza passare da
+            // Creare un nuovo deck qui e' un'azione completa: lo applica subito (senza passare da
             // "Conferma") e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
             // evidenziata in attesa di un'ulteriore conferma.
-            s.currentDeck = newDeck.name; store.save(); view.invalidate();
+            onConfirm.accept(newDeck);
             dialog.dismiss();
         }));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
-            if (selected[0]!=null) { s.currentDeck = selected[0].name; store.save(); view.invalidate(); }
+            if (selected[0]!=null) onConfirm.accept(selected[0]);
             dialog.dismiss();
+        });
+    }
+
+    void chooseCurrentDeck() {
+        Season s = store.seasons.get(store.current);
+        showDeckSelectorDialog(s, "Seleziona un deck", findDeck(s, s.currentDeck), chosen -> {
+            s.currentDeck = chosen.name; store.save(); view.invalidate();
         });
     }
 
@@ -913,7 +931,10 @@ public class MainActivity extends Activity {
     // calcolate al volo dal campo 'deck' di ogni partita, quindi si aggiornano da sole.
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
-        pickDeckFor(s, "Che deck hai usato in questa partita?", "Annulla", name -> { m.deck = name; store.save(); view.invalidate(); });
+        int num = matchNumberOf(s, m);
+        showDeckSelectorDialog(s, "Seleziona un deck diverso per la partita n."+num, findDeck(s, m.deck), chosen -> {
+            m.deck = chosen.name; store.save(); view.invalidate();
+        });
     }
 
     void win() { play(true); }
@@ -1359,6 +1380,7 @@ public class MainActivity extends Activity {
         // Deck "in sospeso": non ancora creato/salvato, serve solo per tenere lo stile/colore scelto
         // nell'anteprima finche' il salvataggio non lo trasferisce sul Deck vero.
         Deck pendingDeck = new Deck("");
+        pendingDeck.previewStyle = store.preferredCardStyle; // parte dallo stile preferito, non sempre "spine"
 
         DeckPreviewThumbView thumb = new DeckPreviewThumbView(this, pendingDeck);
         FrameLayout.LayoutParams thumbLp = new FrameLayout.LayoutParams(dp(64), dp(80));
@@ -1386,9 +1408,6 @@ public class MainActivity extends Activity {
             Deck deck=new Deck(n);
             // Trasferisce sul Deck vero l'anteprima scelta sul Deck "in sospeso".
             deck.previewStyle = pendingDeck.previewStyle; deck.previewColor = pendingDeck.previewColor;
-            deck.previewCustomUri = pendingDeck.previewCustomUri;
-            deck.previewCropCx = pendingDeck.previewCropCx; deck.previewCropCy = pendingDeck.previewCropCy;
-            deck.previewCropWFrac = pendingDeck.previewCropWFrac;
             if(pendingImage!=null){
                 Uri imgUri = pendingImage; pendingImage=null;
                 deck.images.add(imgUri.toString());
@@ -1419,30 +1438,11 @@ public class MainActivity extends Activity {
 
     Uri pendingImage=null;            // immagine "in sospeso" per un Deck non ancora creato (flusso addDeck)
     Deck pendingImageTargetDeck=null; // Deck esistente a cui AGGIUNGERE l'immagine scelta (flusso di gestione screenshot)
-    Deck pendingPreviewTargetDeck=null;         // Deck per cui si sta scegliendo un'anteprima PERSONALIZZATA
-    Runnable pendingPreviewOnChanged=null;      // richiamato a ritaglio confermato, se chi ha aperto il picker ne aveva bisogno (es. per aggiornare una riga in un altro dialog)
 
     void pickImageFor(Deck target){
         pendingImageTargetDeck = target;
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("image/*"); i.addCategory(Intent.CATEGORY_OPENABLE);
         try { startActivityForResult(i,101); } catch(Exception ex) { Toast.makeText(this,"Nessuna app disponibile per selezionare la Lista.",Toast.LENGTH_SHORT).show(); }
-    }
-
-    // Come pickImageFor, ma per l'anteprima personalizzata di un deck (richiesta code diversa, 102, per
-    // distinguerla dal flusso Liste in onActivityResult). pickerToClose (opzionale): il dialog "Scegli
-    // anteprima" sottostante, richiuso automaticamente a ritaglio confermato.
-    void pickImageForPreview(Deck target, Dialog pickerToClose){ pickImageForPreview(target, pickerToClose, null); }
-
-    void pickImageForPreview(Deck target, Dialog pickerToClose, Runnable onChanged){
-        pendingPreviewTargetDeck = target;
-        pendingPreviewOnChanged = onChanged;
-        // Richiuso SUBITO, non solo a ritaglio confermato: lasciarlo aperto sotto mentre si apriva l'editor
-        // di ritaglio (un secondo Dialog impilato sopra) causava un rendering completamente rotto (schermo
-        // nero, controlli fuori posto) — due finestre Dialog sovrapposte contemporaneamente non e' un caso
-        // ben supportato qui.
-        if (pickerToClose!=null) pickerToClose.dismiss();
-        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("image/*"); i.addCategory(Intent.CATEGORY_OPENABLE);
-        try { startActivityForResult(i,102); } catch(Exception ex) { Toast.makeText(this,"Nessuna app disponibile per selezionare l'immagine.",Toast.LENGTH_SHORT).show(); }
     }
 
     @Override protected void onActivityResult(int req,int result,Intent data){
@@ -1463,13 +1463,6 @@ public class MainActivity extends Activity {
             } else {
                 pendingImage = uri; // in attesa che l'utente completi la creazione del nuovo Deck
             }
-        } else if(req==102 && result==RESULT_OK && data!=null){
-            Uri uri = data.getData();
-            try{ getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-            catch(Exception e){ Log.w(TAG, "Impossibile ottenere il permesso persistente sull'immagine", e); }
-            Deck targetDeck = pendingPreviewTargetDeck; pendingPreviewTargetDeck=null;
-            Runnable onChanged = pendingPreviewOnChanged; pendingPreviewOnChanged=null;
-            if (targetDeck!=null) showCropEditor(uri, targetDeck, onChanged); // il dialog "Scegli anteprima" e' gia' stato richiuso in pickImageForPreview()
         }
     }
 
@@ -1522,14 +1515,69 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Dialog "Stile preferito card" (Impostazioni): solo 3 opzioni di STILE, sempre nel colore "grigio
+    // chiaro" (quello di default) — non c'e' nessun deck coinvolto, e' una preferenza globale usata come
+    // punto di partenza per l'anteprima di ogni nuovo deck creato.
+    void showCardStylePreferenceDialog(){
+        String[] selectedStyle = { store.preferredCardStyle };
+
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText("Stile preferito per le card"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
+        root.addView(title, titleLp);
+
+        String[] styleKeys = {"spine","gem","holo"};
+        PreviewSwatchView[] swatches = new PreviewSwatchView[3];
+        LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER);
+        for (int i=0;i<3;i++){
+            PreviewSwatchView sw = new PreviewSwatchView(this, styleKeys[i], "grigiochiaro");
+            sw.selected = styleKeys[i].equals(selectedStyle[0]);
+            swatches[i]=sw;
+            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(dp(96), dp(120));
+            swLp.leftMargin=dp(10); swLp.rightMargin=dp(10);
+            row.addView(sw, swLp);
+            final String sk = styleKeys[i];
+            sw.setOnClickListener(v -> { selectedStyle[0]=sk; for(PreviewSwatchView s: swatches) s.selected=s.style.equals(sk); for(PreviewSwatchView s: swatches) s.invalidate(); });
+        }
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin=dp(10); rowLp.bottomMargin=dp(14);
+        root.addView(row, rowLp);
+
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
+        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(cancelBtn); footer.addView(confirmBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        confirmBtn.setOnClickListener(v -> {
+            store.preferredCardStyle = selectedStyle[0];
+            store.save(); view.invalidate();
+            dialog.dismiss();
+        });
+    }
+
     void showPreviewPicker(Deck d){ showPreviewPicker(d, null); }
 
     // onChanged (opzionale): richiamato a conferma avvenuta, per far ridisegnare la riga se il dialog che ha
     // aperto questo picker (es. "Cambia deck") ha una sua vista separata che altrimenti non si aggiorna da
     // sola — invalidate() sulla TrackerView principale non tocca le view native di ALTRI dialog aperti.
     void showPreviewPicker(Deck d, Runnable onChanged){
-        String[] activeStyle = { ("custom".equals(d.previewStyle) ? "spine" : d.previewStyle) };
-        String[] selectedColor = { "custom".equals(d.previewStyle) ? null : d.previewColor };
+        String[] activeStyle = { d.previewStyle };
+        String[] selectedColor = { d.previewColor };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
@@ -1592,11 +1640,10 @@ public class MainActivity extends Activity {
         refreshTabs[0].run();
         for (int i=0;i<3;i++){ final String sk = styleKeys[i]; tabViews[i].setOnClickListener(v -> { activeStyle[0]=sk; refreshTabs[0].run(); }); }
 
-        // Footer: "Carica immagine" a sinistra, Annulla/Conferma a destra.
+        // Footer: Annulla/Conferma. ("Carica immagine" rimosso: l'anteprima da immagine personalizzata non
+        // esiste piu', restano solo le card preimpostate.)
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setGravity(Gravity.CENTER_VERTICAL); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
-        TextView loadImgBtn = new TextView(this); loadImgBtn.setText("Carica immagine"); loadImgBtn.setTextColor(blueColor()); loadImgBtn.setTextSize(14);
-        footer.addView(loadImgBtn, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
         TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
         cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
         TextView confirmBtn = new TextView(this); confirmBtn.setText("Conferma"); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
@@ -1615,13 +1662,10 @@ public class MainActivity extends Activity {
         // sempre correttamente).
         if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
-
-        loadImgBtn.setOnClickListener(v -> pickImageForPreview(d, dialog, onChanged));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selectedColor[0]!=null){
                 d.previewStyle = activeStyle[0]; d.previewColor = selectedColor[0];
-                d.cachedPreview = null; d.cachedPreviewSourceUri = null; // se prima era "custom", pulisce la cache
                 store.save(); if (view!=null) view.invalidate();
                 if (onChanged!=null) onChanged.run();
             }
@@ -1732,47 +1776,6 @@ public class MainActivity extends Activity {
     // Anteprima automatica del deck: ritaglia una regione a PERCENTUALI FISSE della prima immagine caricata
     // (il box del mazzo nella schermata profilo del gioco, che sta sempre grosso modo nella stessa posizione
     // relativa) — non e' un vero riconoscimento dell'immagine, solo una stima geometrica; funziona in modo
-    // affidabile solo se lo screenshot e' sempre l'intera schermata, non gia' ritagliata diversamente.
-    // Risultato salvato in cache sul Deck stesso, per non ridecodificare/ritagliare ad ogni ridisegno.
-    // Restituisce il bitmap ritagliato dell'anteprima PERSONALIZZATA (previewStyle=="custom"): usato solo
-    // in quel caso, altrimenti l'anteprima e' disegnata direttamente sul canvas da drawDeckPreview() senza
-    // bisogno di alcuna immagine.
-    Bitmap getCustomPreviewBitmap(Deck d){
-        if (d.previewCustomUri == null) return null;
-        String uri = d.previewCustomUri;
-        if (d.cachedPreview!=null && uri.equals(d.cachedPreviewSourceUri)) return d.cachedPreview;
-        try {
-            java.io.InputStream is = getContentResolver().openInputStream(Uri.parse(uri));
-            Bitmap full = BitmapFactory.decodeStream(is);
-            int[] rect = computePreviewCropRect(full.getWidth(), full.getHeight(), d.previewCropCx, d.previewCropCy, d.previewCropWFrac);
-            Bitmap cropped = Bitmap.createBitmap(full, rect[0], rect[1], rect[2], rect[3]);
-            d.cachedPreview = cropped; d.cachedPreviewSourceUri = uri;
-            return cropped;
-        } catch (Exception e) { return null; }
-    }
-
-    // Calcola il rettangolo di ritaglio (in pixel dell'immagine) dato il centro normalizzato (0-1) e le
-    // dimensioni reali dell'immagine: aspect ratio SEMPRE 0.8 (coerente con l'anteprima 64x80), qualunque
-    // sia la risoluzione/aspect ratio del telefono che ha generato lo screenshot — prima erano percentuali
-    // fisse separate per larghezza/altezza, che su risoluzioni diverse producevano un aspect ratio storto.
-    static final float PREVIEW_CROP_ASPECT = 0.8f; // larghezza/altezza, come il riquadro 64x80
-    // Sovraccarico storico (nessun zoom scelto dall'utente): usa la frazione di default 0.24.
-    int[] computePreviewCropRect(int imgW, int imgH, float cx, float cy){
-        return computePreviewCropRect(imgW, imgH, cx, cy, 0.24f);
-    }
-    int[] computePreviewCropRect(int imgW, int imgH, float cx, float cy, float wFrac){
-        float cropW = imgW * wFrac;
-        float cropH = cropW / PREVIEW_CROP_ASPECT;
-        if (cropH > imgH * 0.98f) { cropH = imgH * 0.98f; cropW = cropH * PREVIEW_CROP_ASPECT; }
-        float halfWFrac = (cropW/imgW)/2, halfHFrac = (cropH/imgH)/2;
-        float ccx = Math.max(halfWFrac, Math.min(1-halfWFrac, cx));
-        float ccy = Math.max(halfHFrac, Math.min(1-halfHFrac, cy));
-        int left = (int)((ccx-halfWFrac)*imgW), top = (int)((ccy-halfHFrac)*imgH);
-        int w = Math.max(1,(int)cropW), h = Math.max(1,(int)cropH);
-        left = Math.max(0, Math.min(imgW-w, left)); top = Math.max(0, Math.min(imgH-h, top));
-        return new int[]{left, top, w, h};
-    }
-
     // ===== Anteprime preimpostate: 3 stili (spine/gem/holo) x 9 colori selezionabili + arcobaleno
     // (usato per il colore "arcobaleno" stesso, e come placeholder quando nessun deck e' selezionato).
     // Ogni colore e' una tripla {light, mid, deep} (dal mockup HTML approvato). =====
@@ -1792,15 +1795,11 @@ public class MainActivity extends Activity {
     static final String[] PREVIEW_COLOR_LABELS = {"Verde","Rosso","Azzurro","Giallo","Viola","Marrone","Grigio scuro","Oro","Grigio chiaro","Arcobaleno"};
     static final int[] RAINBOW_HUES = { Color.rgb(0xE8,0x74,0x6A), Color.rgb(0xE0,0xB0,0x23), Color.rgb(0x5F,0xCB,0x8A), Color.rgb(0x2F,0xA8,0xD9), Color.rgb(0x7B,0x4F,0xC9), Color.rgb(0xE8,0x74,0x6A) };
 
-    // Punto d'ingresso unico per disegnare l'anteprima di un deck (o il placeholder "nessun deck"): decide da
-    // solo se serve un'immagine personalizzata ritagliata o una card preimpostata disegnata sul canvas.
+    // Punto d'ingresso unico per disegnare l'anteprima di un deck (o il placeholder "nessun deck"): sempre
+    // una card preimpostata disegnata sul canvas — l'anteprima da immagine personalizzata e' stata rimossa
+    // (causava troppi problemi), restano solo le Liste (screenshot) come funzione separata.
     void drawDeckPreview(Canvas c, Deck d, float l, float t, float r, float b){
         if (d==null) { drawPresetPreviewCard(c, l,t,r,b, "spine", "arcobaleno"); return; }
-        if ("custom".equals(d.previewStyle) && d.previewCustomUri!=null) {
-            Bitmap bmp = getCustomPreviewBitmap(d);
-            if (bmp!=null) { view.drawCoverImage(c, bmp, l,t,r,b, 8*(r-l)/64f); return; }
-            // File non piu' disponibile: ricade sul preimpostato come rete di sicurezza.
-        }
         drawPresetPreviewCard(c, l,t,r,b, d.previewStyle==null?"spine":d.previewStyle, d.previewColor==null?"grigiochiaro":d.previewColor);
     }
 
@@ -1881,163 +1880,8 @@ public class MainActivity extends Activity {
     // spostare; finito il primo trascinamento passa a mostrare SOLO l'area ritagliata, zoomata, per
     // un'ultima rifinitura fine (sempre solo spostamento, mai ridimensionamento). Risolve il problema delle
     // percentuali fisse di ritaglio che con risoluzioni/screenshot diversi finivano spesso storte.
-    // Editor di ritaglio: l'immagine e' mostrata GRANDE (adattata allo schermo, come nella galleria Liste —
-    // niente zoom oltre la sua risoluzione reale, che prima sgranava). Il riquadro di selezione resta FISSO
-    // al centro, alle dimensioni ESATTE della preview finale (proporzionali alla scala di visualizzazione,
-    // non ingrandite): e' l'IMMAGINE che si sposta sotto, come un classico pan-crop. Se il punto di ritaglio
-    // ricordato porta l'immagine a scoprire i margini, si vede lo sfondo scuro del dialog — normale, dato
-    // che l'immagine e' spesso piu' alta/larga dello schermo. Dentro il riquadro: colori veri. Fuori: overlay
-    // scuro semi-trasparente (immagine E sfondo), a dare l'effetto "disattivato/in grigio".
-    // Editor di ritaglio: riquadro a dimensione FISSA sullo schermo (le dimensioni reali della preview,
-    // scalate solo per la densita' del device — non piu' proporzionale all'immagine). L'immagine si sposta
-    // sotto (pan) E si puo' ingrandire/rimpicciolire con un pizzico a due dita (ScaleGestureDetector): più
-    // zoom = il riquadro cattura una porzione più piccola e stretta dell'immagine. Zoom di default leggermente
-    // sopra il minimo, per evitare l'area in eccesso (soprattutto sotto) segnalata.
-    class CropEditorView extends View {
-        Bitmap sourceBitmap;
-        float cropCx, cropCy; // punto (frazione 0-1 dell'immagine) che deve cadere al centro del riquadro
-        float frameWpx, frameHpx; // dimensione FISSA del riquadro su schermo (px reali, density-scaled)
-        float baseScale; // scala immagine tale che, a zoom=1, il riquadro catturi il previewCropWFrac di partenza
-        float zoom, minZoom, maxZoom=4f;
-        float touchStartX, touchStartY, startCx, startCy;
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        ScaleGestureDetector scaleDetector;
+    // (CropEditorView e showCropEditor rimossi: anteprima da immagine personalizzata eliminata, causava troppi problemi — restano solo le anteprime preimpostate e le Liste)
 
-        CropEditorView(Context c, Bitmap bmp, float initCx, float initCy, float initWFrac){
-            super(c);
-            sourceBitmap = bmp; cropCx = initCx; cropCy = initCy;
-            frameWpx = dp(64); frameHpx = dp(80);
-            // Clamp di sicurezza: una frazione troppo piccola farebbe esplodere baseScale (e quindi la
-            // dimensione dell'immagine da disegnare) fino a superare quello che il canvas riesce a
-            // gestire, con schermo nero come risultato — non dovrebbe piu' succedere dopo il fix sopra,
-            // ma meglio non fidarsi ciecamente di qualunque valore arrivi da dati salvati.
-            initWFrac = Math.max(0.05f, Math.min(0.9f, initWFrac));
-            int[] rect0 = computePreviewCropRect(bmp.getWidth(), bmp.getHeight(), initCx, initCy, initWFrac);
-            baseScale = frameWpx / rect0[2]; // a zoom=1, rect0[2] px immagine occupano esattamente frameWpx px schermo
-            minZoom = Math.max(frameWpx/(bmp.getWidth()*baseScale), frameHpx/(bmp.getHeight()*baseScale));
-            // NIENTE PIU' moltiplicatore di zoom fisso qui: partiva sempre da 1.25x SOPRA il valore già salvato
-            // (initWFrac), quindi ogni volta che si riapriva e risalvava lo stesso deck lo zoom si moltiplicava
-            // di nuovo — dopo un paio di modifiche la scala diventava enorme (decine di migliaia di pixel) e
-            // il canvas falliva silenziosamente il disegno (schermo nero). Ora si parte sempre da zoom=1,
-            // che riproduce esattamente initWFrac cosi' com'e' (gia' salvato in precedenza, o il default per
-            // un deck nuovo) — il "leggero ingrandimento di default" e' nel valore di default stesso del
-            // campo (vedi previewCropWFrac in Deck), non piu' applicato di nuovo ad ogni apertura.
-            zoom = Math.max(minZoom, 1f);
-            scaleDetector = new ScaleGestureDetector(c, new ScaleGestureDetector.SimpleOnScaleGestureListener(){
-                @Override public boolean onScale(ScaleGestureDetector d){
-                    zoom = Math.max(minZoom, Math.min(maxZoom, zoom*d.getScaleFactor()));
-                    invalidate();
-                    return true;
-                }
-            });
-        }
-
-        // Frazione di immagine (larghezza) attualmente catturata nel riquadro: da salvare a conferma avvenuta.
-        float currentCropWFrac(){ return frameWpx/(baseScale*zoom*sourceBitmap.getWidth()); }
-
-        @Override protected void onDraw(Canvas c){
-            super.onDraw(c);
-            int vw=getWidth(), vh=getHeight();
-            if (vw==0 || vh==0) return;
-            float effScale = baseScale*zoom;
-            float dispW = sourceBitmap.getWidth()*effScale, dispH = sourceBitmap.getHeight()*effScale;
-            float frameCx = vw/2f, frameCy = vh/2f;
-            float imgL = frameCx - cropCx*dispW, imgT = frameCy - cropCy*dispH;
-            c.drawBitmap(sourceBitmap, null, new RectF(imgL, imgT, imgL+dispW, imgT+dispH), null);
-
-            float fl=frameCx-frameWpx/2, ft=frameCy-frameHpx/2, fr=frameCx+frameWpx/2, fb=frameCy+frameHpx/2;
-
-            // Overlay scuro OVUNQUE fuori dal riquadro (sopra immagine e sfondo, effetto "disattivato").
-            paint.setStyle(Paint.Style.FILL); paint.setColor(Color.argb(180,0,0,0));
-            c.drawRect(0,0,vw,ft,paint);
-            c.drawRect(0,fb,vw,vh,paint);
-            c.drawRect(0,ft,fl,fb,paint);
-            c.drawRect(fr,ft,vw,fb,paint);
-
-            paint.setStyle(Paint.Style.STROKE); paint.setColor(Color.WHITE); paint.setStrokeWidth(3);
-            c.drawRect(fl,ft,fr,fb,paint);
-        }
-
-        @Override public boolean onTouchEvent(MotionEvent e){
-            scaleDetector.onTouchEvent(e);
-            if (scaleDetector.isInProgress()) return true; // durante il pizzico, non spostare anche l'immagine
-            float effScale = baseScale*zoom;
-            float dispW = sourceBitmap.getWidth()*effScale, dispH = sourceBitmap.getHeight()*effScale;
-            switch(e.getActionMasked()){
-                case MotionEvent.ACTION_DOWN:
-                    touchStartX=e.getX(); touchStartY=e.getY(); startCx=cropCx; startCy=cropCy;
-                    return true;
-                case MotionEvent.ACTION_MOVE: {
-                    float dx=e.getX()-touchStartX, dy=e.getY()-touchStartY;
-                    // Il riquadro e' fisso: spostare il dito a destra sposta l'IMMAGINE a destra, quindi il
-                    // punto che finisce al centro si muove a SINISTRA nell'immagine — direzione opposta al
-                    // gesto, come un pan classico.
-                    cropCx = startCx - dx/dispW;
-                    cropCy = startCy - dy/dispH;
-                    float cropWFrac = frameWpx/dispW, cropHFrac = frameHpx/dispH;
-                    float halfW=cropWFrac/2, halfH=cropHFrac/2;
-                    cropCx = Math.max(halfW, Math.min(1-halfW, cropCx));
-                    cropCy = Math.max(halfH, Math.min(1-halfH, cropCy));
-                    invalidate();
-                    return true;
-                }
-            }
-            return true;
-        }
-    }
-
-    // Riusato ora per l'anteprima PERSONALIZZATA di un deck (prima pensato per le Liste): imposta
-    // previewStyle="custom" + l'URI scelto, oltre al centro del ritaglio. onDone (opzionale) e' richiamato a
-    // conferma avvenuta, per permettere al chiamante di richiudere anche il dialog di selezione sottostante.
-    void showCropEditor(Uri imageUri, Deck targetDeck, Runnable onDone){
-        Bitmap bmp;
-        try { bmp = BitmapFactory.decodeStream(getContentResolver().openInputStream(imageUri)); }
-        catch (Exception e) { bmp = null; }
-        if (bmp == null) { Toast.makeText(this,"Impossibile aprire l'immagine.",Toast.LENGTH_SHORT).show(); return; }
-
-        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
-        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
-        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
-        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.BLACK);
-
-        // Niente piu' titolo: "Annulla" a sinistra, "Fatto" a destra — coppia standard, niente testo di
-        // spiegazione superfluo nell'header.
-        LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL); header.setPadding(dp(16),dp(10),dp(16),dp(10));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText("Annulla"); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(15);
-        cancelBtn.setPadding(dp(6),dp(6),dp(12),dp(6));
-        header.addView(cancelBtn);
-        header.addView(new View(this), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1)); // spaziatore
-        TextView doneBtn = new TextView(this); doneBtn.setText("Fatto"); doneBtn.setTextColor(blueColor()); doneBtn.setTextSize(15);
-        doneBtn.setPadding(dp(12),dp(6),dp(6),dp(6));
-        header.addView(doneBtn);
-        root.addView(header);
-
-        CropEditorView cropView = new CropEditorView(this, bmp, targetDeck.previewCropCx, targetDeck.previewCropCy, targetDeck.previewCropWFrac);
-        root.addView(cropView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-        // Niente piu' testo di suggerimento sotto: il pattern (riquadro fisso, immagine che si sposta/si
-        // pizzica) e' abbastanza standard da non richiedere spiegazione.
-
-        cancelBtn.setOnClickListener(v -> dialog.dismiss());
-        doneBtn.setOnClickListener(v -> {
-            targetDeck.previewCropCx = cropView.cropCx; targetDeck.previewCropCy = cropView.cropCy;
-            targetDeck.previewCropWFrac = cropView.currentCropWFrac();
-            targetDeck.previewStyle = "custom"; targetDeck.previewCustomUri = imageUri.toString();
-            targetDeck.cachedPreview = null; targetDeck.cachedPreviewSourceUri = null; // forza la rigenerazione
-            store.save();
-            if (view != null) view.invalidate();
-            dialog.dismiss();
-            if (onDone!=null) onDone.run();
-        });
-
-        dialog.setContentView(root);
-        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT);
-        dialog.setCancelable(false); // e' un editor: non deve chiudersi per errore toccando fuori
-        dialog.show();
-    }
 
     void showImageGallery(Deck d, int startIndex){
         if (d.images.isEmpty()) return;
@@ -2609,13 +2453,20 @@ public class MainActivity extends Activity {
             txt(c,nameLabel,34,centeredBaseline(115,18),18, (store.trainerName==null||store.trainerName.isEmpty())?muted:white, Paint.Align.LEFT);
             drawEditIcon(c, w-40, 115, 18, white);
 
-            box(c,18,158,w-18,206,Color.rgb(30,16,16));
-            strokeBox(c,18,158,w-18,206,red());
-            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(182,15),15,red(),Paint.Align.CENTER);
+            // Stile preferito per le anteprime dei nuovi deck: mostrato in "grigio chiaro" come esempio
+            // neutro (lo stesso usato di default), il tocco apre la scelta tra i 3 stili.
+            box(c,18,158,w-18,308,card);
+            txt(c,"STILE PREFERITO CARD",w/2,180,12,muted,Paint.Align.CENTER);
+            drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro");
+            txt(c,"Tocca per cambiare",w/2,centeredBaseline(292,12),12,muted,Paint.Align.CENTER);
 
-            txt(c,APP_VERSION,w/2,230,11,muted,Paint.Align.CENTER);
+            box(c,18,322,w-18,370,Color.rgb(30,16,16));
+            strokeBox(c,18,322,w-18,370,red());
+            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(346,15),15,red(),Paint.Align.CENTER);
 
-            lastContentBottom = 250;
+            txt(c,APP_VERSION,w/2,394,11,muted,Paint.Align.CENTER);
+
+            lastContentBottom = 414;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
         }
@@ -2657,10 +2508,13 @@ public class MainActivity extends Activity {
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
             box(c,c1L,58,c1R,138,card);
             txt(c,"PUNTI ATTUALI",(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
-            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,26),26,white,Paint.Align.CENTER);
+            txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
             txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
-            float[] pb = centerLines(108,6,20,15);
+            // Blocco numero+W/L spostato più in basso (centerY 108→114) e con gap interno maggiore (6→14):
+            // prima le 3 righe (etichetta, numero, W/L) risultavano ammassate verso il basso della card,
+            // con la coppia numero+W/L troppo vicina tra loro e all'etichetta sopra.
+            float[] pb = centerLines(114,14,20,15);
             txt(c,""+(W+L),(c2L+c2R)/2,pb[0],20,white,Paint.Align.CENTER);
             txtRowCentered(c,(c2L+c2R)/2,pb[1],15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
@@ -2672,14 +2526,14 @@ public class MainActivity extends Activity {
             // sul resto della card cambia ancora il deck (invariato). =====
             boolean noDeck = s.currentDeck==null || "Unknown".equals(s.currentDeck);
             box(c,18,152,w-18,302,card);
-            txt(c,"DECK SELEZIONATO",w/2,174,12,muted,Paint.Align.CENTER);
+            txt(c, noDeck?"NESSUN DECK SELEZIONATO":"DECK SELEZIONATO", w/2,174,12,muted,Paint.Align.CENTER);
             Deck curDeckObjForMenu = noDeck ? null : findDeck(s, s.currentDeck);
             if(curDeckObjForMenu!=null){ drawKebabIcon(c, w-34, 174, muted); currentDeckKebabX=w-34; currentDeckKebabY=174; }
             else { currentDeckKebabX=-1000; currentDeckKebabY=-1000; } // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
             float thumbW=64, thumbH=80, thumbX=w/2-thumbW/2, thumbY=186;
             drawDeckPreview(c, curDeckObjForMenu, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
             if(noDeck){
-                txt(c,"Nessun deck selezionato",w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
+                txt(c,"Tocca per selezionare un deck",w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
             } else {
                 txt(c,s.currentDeck,w/2,centeredBaseline(284,18),18,white,Paint.Align.CENTER);
             }
@@ -2738,8 +2592,8 @@ public class MainActivity extends Activity {
             // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
             // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
             float tabIconY = listCardTop+21; // vero centro della fascia (42 di altezza): prima era +26, 5 unita' piu' in basso del centro reale
-            drawMiniChartTabIcon(c, w/2-23, tabIconY, 22, partiteTab==0?blue:muted);
-            drawListTabIcon(c, w/2+23, tabIconY, 22, partiteTab==1?blue:muted);
+            drawMiniChartTabIcon(c, w/2-23, tabIconY, 28, partiteTab==0?blue:muted);
+            drawListTabIcon(c, w/2+23, tabIconY, 28, partiteTab==1?blue:muted);
             // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
             // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
             // dimensione dell'icona cambiava.
@@ -3117,10 +2971,12 @@ public class MainActivity extends Activity {
             // pulsante che si espande) non c'e' piu' spazio per farla convivere senza dare fastidio.
             // Stesso colore/bordo del pulsante "Nuovo Deck" nel dialog "Seleziona un deck" (styleSecondaryButton),
             // al posto del riempimento blu pieno di prima, per coerenza visiva tra i due.
-            box(c,18,90,w-18,138,Color.rgb(20,32,48));
-            strokeBox(c,18,90,w-18,138,FIELD_BORDER);
-            txt(c,"Nuovo Deck",w/2,117,14,white,Paint.Align.CENTER);
-            float y=152;
+            // Margine aumentato dalla barra di ricerca sopra (che finisce a y=88): prima "Nuovo Deck"
+            // iniziava a y=90, appena 2 unita' dopo, sembravano attaccati.
+            box(c,18,100,w-18,148,Color.rgb(20,32,48));
+            strokeBox(c,18,100,w-18,148,FIELD_BORDER);
+            txt(c,"Nuovo Deck",w/2,127,14,white,Paint.Align.CENTER);
+            float y=162;
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
                 if (!q.isEmpty() && !d.name.toLowerCase(Locale.ITALY).contains(q)) continue;
@@ -3407,7 +3263,7 @@ public class MainActivity extends Activity {
                 if(Math.hypot(x-(w-30), y-56) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
                 if(Math.hypot(x-(w-64), y-56) <= 24){ showWelcomeGuide(); return true; }
                 for(float[] kb: seasonKebabPos){
-                    if(Math.hypot(x-kb[0], contentY-kb[1]) <= 22){ seasonActionsMenu((int)kb[2], w-18, kb[1]-scrollY+16); return true; }
+                    if(Math.hypot(x-kb[0], contentY-kb[1]) <= 22){ seasonActionsMenu((int)kb[2], kb[0], kb[1]-scrollY+16); return true; }
                 }
                 for(Hit hit: seasonHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ store.current=hit.index; screen=SCREEN_SEASON_DETAIL; detailTab=0; store.save(); invalidate(); return true; } }
                 return true;
@@ -3416,7 +3272,8 @@ public class MainActivity extends Activity {
             if(screen==SCREEN_SETTINGS){
                 if(y<52){ if(x<60){ screen=SCREEN_SEASON_LIST; invalidate(); return true; } return true; }
                 if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
-                if(contentY>=158&&contentY<=206){ resetAllData(); return true; }
+                if(contentY>=158&&contentY<=308){ showCardStylePreferenceDialog(); return true; }
+                if(contentY>=322&&contentY<=370){ resetAllData(); return true; }
                 return true;
             }
 
@@ -3441,7 +3298,7 @@ public class MainActivity extends Activity {
                 if(Math.hypot(x-currentDeckKebabX, contentY-currentDeckKebabY) <= 22){
                     Deck curDeckObj=findDeck(s,s.currentDeck);
                     if(curDeckObj!=null){
-                        view.showAnchoredMenu(w-18, contentY-scrollY+16,
+                        view.showAnchoredMenu(currentDeckKebabX, contentY-scrollY+16,
                             new String[]{"Cambia deck","Rinomina deck","Scegli anteprima","Aggiungi Lista","Elimina deck"},
                             new int[]{Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE, red()},
                             new Runnable[]{ () -> chooseCurrentDeck(), () -> renameDeckDialog(curDeckObj), () -> showPreviewPicker(curDeckObj), () -> openDeckImages(curDeckObj), () -> confirmDeleteDeck(s,curDeckObj) });
@@ -3481,14 +3338,21 @@ public class MainActivity extends Activity {
                         }
                         return true;
                     }
-                    float matchContentY = contentY + matchInnerScrollY;
-                    for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
+                    // Guardia mancante: senza, un tocco sull'header fisso (icone/barra data) con la lista
+                    // scorsa poteva "combaciare per caso" con lo Hit di una partita molto piu' in basso nel
+                    // contenuto scorrevole (matchContentY = contentY + matchInnerScrollY, senza verificare che
+                    // contentY fosse davvero dentro l'area scorrevole) — aprendo il dialog cambio deck anche
+                    // toccando l'header, non solo una partita vera.
+                    if (contentY >= dateBarBottom) {
+                        float matchContentY = contentY + matchInnerScrollY;
+                        for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
+                    }
                 }
             } else if(detailTab==1){
-                if(contentY>=90&&contentY<=138){ addDeck(); return true; }
+                if(contentY>=100&&contentY<=148){ addDeck(); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
-                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-32,yy+36-scrollY); return true; }
+                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-36,yy+36-scrollY); return true; }
                     yy+=104;
                 }
                 for(Object[] pz: deckPreviewTapZones){
@@ -3513,27 +3377,15 @@ public class MainActivity extends Activity {
     }
     static class Deck {
         String name; ArrayList<String> images=new ArrayList<>(); Deck(String n){name=n;}
-        // Cache dell'anteprima (personalizzata, ritagliata da un'immagine): non salvata su disco, ricalcolata
-        // al bisogno — evita di ridecodificare/ritagliare l'immagine ad ogni singolo ridisegno.
-        transient Bitmap cachedPreview; transient String cachedPreviewSourceUri;
-        // Anteprima: o preimpostata (stile+colore, disegnata direttamente sul canvas, nessuna immagine
-        // coinvolta) o personalizzata (un'immagine propria, ritagliata con l'editor a 2 fasi). Default per
-        // ogni nuovo deck: stile "spine", colore "grigiochiaro" — coerente con l'idea di "grigio chiaro" come
-        // colore neutro di default discussa nel mockup.
-        String previewStyle="spine";   // "spine" | "gem" | "holo" | "custom"
-        String previewColor="grigiochiaro"; // usato solo se previewStyle != "custom"
-        String previewCustomUri=null;  // usato solo se previewStyle == "custom"
-        // Centro del ritaglio per l'anteprima personalizzata (frazioni 0-1 dell'immagine), scelto dall'utente
-        // con l'editor — il riquadro sullo schermo ha dimensione FISSA, e' la frazione di immagine che ci
-        // finisce dentro (previewCropWFrac) a variare con lo zoom scelto dall'utente (pizzico con due dita).
-        float previewCropCx=0.213f, previewCropCy=0.26f;
-        float previewCropWFrac=0.192f; // 0.24/1.25: leggero ingrandimento di default per un deck NUOVO (mai ritagliato prima) — applicato una sola volta qui nel default, non piu' come moltiplicatore a runtime (che si accumulava ad ogni riapertura, causando lo schermo nero)
+        // Anteprima preimpostata (stile+colore, disegnata direttamente sul canvas — nessuna immagine
+        // personalizzata: quella possibilita' e' stata rimossa, causava troppi problemi). Default per ogni
+        // nuovo deck: stile "spine", colore "grigiochiaro".
+        String previewStyle="spine";   // "spine" | "gem" | "holo"
+        String previewColor="grigiochiaro";
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
             JSONArray imgs=new JSONArray(); for(String i:images) imgs.put(i); o.put("imgs",imgs);
             o.put("pstyle",previewStyle); o.put("pcolor",previewColor);
-            if (previewCustomUri!=null) o.put("pcuri",previewCustomUri);
-            o.put("ccx",previewCropCx); o.put("ccy",previewCropCy); o.put("cwf",previewCropWFrac);
             return o;
         }
         static Deck from(JSONObject o){
@@ -3543,9 +3395,6 @@ public class MainActivity extends Activity {
             else { String legacy=o.optString("i",null); if(legacy!=null) d.images.add(legacy); } // dati salvati dalla vecchia versione (un solo screenshot)
             d.previewStyle = o.optString("pstyle","spine");
             d.previewColor = o.optString("pcolor","grigiochiaro");
-            d.previewCustomUri = o.optString("pcuri",null);
-            d.previewCropCx = (float)o.optDouble("ccx", 0.213); d.previewCropCy = (float)o.optDouble("ccy", 0.26);
-            d.previewCropWFrac = (float)o.optDouble("cwf", 0.24);
             return d;
         }
     }
@@ -3603,11 +3452,13 @@ public class MainActivity extends Activity {
     static class Store {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
+        String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"holo")
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
+            preferredCardStyle = pref.getString("preferredCardStyle","spine");
             try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
