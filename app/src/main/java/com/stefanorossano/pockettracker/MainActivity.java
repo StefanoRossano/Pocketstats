@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.2";
+    static final String APP_VERSION = "v0.3.5";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -43,8 +43,8 @@ public class MainActivity extends Activity {
 
     // Lingue supportate: inglese di default (non l'italiano, e non la lingua di sistema) finche' l'utente
     // non sceglie diversamente da Impostazioni. "semplice, senza bandiera": solo il nome, niente icone.
-    static final String[] LANGUAGE_CODES = {"en","de","it","fr","es"};
-    static final String[] LANGUAGE_LABELS = {"English","Deutsch","Italiano","Français","Español"};
+    static final String[] LANGUAGE_CODES = {"en","it"};
+    static final String[] LANGUAGE_LABELS = {"English","Italiano"};
 
     // Applica la lingua salvata PRIMA che l'Activity venga creata (attachBaseContext e' chiamato prima di
     // onCreate) — legge le SharedPreferences direttamente, dato che l'oggetto Store normale non esiste
@@ -3652,7 +3652,7 @@ public class MainActivity extends Activity {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"mountains"|...)
-        String language="en"; // lingua dell'app: "en" (default) | "de" | "it" | "fr" | "es" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
+        String language="en"; // lingua dell'app: "en" (default) | "it" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
         void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
