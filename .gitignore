@@ -1,0 +1,9 @@
+# Chiave di firma RELEASE: non va mai committata (repo pubblico). Viene generata dal
+# workflow CI a partire da un secret di GitHub Actions, solo temporaneamente durante la build.
+release.keystore
+*.jks
+
+# Output di build standard
+/build
+/app/build
+local.properties
