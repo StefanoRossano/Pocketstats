@@ -237,4 +237,22 @@
         <item>Pocket evening?</item>
         <item>Ready for a few matches tonight?</item>
     </string-array>
+
+    <!-- Stili uniti qui dentro (prima in styles.xml separato): un unico file nella cartella values,
+    per escludere che il bug del resource merger riguardi il MERGE tra piu' file XML nella stessa cartella. -->
+    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#4D8DFF</item>
+        <item name="android:navigationBarColor">#070B12</item>
+        <item name="android:statusBarColor">#070B12</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:alertDialogTheme">@style/PocketDialogTheme</item>
+    </style>
+
+    <style name="PocketDialogTheme" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_background</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#A5AFBE</item>
+        <item name="android:colorAccent">#3778FF</item>
+    </style>
 </resources>
