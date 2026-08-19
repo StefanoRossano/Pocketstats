@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.174";
+    static final String APP_VERSION = "v0.2.175";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -109,15 +109,18 @@ public class MainActivity extends Activity {
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         deckSearchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        // Sempre visibile, niente piu' pulsante che si espande: la tastiera si apre semplicemente toccando
+        // il campo (comportamento normale di ogni EditText), con l'icona "cerca" al posto di "Fatto".
         deckSearchInput = new EditText(this);
         deckSearchInput.setSingleLine(); deckSearchInput.setBackground(null);
         deckSearchInput.setTextColor(Color.WHITE); deckSearchInput.setHintTextColor(MUTED_TXT);
         deckSearchInput.setHint("Cerca deck"); deckSearchInput.setTextSize(14);
         deckSearchInput.setPadding(0,0,0,0);
-        deckSearchInput.setVisibility(View.GONE);
         LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         deckSearchBar.addView(deckSearchInput, inputLp);
 
+        // "X" visibile SOLO quando c'e' del testo scritto (non il placeholder): azzera il campo, non "chiude"
+        // piu' nulla dato che non c'e' piu' un pulsante collassato da tornare a essere.
         deckSearchClearBtn = new TextView(this); deckSearchClearBtn.setText("✕"); deckSearchClearBtn.setTextColor(MUTED_TXT);
         deckSearchClearBtn.setGravity(Gravity.CENTER); deckSearchClearBtn.setTextSize(13);
         GradientDrawable closeCircle = new GradientDrawable(); closeCircle.setShape(GradientDrawable.OVAL); closeCircle.setColor(Color.rgb(24,36,52));
@@ -128,10 +131,17 @@ public class MainActivity extends Activity {
         clearLp.leftMargin = dp(6); clearLp.rightMargin = dp(6);
         deckSearchBar.addView(deckSearchClearBtn, clearLp);
 
-        deckSearchBar.setOnClickListener(v -> { if (!view.deckSearchActive) expandDeckSearch(); });
-        deckSearchClearBtn.setOnClickListener(v -> collapseDeckSearch());
-        // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il filtro
-        // si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
+        deckSearchClearBtn.setOnClickListener(v -> {
+            deckSearchInput.setText("");
+            view.deckSearchQuery = ""; view.invalidate();
+        });
+        deckSearchInput.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
+            public void onTextChanged(CharSequence s,int a,int b,int c){ deckSearchClearBtn.setVisibility(s.length()>0?View.VISIBLE:View.GONE); }
+            public void afterTextChanged(android.text.Editable s){}
+        });
+        // Niente filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il filtro si
+        // applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
         deckSearchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         deckSearchInput.setOnEditorActionListener((tv,actionId,ev) -> {
             if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
@@ -147,60 +157,28 @@ public class MainActivity extends Activity {
         rootContainer.addView(deckSearchBar, new FrameLayout.LayoutParams(dp(44), dp(44)));
     }
 
-    void expandDeckSearch(){
-        view.deckSearchActive = true;
-        deckSearchInput.setVisibility(View.VISIBLE);
-        deckSearchClearBtn.setVisibility(View.VISIBLE);
-        deckSearchInput.setText(view.deckSearchQuery);
-        // Prima si allarga la barra (positionDeckSearchBar), POI si chiede il focus/tastiera con un post():
-        // richiederli subito, con la view ancora alla larghezza collassata del frame precedente (non ancora
-        // ri-misurata), poteva fallire silenziosamente — la tastiera non si apriva sempre, anche se il campo
-        // risultava "selezionato".
-        positionDeckSearchBar();
-        view.invalidate();
-        deckSearchInput.post(() -> {
-            deckSearchInput.requestFocus();
-            deckSearchInput.selectAll();
-            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm!=null) imm.showSoftInput(deckSearchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-        });
-    }
-
-    void collapseDeckSearch(){
-        view.deckSearchActive = false;
-        view.deckSearchQuery = "";
-        deckSearchInput.setText("");
-        deckSearchInput.setVisibility(View.GONE);
-        deckSearchClearBtn.setVisibility(View.GONE);
-        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        if (imm!=null) imm.hideSoftInputFromWindow(deckSearchInput.getWindowToken(), 0);
-        positionDeckSearchBar();
-        view.invalidate();
-    }
-
-    // Richiamato ad ogni invalidate() della TrackerView (vedi override in TrackerView): tiene la pillola
-    // nativa sincronizzata con lo stato disegnato sul canvas (schermata/tab correnti, espansa o no), senza
-    // dover ricordarsi di chiamarla a mano in ogni singolo punto che cambia tab/schermata.
+    // Richiamato ad ogni invalidate() della TrackerView (vedi override in TrackerView): tiene la barra
+    // nativa sincronizzata con schermata/tab corrente — mostrata a larghezza piena, sempre uguale, niente
+    // piu' distinzione espansa/collassata.
     void positionDeckSearchBar(){
         if (view == null || deckSearchBar == null) return;
         boolean shouldShow = screen==SCREEN_SEASON_DETAIL && view.detailTab==1;
         if (!shouldShow) {
             deckSearchBar.setVisibility(View.GONE);
-            // Se si esce dal tab Deck con la ricerca ancora attiva, la si azzera: tornando indietro non
-            // avrebbe senso ritrovare un filtro "invisibile" applicato senza che la pillola lo mostri.
-            if (view.deckSearchActive || !view.deckSearchQuery.isEmpty()) {
-                view.deckSearchActive=false; view.deckSearchQuery="";
-                deckSearchInput.setText(""); deckSearchInput.setVisibility(View.GONE); deckSearchClearBtn.setVisibility(View.GONE);
+            // Se si esce dal tab Deck con un filtro ancora scritto, lo si azzera: tornando indietro non
+            // avrebbe senso ritrovare un filtro "invisibile" applicato senza che la barra lo mostri.
+            if (!view.deckSearchQuery.isEmpty()) {
+                view.deckSearchQuery=""; deckSearchInput.setText(""); deckSearchClearBtn.setVisibility(View.GONE);
             }
             return;
         }
         deckSearchBar.setVisibility(View.VISIBLE);
         float logicalW = (view.getWidth()-view.getPaddingLeft()-view.getPaddingRight())/view.density;
         if (logicalW<=0) return; // non ancora misurata: verra' richiamato dal listener di layout
-        int top = view.getPaddingTop() + dp(44); // spostato su di 4dp: con l'altezza ora 44 (era 28), a dp(48) avrebbe leggermente sovrapposto "Nuovo Deck" (che parte da y=90)
+        int top = view.getPaddingTop() + dp(44);
         int left = view.getPaddingLeft() + dp(18);
-        int height = dp(44); // 44dp: tocco comodo (era 28, sotto il minimo consigliato)
-        int width = view.deckSearchActive ? Math.round((logicalW-36)*view.density) : dp(44);
+        int height = dp(44);
+        int width = Math.round((logicalW-36)*view.density); // stesso margine (18) del pulsante "Nuovo Deck" sotto
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) deckSearchBar.getLayoutParams();
         lp.width = width; lp.height = height; lp.leftMargin = left; lp.topMargin = top;
         deckSearchBar.setLayoutParams(lp);
@@ -695,16 +673,17 @@ public class MainActivity extends Activity {
             int[] wl = view.deckWL(s, deckObj.name);
             int best = view.longestStreakForDeck(s, deckObj.name);
             int gain = view.deckGain(s, deckObj.name);
-            view.deckCardVisual(c, deckObj, deckObj.name, false, wl[0], wl[1], best, gain, 0, w, true);
+            // Tutto disegnato a partire da y=1.5 (non 0): lo stroke di selezione (largo 3) sporge di 1.5 sopra
+            // e sotto il rettangolo della card — con la card attaccata al bordo esatto della view (y=0..92,
+            // altezza della riga=92) quello sporgere veniva tagliato. La riga stessa e' ora alta 95 (92+3)
+            // per fargli spazio, esattamente quanto serve, non di piu'.
+            view.deckCardVisual(c, deckObj, deckObj.name, false, wl[0], wl[1], best, gain, 1.5f, w, true);
             if (selected) {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
                 p.setColor(Color.rgb(255,138,61)); // stesso arancione usato per la Stagione attuale
-                // Stesso rettangolo ESATTO della card (30,0,w-30,92) e stesso raggio (18) usato da box(): prima
-                // il rettangolo del bordo era leggermente piu' piccolo in verticale (1.5..90.5 invece di 0..92)
-                // ma non in orizzontale, un inset asimmetrico che faceva sembrare il raggio sbagliato agli
-                // angoli — coincidendo esattamente con la card non c'e' piu' alcun disallineamento.
-                c.drawRoundRect(new RectF(30,0,w-30,92), 18,18, p);
+                // Stesso rettangolo ESATTO della card (18,1.5,w-18,93.5) e stesso raggio (18) usato da box().
+                c.drawRoundRect(new RectF(18,1.5f,w-18,93.5f), 18,18, p);
             }
             c.restore();
         }
@@ -776,7 +755,7 @@ public class MainActivity extends Activity {
 
         TextView title = new TextView(this); title.setText("Seleziona un deck"); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(16);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18);
         root.addView(title, titleLp);
 
         // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
@@ -787,25 +766,28 @@ public class MainActivity extends Activity {
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        // Sempre visibile, niente piu' pulsante che si espande: la tastiera si apre semplicemente toccando
+        // il campo (comportamento normale di ogni EditText).
         EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
         searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint("Cerca deck"); searchInput.setTextSize(14);
-        searchInput.setPadding(0,0,0,0); searchInput.setVisibility(View.GONE);
+        searchInput.setPadding(0,0,0,0);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        // "X" visibile SOLO quando c'e' del testo scritto (non il placeholder).
         TextView clearBtn = new TextView(this); clearBtn.setText("✕"); clearBtn.setTextColor(MUTED_TXT); clearBtn.setGravity(Gravity.CENTER); clearBtn.setTextSize(13);
         GradientDrawable clearCircle = new GradientDrawable(); clearCircle.setShape(GradientDrawable.OVAL); clearCircle.setColor(Color.rgb(24,36,52));
         clearBtn.setBackground(clearCircle); clearBtn.setVisibility(View.GONE);
         LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(22), dp(22)); clearLp.leftMargin=dp(6); clearLp.rightMargin=dp(6);
         searchBar.addView(clearBtn, clearLp);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp(44), dp(44));
-        searchLp.topMargin=dp(14); searchLp.leftMargin=dp(14); searchLp.rightMargin=dp(14); searchLp.bottomMargin=dp(10);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
+        searchLp.topMargin=dp(14); searchLp.leftMargin=dp(18); searchLp.rightMargin=dp(18); searchLp.bottomMargin=dp(10);
         root.addView(searchBar, searchLp);
 
         // Lista scrollabile delle card deck.
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
-        // Solo padding verticale: quello orizzontale, insieme al margine di 30 unita' che la card disegna
+        // Solo padding verticale: quello orizzontale, insieme al margine di 18 unita' che la card disegna
         // già da sé (deckCardVisual), creava un doppio inset — le card risultavano piu' strette del pulsante
-        // "Nuovo Deck" sotto (che ha solo 14dp), non allineate con esso.
+        // "Nuovo Deck" sotto.
         list.setPadding(0,dp(4),0,dp(4));
         // LayoutParams espliciti (MATCH_PARENT): una ScrollView di default da' ai suoi figli WRAP_CONTENT in
         // larghezza, non MATCH_PARENT — "list" (e quindi ogni card dentro) si misurava contro una larghezza
@@ -822,12 +804,15 @@ public class MainActivity extends Activity {
                 android.widget.FrameLayout row = new android.widget.FrameLayout(this);
                 DeckCardRowView cardView = new DeckCardRowView(this, d);
                 cardView.selected = (d == selected[0]);
-                row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(92)));
+                row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(95)));
                 View kebabHotspot = new View(this);
                 android.widget.FrameLayout.LayoutParams khLp = new android.widget.FrameLayout.LayoutParams(dp(44), dp(44));
-                khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(26);
+                // Margine destro ricalcolato per il nuovo margine card (18, non piu' 30): il kebab e' ora
+                // disegnato a w-36 invece di w-48. topMargin=1.5 per seguire lo spostamento verticale della
+                // card (disegnata ora a partire da y=1.5, non 0, per fare spazio allo stroke di selezione).
+                khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(14); khLp.topMargin = dp(1.5f);
                 row.addView(kebabHotspot, khLp);
-                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(92));
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(95));
                 rowLp.bottomMargin = dp(10);
                 list.addView(row, rowLp);
 
@@ -850,23 +835,24 @@ public class MainActivity extends Activity {
         // "Nuovo Deck" faceva questo a mano per conto suo; ora e' condiviso da tutte le azioni del menu "⋮".
         refreshFromSource[0] = () -> {
             allDecks.clear(); allDecks.addAll(view.sortedDecks(s));
-            if (selected[0]!=null && !allDecks.contains(selected[0])) selected[0]=null; // era il deck appena eliminato
+            // Se il deck selezionato era proprio quello appena eliminato, si va sul primo della lista COMPLETA
+            // (non filtrata da un'eventuale ricerca attiva) — coerente anche se la ricerca in corso non lo
+            // includerebbe.
+            if (selected[0]!=null && !allDecks.contains(selected[0])) {
+                selected[0] = allDecks.isEmpty() ? null : allDecks.get(0);
+            }
             doFilter[0].run();
         };
-        searchBar.setOnClickListener(v -> {
-            if (searchInput.getVisibility()==View.VISIBLE) return;
-            searchInput.setVisibility(View.VISIBLE); clearBtn.setVisibility(View.VISIBLE);
-            searchLp.width = LinearLayout.LayoutParams.MATCH_PARENT; searchBar.setLayoutParams(searchLp);
-            searchInput.post(() -> {
-                searchInput.requestFocus();
-                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm!=null) imm.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-            });
-        });
+        // "X": azzera il campo E applica subito il filtro vuoto (mostra di nuovo tutti i deck) — niente piu'
+        // logica di espansione, dato che la barra e' sempre a piena larghezza.
         clearBtn.setOnClickListener(v -> {
-            searchInput.setText(""); searchInput.setVisibility(View.GONE); clearBtn.setVisibility(View.GONE);
-            searchLp.width = dp(44); searchBar.setLayoutParams(searchLp);
+            searchInput.setText("");
             doFilter[0].run();
+        });
+        searchInput.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
+            public void onTextChanged(CharSequence s,int a,int b,int c){ clearBtn.setVisibility(s.length()>0?View.VISIBLE:View.GONE); }
+            public void afterTextChanged(android.text.Editable s){}
         });
         // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il
         // filtro si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
@@ -884,7 +870,7 @@ public class MainActivity extends Activity {
         // "Nuovo Deck" resta in fondo alla lista, come nel vecchio dialog.
         Button newDeckBtn = new Button(this); newDeckBtn.setText("Nuovo Deck"); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(14); newBtnLp.rightMargin=dp(14); newBtnLp.bottomMargin=dp(10);
+        newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(18); newBtnLp.rightMargin=dp(18); newBtnLp.bottomMargin=dp(10);
         root.addView(newDeckBtn, newBtnLp);
 
         // Footer: Annulla / Conferma.
@@ -2230,7 +2216,6 @@ public class MainActivity extends Activity {
         final float density;
         // Ricerca deck (tab Deck): stato letto/scritto sia dal canvas (per il filtro) sia dalla EditText
         // nativa sovrapposta (per il testo digitato) — vedi buildDeckSearchBar() in MainActivity.
-        boolean deckSearchActive=false;
         String deckSearchQuery="";
         @Override public void invalidate(){
             super.invalidate();
@@ -2694,7 +2679,7 @@ public class MainActivity extends Activity {
             float thumbW=64, thumbH=80, thumbX=w/2-thumbW/2, thumbY=186;
             drawDeckPreview(c, curDeckObjForMenu, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
             if(noDeck){
-                txt(c,"Tocca per selezionare un deck",w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
+                txt(c,"Nessun deck selezionato",w/2,centeredBaseline(284,13),13,muted,Paint.Align.CENTER);
             } else {
                 txt(c,s.currentDeck,w/2,centeredBaseline(284,18),18,white,Paint.Align.CENTER);
             }
@@ -3084,11 +3069,13 @@ public class MainActivity extends Activity {
         // riusabile sia dal tab Deck (che poi registra le sue zone) sia dal nuovo dialog "Cambia deck" (che
         // gestisce le sue zone in modo indipendente, senza sporcare lo stato del tab Deck vero).
         float deckCardVisual(Canvas c, Deck deckObj, String name, boolean isUnknown, int W, int L, int best, int gain, float y, float w, boolean showKebab){
-            // Sfondo piu' scuro della card che lo contiene, margine ai lati coerente con le righe delle partite.
-            box(c,30,y,w-30,y+92,Color.rgb(10,18,30));
-            float textX = 46;
+            // Margine ridotto da 30 a 18: prima le card erano piu' strette del pulsante "Nuovo Deck" (margine
+            // 18) sotto — ora coincidono. Le posizioni interne (anteprima, testo, kebab) sono traslate di
+            // conseguenza (-12) per mantenere gli stessi spazi relativi rispetto al nuovo bordo.
+            box(c,18,y,w-18,y+92,Color.rgb(10,18,30));
+            float textX = 34;
             if (!isUnknown) {
-                float thumbW=64, thumbH=80, thumbX=40, thumbY=y+6;
+                float thumbW=64, thumbH=80, thumbX=28, thumbY=y+6;
                 drawDeckPreview(c, deckObj, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH);
                 textX = thumbX+thumbW+14;
             }
@@ -3096,7 +3083,7 @@ public class MainActivity extends Activity {
             float wr=(W+L)==0?0:100f*W/(W+L);
             txt(c,(W+L)+" partite",textX,y+46,12, isUnknown?muted:white, Paint.Align.LEFT);
             if (!isUnknown && showKebab) {
-                drawKebabIcon(c, w-30-10-8, y+22, muted);
+                drawKebabIcon(c, w-18-10-8, y+22, muted);
             }
             if (isUnknown) {
                 txtRow(c,textX,y+64,11,
@@ -3126,10 +3113,13 @@ public class MainActivity extends Activity {
 
         void decks(Canvas c,Season s,float w,float h){
             deckPreviewTapZones.clear();
-            // "Ordina" non si disegna piu' quando la ricerca e' espansa: la pillola nativa (sovrapposta)
-            // occupa visivamente la stessa zona, disegnarla sotto sarebbe ridondante.
-            if (!deckSearchActive) { box(c,w-165,48,w-18,76,card); txt(c,"Ordina: "+deckSortLabel()+" ▾",w-91,68,13,white,Paint.Align.CENTER); }
-            box(c,18,90,w-18,138,blue); txt(c,"Nuovo Deck",w/2,117,14,white,Paint.Align.CENTER);
+            // Pillola "Ordina" rimossa del tutto: con la barra di ricerca ora sempre visibile (non piu' un
+            // pulsante che si espande) non c'e' piu' spazio per farla convivere senza dare fastidio.
+            // Stesso colore/bordo del pulsante "Nuovo Deck" nel dialog "Seleziona un deck" (styleSecondaryButton),
+            // al posto del riempimento blu pieno di prima, per coerenza visiva tra i due.
+            box(c,18,90,w-18,138,Color.rgb(20,32,48));
+            strokeBox(c,18,90,w-18,138,FIELD_BORDER);
+            txt(c,"Nuovo Deck",w/2,117,14,white,Paint.Align.CENTER);
             float y=152;
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
@@ -3495,7 +3485,6 @@ public class MainActivity extends Activity {
                     for(Hit hit: matchHits){ if(matchContentY>=hit.top&&matchContentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
                 }
             } else if(detailTab==1){
-                if(!deckSearchActive && contentY>=48&&contentY<=76&&x>=w-165){ showDeckSortMenu(); return true; }
                 if(contentY>=90&&contentY<=138){ addDeck(); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
