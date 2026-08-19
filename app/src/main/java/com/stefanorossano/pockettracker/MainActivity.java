@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.161";
+    static final String APP_VERSION = "v0.2.162";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -2633,10 +2633,10 @@ public class MainActivity extends Activity {
                 c.restore();
 
                 if(matchInnerMaxScrollY>1){
-                    float thumbH = Math.max(24, listHeight*(listHeight/totalRowsHeight));
-                    float thumbY = listTop + (listHeight-thumbH)*(matchInnerScrollY/matchInnerMaxScrollY);
+                    float matchThumbH = Math.max(24, listHeight*(listHeight/totalRowsHeight));
+                    float matchThumbY = listTop + (listHeight-matchThumbH)*(matchInnerScrollY/matchInnerMaxScrollY);
                     p.setColor(Color.rgb(45,60,85)); p.setStyle(Paint.Style.FILL);
-                    c.drawRoundRect(w-22,thumbY,w-19,thumbY+thumbH,1.5f,1.5f,p);
+                    c.drawRoundRect(w-22,matchThumbY,w-19,matchThumbY+matchThumbH,1.5f,1.5f,p);
                 }
             }
 
