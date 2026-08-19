@@ -140,7 +140,7 @@
     <string name="confirm_undo_match_msg">Hai registrato %1$s: verrà eliminata definitivamente. Se hai sbagliato ad annullare, registra di nuovo %1$s.</string>
     <string name="dialog_welcome_title">Benvenuto su Pocket Tracker!</string>
     <string name="dialog_welcome_title_named">Benvenuto su Pocket Tracker, %1$s!</string>
-    <string name="dialog_welcome_guide">Ecco come funziona, in breve:\n\n- Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n- Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n- Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n- Il tab Stats ti mostra il quadro generale della Stagione.\n- Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
+    <string name="dialog_welcome_guide">- Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n- Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n- Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n- Il tab Stats ti mostra il quadro generale della Stagione.\n- Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
     <string name="label_season_default_name">Stagione %1$d</string>
     <string name="label_range_1_day">1 giorno</string>
     <string name="label_range_3_days">3 giorni</string>
