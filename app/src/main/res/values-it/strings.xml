@@ -1,1 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="btn_cancel">Annulla</string>
+    <string name="btn_confirm">Conferma</string>
+    <string name="btn_save">Salva</string>
+    <string name="btn_done">Fatto</string>
+    <string name="btn_new_deck">Nuovo Deck</string>
 
+    <string name="settings_title">Impostazioni</string>
+    <string name="settings_trainer_name">NOME ALLENATORE</string>
+    <string name="settings_no_name_set">Nessun nome impostato</string>
+    <string name="settings_preferred_style">STILE PREFERITO CARD</string>
+    <string name="settings_language">LINGUA</string>
+    <string name="settings_delete_all_data">Cancella tutti i dati</string>
+
+    <!-- Fetta 2: azioni, etichette e dialog comuni -->
+    <string name="action_add_lista">Aggiungi Lista</string>
+    <string name="action_add_lista_optional">Aggiungi Lista (opzionale)</string>
+    <string name="action_add_correction">Aggiungi correzione manuale</string>
+    <string name="action_change_deck">Cambia deck</string>
+    <string name="action_rename_deck">Rinomina deck</string>
+    <string name="dialog_rename_deck_title">Rinomina Deck</string>
+    <string name="action_delete_deck">Elimina deck</string>
+    <string name="action_delete_season">Elimina Stagione</string>
+    <string name="dialog_rename_season_title">Rinomina Stagione</string>
+    <string name="action_choose_preview">Scegli anteprima</string>
+    <string name="action_view_lista">Vedi Lista</string>
+    <string name="action_view_lista2">Visualizza Lista</string>
+    <string name="share_lista_title">Condividi Lista</string>
+    <string name="btn_new_season">Nuova Stagione</string>
+    <string name="hint_search_deck">Cerca deck</string>
+    <string name="hint_max_chars">Massimo %1$d caratteri</string>
+    <string name="msg_pentakill">PENTAKILL!</string>
+    <string name="msg_destroy_them_all">Distruggili tutti, %1$s!</string>
+    <string name="dialog_choose_deck_title">Scegli il Deck</string>
+    <string name="dialog_pick_deck_title">Scegli un Deck</string>
+    <string name="dialog_select_deck_title">Seleziona un deck</string>
+    <string name="label_manual_correction">Correzione manuale</string>
+    <string name="action_remove_name">Rimuovi nome</string>
+    <string name="action_prefer_not_say">Preferisco non rispondere</string>
+    <string name="label_decks_played">DECK GIOCATI</string>
+    <string name="label_most_played_deck">DECK PIU\' GIOCATO</string>
+    <string name="label_selected_deck">DECK SELEZIONATO</string>
+    <string name="label_no_deck_selected">NESSUN DECK SELEZIONATO</string>
+    <string name="label_current_season">STAGIONE ATTUALE</string>
+    <string name="label_past_seasons">STAGIONI PASSATE</string>
+    <string name="label_total_matches">PARTITE TOTALI</string>
+    <string name="label_current_points">PUNTI ATTUALI</string>
+    <string name="label_win_streak">VITTORIE CONSECUTIVE</string>
+    <string name="label_current_points_title">Punti attuali</string>
+    <string name="label_starting_points">Punti di partenza</string>
+    <string name="label_best_streak">Miglior serie</string>
+    <string name="label_total_losses">Sconfitte totali</string>
+    <string name="label_total_wins">Vittorie totali</string>
+    <string name="label_current_streak">Vittorie consecutive attuali</string>
+    <string name="label_win_rate">Win rate</string>
+    <string name="label_trainer_name">Nome allenatore</string>
+    <string name="label_unknown_deck">Deck sconosciuto</string>
+    <string name="label_unknown_date">Data sconosciuta</string>
+    <string name="label_no_matches_yet">Nessuna partita ancora</string>
+    <string name="hint_tap_choose_deck">Tocca per scegliere un deck</string>
+    <string name="hint_tap_select_deck">Tocca per selezionare un deck</string>
+    <string name="label_sort_decks_by">Ordina deck per</string>
+    <string name="sort_name_az">Nome (A→Z)</string>
+    <string name="sort_name_za">Nome (Z→A)</string>
+    <string name="sort_best_streak_desc">Miglior serie (dal più alto)</string>
+    <string name="sort_best_streak_asc">Miglior serie (dal più basso)</string>
+    <string name="sort_matches_desc">Partite (dal più alto)</string>
+    <string name="sort_matches_asc">Partite (dal più basso)</string>
+    <string name="sort_winrate_desc">Win rate (dal più alto)</string>
+    <string name="sort_winrate_asc">Win rate (dal più basso)</string>
+    <string name="color_light_gray">Grigio chiaro</string>
+    <string name="color_dark_gray">Grigio scuro</string>
+    <string name="style_1">Stile 1</string>
+    <string name="style_2">Stile 2</string>
+    <string name="style_3">Stile 3</string>
+    <string name="style_4">Stile 4</string>
+    <string name="style_5">Stile 5</string>
+    <string name="style_6">Stile 6</string>
+    <string name="dialog_preferred_style_title">Stile preferito per le card</string>
+    <string name="dialog_language_title">Lingua / Language</string>
+    <string name="hint_deck_name">Nome Deck</string>
+    <string name="hint_season_name">Nome Stagione</string>
+    <string name="hint_new_deck_name">Nome nuovo deck</string>
+    <string name="dialog_create_season_title">Crea Stagione</string>
+    <string name="dialog_create_first_season_title">Crea la prima Stagione</string>
+    <string name="dialog_ask_name_title">Come ti chiami, allenatore?</string>
+    <string name="dialog_already_played_question">Hai già giocato questa Stagione prima di usare il tracker?</string>
+    <string name="label_season_ended">Questa stagione è terminata.</string>
+    <string name="confirm_delete_all_title">Cancellare tutti i dati?</string>
+    <string name="action_delete_all">Elimina tutto</string>
+    <string name="confirm_delete_deck_msg">Eliminare definitivamente questo deck?</string>
+    <string name="dialog_undo_match_title">Annulla partita</string>
+    <string name="dialog_undo_last_match_title">Annullare l\'ultima partita?</string>
+    <string name="dialog_undo_correction_title">Annulla correzione</string>
+    <string name="dialog_undo_correction_msg">Annullare la correzione?</string>
+    <string name="msg_correction_will_be_deleted">La correzione manuale verrà eliminata definitivamente.</string>
+    <string name="msg_no_match_to_undo">Nessuna partita da annullare.</string>
+    <string name="err_season_name_empty">Il nome della Stagione non può essere vuoto.</string>
+    <string name="err_deck_name_invalid">Nome Deck non valido o già esistente.</string>
+    <string name="err_choose_valid_name">Scegli un nome valido.</string>
+    <string name="err_choose_valid_name_or_skip">Scegli un nome valido, oppure tocca \"Preferisco non rispondere\".</string>
+    <string name="err_no_app_for_lista">Nessuna app disponibile per selezionare la Lista.</string>
+    <string name="err_lista_load_failed">Impossibile caricare la Lista (file non più disponibile).</string>
+    <string name="err_lista_share_failed">Impossibile condividere questa Lista.</string>
+    <string name="msg_no_language_change">Nessun cambiamento: era già questa lingua.</string>
+    <string name="err_invalid_values">Inserisci valori validi (streak/vittorie/sconfitte &gt;= 0).</string>
+    <string name="err_invalid_totals">Valori non validi (i totali di vittorie/sconfitte non possono diminuire).</string>
+    <string name="info_manual_correction_help">Usala per allineare i punti quando hai giocato senza registrare le singole partite. Inserisci i totali ATTUALI (non solo quelli di questo periodo): calcolo io la differenza.</string>
+    <string name="log_load_error">Errore nel caricamento dati, si riparte da zero</string>
+    <string name="log_save_error">Errore nel salvataggio dati</string>
+
+    <!-- Fetta 3a: etichette statiche mancate nel primo giro -->
+    <string name="label_variation_header">VARIAZIONE</string>
+    <string name="label_wlp_header">W / L / %</string>
+    <string name="label_maxima_header">MASSIME</string>
+    <string name="btn_yes">Sì</string>
+    <string name="btn_no">No</string>
+    <string name="btn_next">Avanti</string>
+    <string name="btn_back">Indietro</string>
+    <string name="btn_lets_start">Iniziamo!</string>
+    <string name="btn_close">Chiudi</string>
+    <string name="btn_delete">Elimina</string>
+    <string name="err_select_or_new_deck">Seleziona un deck esistente o scrivi il nome di uno nuovo.</string>
+    <!-- Fetta 3b: stringhe dinamiche (concatenate), convertite a String.format -->
+    <string name="confirm_delete_deck_used_singular">Questo deck è usato in %1$d partita. Eliminandolo, verrà impostata su "Deck sconosciuto".</string>
+    <string name="confirm_delete_deck_used_plural">Questo deck è usato in %1$d partite. Eliminandolo, verranno impostate su "Deck sconosciuto".</string>
+    <string name="dialog_delete_deck_title_fmt">Elimina %1$s</string>
+    <string name="dialog_delete_season_title_fmt">Elimina "%1$s"</string>
+    <string name="confirm_delete_season_msg">Verranno eliminate definitivamente tutte le %1$d partite e i deck di questa Stagione. Azione irreversibile.</string>
+    <string name="confirm_delete_all_msg">Questo eliminerà definitivamente ogni Stagione, partita e deck. L\'azione non può essere annullata.</string>
+    <string name="label_points_and_streak">Punti %1$d   Vittorie consecutive %2$d</string>
+    <string name="label_match_number_time">Partita %1$d  •  %2$s</string>
+    <string name="label_variation">Variazione: %1$s</string>
+    <string name="label_starting_points_fmt">Punti iniziali: %1$d</string>
+    <string name="label_current_points_fmt">Punti attuali: %1$d</string>
+    <string name="confirm_trainer_name_msg">Ti chiami "%1$s", ho capito bene?</string>
+    <string name="label_outcome_win">una vittoria (W)</string>
+    <string name="label_outcome_loss">una sconfitta (L)</string>
+    <string name="confirm_undo_match_msg">Hai registrato %1$s: verrà eliminata definitivamente. Se hai sbagliato ad annullare, registra di nuovo %1$s.</string>
+    <string name="dialog_welcome_title">Benvenuto su Pocket Tracker!</string>
+    <string name="dialog_welcome_title_named">Benvenuto su Pocket Tracker, %1$s!</string>
+    <string name="dialog_welcome_guide">Ecco come funziona, in breve:\n\n• Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n• Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n• Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n• Il tab Stats ti mostra il quadro generale della Stagione.\n• Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
+    <string name="label_season_default_name">Stagione %1$d</string>
+    <!-- Fetta 4: messaggi motivazionali e di benvenuto -->
+    <string-array name="msgs_win_first">
+        <item>Solo la prima di una lunga serie!</item>
+        <item>Si parte bene!</item>
+        <item>Ottimo lavoro!</item>
+        <item>Una vittoria meritata!</item>
+        <item>Bel colpo!</item>
+    </string-array>
+    <string-array name="msgs_win_low">
+        <item>Continua così!</item>
+        <item>Si comincia a carburare!</item>
+        <item>Ottimo lavoro!</item>
+        <item>Una vittoria meritata!</item>
+        <item>Bel colpo!</item>
+    </string-array>
+    <string-array name="msgs_win_high">
+        <item>Sei inarrestabile!</item>
+        <item>Che striscia di vittorie!</item>
+        <item>Nessuno può fermarti!</item>
+        <item>Stai dominando!</item>
+        <item>Vittoria dopo vittoria, complimenti!</item>
+        <item>Sei in stato di grazia!</item>
+        <item>Imbattibile in questo momento!</item>
+    </string-array>
+    <string-array name="msgs_loss_low">
+        <item>Capita a tutti, rialzati!</item>
+        <item>La prossima è quella buona!</item>
+        <item>Non mollare!</item>
+        <item>Ricalibra e riparti!</item>
+        <item>Un passo indietro, due avanti!</item>
+        <item>Analizza e migliora!</item>
+        <item>Il campione si vede nelle sconfitte!</item>
+        <item>Testa alta, si riparte!</item>
+        <item>Ogni sconfitta insegna qualcosa!</item>
+        <item>Pazienza, il vento girerà!</item>
+    </string-array>
+    <string-array name="msgs_loss_high">
+        <item>Forse è il momento di una pausa.</item>
+        <item>Stacca un attimo, si torna più lucidi.</item>
+        <item>Respira: una pausa non fa mai male.</item>
+        <item>Prenditi qualche minuto, poi si riparte.</item>
+        <item>Va benissimo fermarsi un attimo.</item>
+        <item>Una brutta giornata capita: rilassati un po\'.</item>
+        <item>Ricaricare le energie non è mai tempo perso.</item>
+    </string-array>
+    <string-array name="msgs_day_hot">
+        <item>Oggi sei inarrestabile!</item>
+        <item>Oggi non ti ferma più nessuno!</item>
+        <item>Giornata da campione!</item>
+        <item>Stai dominando la giornata!</item>
+        <item>Che giornata, continua così!</item>
+        <item>Oggi hai il tocco magico!</item>
+    </string-array>
+    <string-array name="greeting_night_named">
+        <item>Partitina notturna, %1$s?</item>
+        <item>Gli allenatori più tenaci giocano di notte, %1$s.</item>
+        <item>A quest\'ora, %1$s? Rispetto.</item>
+    </string-array>
+    <string-array name="greeting_night_plain">
+        <item>Partitina notturna?</item>
+        <item>Gli allenatori più tenaci giocano di notte.</item>
+        <item>A quest\'ora? Rispetto.</item>
+    </string-array>
+    <string-array name="greeting_morning_named">
+        <item>Buongiorno %1$s, si comincia!</item>
+        <item>Colazione e qualche partita, %1$s?</item>
+        <item>Si parte presto oggi, %1$s!</item>
+    </string-array>
+    <string-array name="greeting_morning_plain">
+        <item>Buongiorno, si comincia!</item>
+        <item>Colazione e qualche partita?</item>
+        <item>Si parte presto oggi!</item>
+    </string-array>
+    <string-array name="greeting_afternoon_named">
+        <item>Pausa pranzo con qualche partita, %1$s?</item>
+        <item>Buon pomeriggio, %1$s! Pronto a giocare?</item>
+        <item>Si gioca nel pomeriggio, %1$s!</item>
+    </string-array>
+    <string-array name="greeting_afternoon_plain">
+        <item>Pausa pranzo con qualche partita?</item>
+        <item>Buon pomeriggio! Pronto a giocare?</item>
+        <item>Si gioca nel pomeriggio!</item>
+    </string-array>
+    <string-array name="greeting_evening_named">
+        <item>Buonasera %1$s, si comincia?</item>
+        <item>Serata di Pocket, %1$s?</item>
+        <item>Pronto per qualche partita stasera, %1$s?</item>
+    </string-array>
+    <string-array name="greeting_evening_plain">
+        <item>Buonasera, si comincia?</item>
+        <item>Serata di Pocket?</item>
+        <item>Pronto per qualche partita stasera?</item>
+    </string-array>
+</resources>
