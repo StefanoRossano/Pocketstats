@@ -63,8 +63,8 @@
     <string name="hint_tap_choose_deck">Tap to choose a deck</string>
     <string name="hint_tap_select_deck">Tap to select a deck</string>
     <string name="label_sort_decks_by">Sort decks by</string>
-    <string name="sort_name_az">Name (A→Z)</string>
-    <string name="sort_name_za">Name (Z→A)</string>
+    <string name="sort_name_az">Name (A-Z)</string>
+    <string name="sort_name_za">Name (Z-A)</string>
     <string name="sort_best_streak_desc">Best streak (highest first)</string>
     <string name="sort_best_streak_asc">Best streak (lowest first)</string>
     <string name="sort_matches_desc">Matches (highest first)</string>
@@ -108,7 +108,7 @@
     <string name="msg_no_language_change">No change made.</string>
     <string name="err_invalid_values">Enter valid values (streak/wins/losses &gt;= 0).</string>
     <string name="err_invalid_totals">Invalid values (win/loss totals can\'t decrease).</string>
-    <string name="info_manual_correction_help">Use this to align your points when you\'ve played without recording individual matches. Enter your CURRENT totals — not just for this period — and the difference will be calculated automatically.</string>
+    <string name="info_manual_correction_help">Use this to align your points when you\'ve played without recording individual matches. Enter your CURRENT totals, not just for this period, and the difference will be calculated automatically.</string>
     <string name="log_load_error">Error loading data, starting fresh</string>
     <string name="log_save_error">Error saving data</string>
 
@@ -132,17 +132,17 @@
     <string name="confirm_delete_season_msg">All %1$d matches and decks of this Season will be permanently deleted. This action cannot be undone.</string>
     <string name="confirm_delete_all_msg">This will permanently delete every Season, match, and deck. This action cannot be undone.</string>
     <string name="label_points_and_streak">Points %1$d   Win streak %2$d</string>
-    <string name="label_match_number_time">Match %1$d  •  %2$s</string>
+    <string name="label_match_number_time">Match %1$d - %2$s</string>
     <string name="label_variation">Variation: %1$s</string>
     <string name="label_starting_points_fmt">Starting points: %1$d</string>
     <string name="label_current_points_fmt">Current points: %1$d</string>
-    <string name="confirm_trainer_name_msg">So you\'re %1$s — did I get that right?</string>
+    <string name="confirm_trainer_name_msg">So you\'re %1$s, did I get that right?</string>
     <string name="label_outcome_win">a win (W)</string>
     <string name="label_outcome_loss">a loss (L)</string>
-    <string name="confirm_undo_match_msg">You recorded %1$s — it\'ll be permanently deleted. If that was a mistake, just record %1$s again.</string>
+    <string name="confirm_undo_match_msg">You recorded %1$s. It\'ll be permanently deleted. If that was a mistake, just record %1$s again.</string>
     <string name="dialog_welcome_title">Welcome to Pocket Tracker!</string>
     <string name="dialog_welcome_title_named">Welcome to Pocket Tracker, %1$s!</string>
-    <string name="dialog_welcome_guide">Here\'s how it works, in short:\n\n• Create a Season to start tracking your scores.\n• In the Play tab, choose your deck and record every match with W or L: points and streak update automatically.\n• The Deck tab keeps stats for each deck, along with the Lists (screenshots) you upload.\n• The Stats tab shows you the overall picture of the Season.\n• Played some matches without logging them? Use "%1$s" to catch your totals up.\n\nHave fun, and may your win streaks be long!</string>
+    <string name="dialog_welcome_guide">Here\'s how it works, in short:\n\n- Create a Season to start tracking your scores.\n- In the Play tab, choose your deck and record every match with W or L: points and streak update automatically.\n- The Deck tab keeps stats for each deck, along with the Lists (screenshots) you upload.\n- The Stats tab shows you the overall picture of the Season.\n- Played some matches without logging them? Use "%1$s" to catch your totals up.\n\nHave fun, and may your win streaks be long!</string>
     <string name="label_season_default_name">Season %1$d</string>
     <!-- Fetta 4: messaggi motivazionali e di benvenuto -->
     <string-array name="msgs_win_first">
@@ -164,12 +164,12 @@
         <item>What a win streak!</item>
         <item>Nothing can stop you!</item>
         <item>You're on a roll!</item>
-        <item>Win after win — well played!</item>
+        <item>Win after win, well played!</item>
         <item>You're on fire!</item>
         <item>Unbeatable right now!</item>
     </string-array>
     <string-array name="msgs_loss_low">
-        <item>It happens to everyone — get back up!</item>
+        <item>It happens to everyone, get back up!</item>
         <item>Your next one's a winner!</item>
         <item>Don't give up!</item>
         <item>Recalibrate and go again!</item>
@@ -178,15 +178,15 @@
         <item>Losses build champions!</item>
         <item>Chin up, let's go again!</item>
         <item>Every loss teaches something!</item>
-        <item>Patience — the tide will turn!</item>
+        <item>Patience, the tide will turn!</item>
     </string-array>
     <string-array name="msgs_loss_high">
         <item>Maybe it's time for a break.</item>
         <item>Take a breather, you'll come back sharper.</item>
-        <item>Breathe — a break never hurts.</item>
+        <item>Breathe, a break never hurts.</item>
         <item>Take a few minutes, then start again.</item>
         <item>It's okay to stop for a moment.</item>
-        <item>Bad days happen — take it easy.</item>
+        <item>Bad days happen, take it easy.</item>
         <item>Recharging is never wasted time.</item>
     </string-array>
     <string-array name="msgs_day_hot">
