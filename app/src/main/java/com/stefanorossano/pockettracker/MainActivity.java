@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.179";
+    static final String APP_VERSION = "v0.2.183";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -765,8 +765,10 @@ public class MainActivity extends Activity {
         root.setBackground(rootBg);
 
         TextView title = new TextView(this); title.setText(headerText); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18);
+        // MATCH_PARENT (non piu' WRAP_CONTENT) con margine destro: un titolo troppo lungo va a capo invece
+        // di sbordare fuori dallo schermo (come "Seleziona un deck diverso per la partita n.116").
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
 
         // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
@@ -832,6 +834,18 @@ public class MainActivity extends Activity {
             }
         };
         rebuildList[0].run();
+
+        // Scorre subito verso il deck di partenza (quello attuale, o quello appena creato se questo dialog
+        // e' stato aperto giusto dopo — es. da changeMatchDeck), cosi' e' visibile senza dover scorrere a
+        // mano se si trova piu' in basso nella lista ordinata.
+        if (selected[0]!=null) {
+            int idx = filtered.indexOf(selected[0]);
+            if (idx>=0) {
+                int rowH = dp(95)+dp(10); // altezza riga + margine sotto, stessi valori usati in rebuildList
+                int targetY = Math.max(0, idx*rowH - dp(10));
+                scroll.post(() -> scroll.scrollTo(0, targetY));
+            }
+        }
 
         Runnable[] doFilter = new Runnable[1];
         doFilter[0] = () -> {
@@ -932,7 +946,7 @@ public class MainActivity extends Activity {
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
         int num = matchNumberOf(s, m);
-        showDeckSelectorDialog(s, "Seleziona un deck diverso per la partita n."+num, findDeck(s, m.deck), chosen -> {
+        showDeckSelectorDialog(s, "Seleziona un deck diverso (partita n."+num+")", findDeck(s, m.deck), chosen -> {
             m.deck = chosen.name; store.save(); view.invalidate();
         });
     }
@@ -1371,6 +1385,17 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    // Scorre il tab Deck (canvas) fino a rendere visibile un deck specifico, in base alla sua posizione
+    // nell'elenco ordinato — stessa formula (y iniziale 162, ogni card 104 alta) usata da decks().
+    void scrollDeckTabToShow(Season s, Deck target){
+        ArrayList<Deck> sorted = view.sortedDecks(s);
+        int idx = sorted.indexOf(target);
+        if (idx<0) return;
+        float y = 162 + idx*104;
+        view.scrollY = Math.max(0, y-20); // un po' di margine sopra, non incollato al bordo
+        view.invalidate(); // finishScroll() rifara' il clamp su scrollY al prossimo disegno, se serve
+    }
+
     void addDeck(){ addDeck(null); }
 
     // onCreated (opzionale): richiamato col Deck appena creato, se il salvataggio va a buon fine — usato dal
@@ -1530,22 +1555,29 @@ public class MainActivity extends Activity {
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
         root.addView(title, titleLp);
 
-        String[] styleKeys = {"spine","gem","holo"};
-        PreviewSwatchView[] swatches = new PreviewSwatchView[3];
-        LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER);
-        for (int i=0;i<3;i++){
+        String[] styleKeys = {"spine","gem","holo","prism","ring","fold"};
+        PreviewSwatchView[] swatches = new PreviewSwatchView[6];
+        LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout gridRow = null;
+        for (int i=0;i<6;i++){
+            if (i%3==0){
+                gridRow = new LinearLayout(this); gridRow.setOrientation(LinearLayout.HORIZONTAL); gridRow.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams gridRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                gridRowLp.topMargin = i==0?0:dp(12);
+                grid.addView(gridRow, gridRowLp);
+            }
             PreviewSwatchView sw = new PreviewSwatchView(this, styleKeys[i], "grigiochiaro");
             sw.selected = styleKeys[i].equals(selectedStyle[0]);
             swatches[i]=sw;
-            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(dp(96), dp(120));
-            swLp.leftMargin=dp(10); swLp.rightMargin=dp(10);
-            row.addView(sw, swLp);
+            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(dp(84), dp(105));
+            swLp.leftMargin=dp(8); swLp.rightMargin=dp(8);
+            gridRow.addView(sw, swLp);
             final String sk = styleKeys[i];
             sw.setOnClickListener(v -> { selectedStyle[0]=sk; for(PreviewSwatchView s: swatches) s.selected=s.style.equals(sk); for(PreviewSwatchView s: swatches) s.invalidate(); });
         }
         LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         rowLp.topMargin=dp(10); rowLp.bottomMargin=dp(14);
-        root.addView(row, rowLp);
+        root.addView(grid, rowLp);
 
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
@@ -1583,19 +1615,26 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        // Header: 3 tab di stile.
-        LinearLayout tabs = new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL);
+        // Header: 6 tab di stile, 3 per riga (uno solo non ci starebbe comodo con 6 etichette).
+        LinearLayout tabs = new LinearLayout(this); tabs.setOrientation(LinearLayout.VERTICAL);
         tabs.setPadding(dp(14),dp(14),dp(14),dp(10));
-        TextView[] tabViews = new TextView[3];
-        String[] styleKeys = {"spine","gem","holo"};
-        String[] styleLabels = {"Stile 1","Stile 2","Stile 3"};
+        TextView[] tabViews = new TextView[6];
+        String[] styleKeys = {"spine","gem","holo","prism","ring","fold"};
+        String[] styleLabels = {"Stile 1","Stile 2","Stile 3","Stile 4","Stile 5","Stile 6"};
         Runnable[] refreshTabs = new Runnable[1];
-        for (int i=0;i<3;i++){
+        LinearLayout tabRow = null;
+        for (int i=0;i<6;i++){
+            if (i%3==0){
+                tabRow = new LinearLayout(this); tabRow.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                trLp.topMargin = i==0?0:dp(6);
+                tabs.addView(tabRow, trLp);
+            }
             TextView t = new TextView(this); t.setText(styleLabels[i]); t.setGravity(Gravity.CENTER); t.setTextSize(13);
             t.setPadding(0,dp(8),0,dp(8));
             LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
-            tlp.leftMargin = i==0?0:dp(6);
-            tabs.addView(t, tlp);
+            tlp.leftMargin = (i%3==0)?0:dp(6);
+            tabRow.addView(t, tlp);
             tabViews[i]=t;
         }
         root.addView(tabs);
@@ -1628,7 +1667,7 @@ public class MainActivity extends Activity {
         root.addView(scroll, scrollLp);
 
         refreshTabs[0] = () -> {
-            for (int i=0;i<3;i++){
+            for (int i=0;i<6;i++){
                 boolean active = styleKeys[i].equals(activeStyle[0]);
                 tabViews[i].setTextColor(active?Color.WHITE:MUTED_TXT);
                 GradientDrawable tbg = new GradientDrawable(); tbg.setCornerRadius(dp(8));
@@ -1638,7 +1677,7 @@ public class MainActivity extends Activity {
             for (PreviewSwatchView s: swatches) { s.style = activeStyle[0]; s.invalidate(); }
         };
         refreshTabs[0].run();
-        for (int i=0;i<3;i++){ final String sk = styleKeys[i]; tabViews[i].setOnClickListener(v -> { activeStyle[0]=sk; refreshTabs[0].run(); }); }
+        for (int i=0;i<6;i++){ final String sk = styleKeys[i]; tabViews[i].setOnClickListener(v -> { activeStyle[0]=sk; refreshTabs[0].run(); }); }
 
         // Footer: Annulla/Conferma. ("Carica immagine" rimosso: l'anteprima da immagine personalizzata non
         // esiste piu', restano solo le card preimpostate.)
@@ -1817,6 +1856,9 @@ public class MainActivity extends Activity {
         switch (style==null?"spine":style) {
             case "gem": drawPreviewGem(c, pp, l,t,r,b, shades, rainbow); break;
             case "holo": drawPreviewHolo(c, pp, l,t,r,b, shades, rainbow); break;
+            case "prism": drawPreviewPrism(c, pp, l,t,r,b, shades, rainbow); break;
+            case "ring": drawPreviewRing(c, pp, l,t,r,b, shades, rainbow); break;
+            case "fold": drawPreviewFold(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
         c.restore();
@@ -1868,6 +1910,61 @@ public class MainActivity extends Activity {
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
         pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(36,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
         c.drawRect(l,t,r,b,pp);
+    }
+
+    // Stile 4 "Prism": la card divisa in due da un taglio diagonale netto (chiaro in alto/sinistra, scuro in
+    // basso/destra), con una sottile cucitura chiara lungo il taglio — piu' angolare e deciso del rombo
+    // centrale di "Gem".
+    void drawPreviewPrism(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+        pp.setStyle(Paint.Style.FILL);
+        if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
+        else { pp.setColor(shades[1]); c.drawRect(l,t,r,b,pp); }
+        Path lightHalf = new Path(); lightHalf.moveTo(l,t); lightHalf.lineTo(r,t); lightHalf.lineTo(l,b); lightHalf.close();
+        pp.setColor(rainbow ? Color.argb(70,255,255,255) : shades[0]);
+        c.drawPath(lightHalf, pp);
+        Path deepHalf = new Path(); deepHalf.moveTo(r,t); deepHalf.lineTo(r,b); deepHalf.lineTo(l,b); deepHalf.close();
+        pp.setColor(rainbow ? Color.argb(100,10,14,20) : shades[2]);
+        c.drawPath(deepHalf, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(130,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        c.drawLine(l,t,r,b,pp);
+    }
+
+    // Stile 5 "Ring": un medaglione — anello sottile chiaro attorno a un disco centrale, su sfondo scuro
+    // (il colore/arcobaleno vive solo nell'anello) — silhouette circolare, ben distinta dai rettangoli di
+    // "Spine" e dal rombo di "Gem".
+    void drawPreviewRing(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+        float cx=(l+r)/2, cy=(t+b)/2, side=Math.min(r-l,b-t);
+        pp.setStyle(Paint.Style.FILL); pp.setColor(rainbow ? Color.rgb(18,24,34) : shades[2]);
+        c.drawRect(l,t,r,b,pp);
+        float outerR=side*0.38f, innerR=outerR*0.58f;
+        if (rainbow) pp.setShader(new SweepGradient(cx,cy,RAINBOW_HUES,null)); else pp.setColor(shades[1]);
+        c.drawCircle(cx,cy,outerR,pp); pp.setShader(null);
+        pp.setColor(rainbow ? Color.rgb(18,24,34) : shades[2]);
+        c.drawCircle(cx,cy,innerR,pp);
+        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        c.drawCircle(cx,cy,innerR*0.4f,pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(80,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        c.drawCircle(cx,cy,outerR,pp);
+    }
+
+    // Stile 6 "Fold": un angolo "piegato" in alto a destra (come una pagina d'archivio con l'angolo
+    // ripiegato), colore chiaro sulla piega con una leggera ombra lungo la piega stessa — silhouette
+    // asimmetrica, diversa da tutte le altre.
+    void drawPreviewFold(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+        pp.setStyle(Paint.Style.FILL);
+        if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
+        else { pp.setColor(shades[1]); c.drawRect(l,t,r,b,pp); }
+        float foldSize = (r-l)*0.42f;
+        Path shadow = new Path();
+        shadow.moveTo(r-foldSize,t); shadow.lineTo(r,t+foldSize); shadow.lineTo(r-foldSize,t+foldSize); shadow.close();
+        pp.setColor(Color.argb(60,0,0,0));
+        c.drawPath(shadow, pp);
+        Path fold = new Path();
+        fold.moveTo(r-foldSize,t); fold.lineTo(r,t); fold.lineTo(r,t+foldSize); fold.close();
+        pp.setColor(rainbow ? Color.argb(210,255,255,255) : shades[0]);
+        c.drawPath(fold, pp);
+        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(50,0,0,0)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
+        c.drawLine(r-foldSize,t,r,t+foldSize,pp);
     }
 
     // Visualizzatore in stile galleria: header in alto (chiudi/titolo/aggiungi), frecce di navigazione come
@@ -2454,19 +2551,19 @@ public class MainActivity extends Activity {
             drawEditIcon(c, w-40, 115, 18, white);
 
             // Stile preferito per le anteprime dei nuovi deck: mostrato in "grigio chiaro" come esempio
-            // neutro (lo stesso usato di default), il tocco apre la scelta tra i 3 stili.
-            box(c,18,158,w-18,308,card);
+            // neutro (lo stesso usato di default), il tocco apre la scelta tra i 3 stili. Card ridotta (158-
+            // 282, non piu' 158-308): tolto il tip "Tocca per cambiare" sotto, restava spazio vuoto inutile.
+            box(c,18,158,w-18,282,card);
             txt(c,"STILE PREFERITO CARD",w/2,180,12,muted,Paint.Align.CENTER);
             drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro");
-            txt(c,"Tocca per cambiare",w/2,centeredBaseline(292,12),12,muted,Paint.Align.CENTER);
 
-            box(c,18,322,w-18,370,Color.rgb(30,16,16));
-            strokeBox(c,18,322,w-18,370,red());
-            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(346,15),15,red(),Paint.Align.CENTER);
+            box(c,18,296,w-18,344,Color.rgb(30,16,16));
+            strokeBox(c,18,296,w-18,344,red());
+            txt(c,"Cancella tutti i dati",w/2,centeredBaseline(320,15),15,red(),Paint.Align.CENTER);
 
-            txt(c,APP_VERSION,w/2,394,11,muted,Paint.Align.CENTER);
+            txt(c,APP_VERSION,w/2,368,11,muted,Paint.Align.CENTER);
 
-            lastContentBottom = 414;
+            lastContentBottom = 388;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
         }
@@ -2511,12 +2608,11 @@ public class MainActivity extends Activity {
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
             txt(c,"PARTITE TOTALI",(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
-            // Blocco numero+W/L spostato più in basso (centerY 108→114) e con gap interno maggiore (6→14):
-            // prima le 3 righe (etichetta, numero, W/L) risultavano ammassate verso il basso della card,
-            // con la coppia numero+W/L troppo vicina tra loro e all'etichetta sopra.
-            float[] pb = centerLines(114,14,20,15);
-            txt(c,""+(W+L),(c2L+c2R)/2,pb[0],20,white,Paint.Align.CENTER);
-            txtRowCentered(c,(c2L+c2R)/2,pb[1],15,
+            // Simmetria esatta rispetto alla card (58-138): riga 1 (etichetta) e' a 80, cioe' 22 dal top (58).
+            // Riga 3 (W/L/%) messa a 116, cioe' 22 dal bottom (138) — stessa distanza, dal lato opposto.
+            // Riga 2 (numero) esattamente a meta' tra le due: (80+116)/2 = 98.
+            txt(c,""+(W+L),(c2L+c2R)/2,98,20,white,Paint.Align.CENTER);
+            txtRowCentered(c,(c2L+c2R)/2,116,15,
                 new String[]{W+"W  ", L+"L  ", String.format(Locale.US,"%.1f%%",wr)},
                 new int[]{green, red, wrColor(wr,W+L)});
 
@@ -3272,8 +3368,8 @@ public class MainActivity extends Activity {
             if(screen==SCREEN_SETTINGS){
                 if(y<52){ if(x<60){ screen=SCREEN_SEASON_LIST; invalidate(); return true; } return true; }
                 if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
-                if(contentY>=158&&contentY<=308){ showCardStylePreferenceDialog(); return true; }
-                if(contentY>=322&&contentY<=370){ resetAllData(); return true; }
+                if(contentY>=158&&contentY<=282){ showCardStylePreferenceDialog(); return true; }
+                if(contentY>=296&&contentY<=344){ resetAllData(); return true; }
                 return true;
             }
 
@@ -3349,7 +3445,7 @@ public class MainActivity extends Activity {
                     }
                 }
             } else if(detailTab==1){
-                if(contentY>=100&&contentY<=148){ addDeck(); return true; }
+                if(contentY>=100&&contentY<=148){ addDeck(newDeck -> scrollDeckTabToShow(s, newDeck)); return true; }
                 float yy=152;
                 for(Deck d: sortedDecks(s)){
                     if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-36,yy+36-scrollY); return true; }
@@ -3380,7 +3476,7 @@ public class MainActivity extends Activity {
         // Anteprima preimpostata (stile+colore, disegnata direttamente sul canvas — nessuna immagine
         // personalizzata: quella possibilita' e' stata rimossa, causava troppi problemi). Default per ogni
         // nuovo deck: stile "spine", colore "grigiochiaro".
-        String previewStyle="spine";   // "spine" | "gem" | "holo"
+        String previewStyle="spine";   // "spine" | "gem" | "holo" | "prism" | "ring" | "fold"
         String previewColor="grigiochiaro";
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
