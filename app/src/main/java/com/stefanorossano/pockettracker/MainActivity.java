@@ -1864,7 +1864,8 @@ public class MainActivity extends Activity {
         PREVIEW_COLORS.put("grigiochiaro",new int[]{Color.rgb(0xC7,0xCD,0xD6), Color.rgb(0x9A,0xA3,0xAE), Color.rgb(0x6B,0x74,0x80)});
     }
     static final String[] PREVIEW_COLOR_ORDER = {"verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro","arcobaleno"};
-    static final String[] PREVIEW_COLOR_LABELS = {"Verde","Rosso","Azzurro","Giallo","Viola","Marrone",getString(R.string.color_dark_gray),"Oro",getString(R.string.color_light_gray),"Arcobaleno"};
+    // PREVIEW_COLOR_LABELS rimosso: era codice morto (mai referenziato da nessuna parte) e causava un
+    // errore di compilazione reale (chiamava getString(), un metodo di istanza, da un contesto static).
     static final int[] RAINBOW_HUES = { Color.rgb(0xE8,0x74,0x6A), Color.rgb(0xE0,0xB0,0x23), Color.rgb(0x5F,0xCB,0x8A), Color.rgb(0x2F,0xA8,0xD9), Color.rgb(0x7B,0x4F,0xC9), Color.rgb(0xE8,0x74,0x6A) };
 
     // Punto d'ingresso unico per disegnare l'anteprima di un deck (o il placeholder "nessun deck"): sempre
