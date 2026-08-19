@@ -142,5 +142,17 @@
     <string name="dialog_welcome_title_named">Benvenuto su Pocket Tracker, %1$s!</string>
     <string name="dialog_welcome_guide">Ecco come funziona, in breve:\n\n- Crea una Stagione per iniziare a tracciare i tuoi punteggi.\n- Nel tab Gioca scegli il deck e registra ogni partita con W o L: punti e streak si aggiornano da soli.\n- Il tab Deck tiene le statistiche di ogni mazzo, con le Liste (screenshot) che carichi.\n- Il tab Stats ti mostra il quadro generale della Stagione.\n- Hai giocato senza registrare ogni partita? Usa "%1$s" per allineare i conti.\n\nBuon divertimento, e che le tue serie di vittorie siano lunghe!</string>
     <string name="label_season_default_name">Stagione %1$d</string>
+    <string name="label_range_1_day">1 giorno</string>
+    <string name="label_range_3_days">3 giorni</string>
+    <string name="label_range_all">Tutto</string>
+    <string name="tab_play">Gioca</string>
+    <string name="tab_deck">Deck</string>
+    <string name="tab_stats">Stats</string>
+    <string name="dialog_select_deck_for_match">Seleziona un deck diverso (partita n.%1$d)</string>
+    <string name="label_matches_count">%1$d partite</string>
+    <string name="label_points_count">%1$d punti</string>
+    <string name="label_points_count_signed">%1$s punti</string>
+    <string name="label_win_streak_abbr">VC   </string>
+    <string name="label_max_win_streak">Max vittorie consecutive </string>
     <!-- Fetta 4: messaggi motivazionali e di benvenuto -->
 </resources>
