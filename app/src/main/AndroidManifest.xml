@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+        android:name=".PocketApplication"
         android:theme="@style/AppTheme"
         android:label="Pocket Tracker"
         android:allowBackup="true"
