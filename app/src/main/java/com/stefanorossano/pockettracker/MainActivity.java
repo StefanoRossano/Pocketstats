@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.172";
+    static final String APP_VERSION = "v0.2.174";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -130,10 +130,18 @@ public class MainActivity extends Activity {
 
         deckSearchBar.setOnClickListener(v -> { if (!view.deckSearchActive) expandDeckSearch(); });
         deckSearchClearBtn.setOnClickListener(v -> collapseDeckSearch());
-        deckSearchInput.addTextChangedListener(new android.text.TextWatcher(){
-            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
-            public void onTextChanged(CharSequence s,int a,int b,int c){ view.deckSearchQuery = s.toString(); view.invalidate(); }
-            public void afterTextChanged(android.text.Editable s){}
+        // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il filtro
+        // si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
+        deckSearchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        deckSearchInput.setOnEditorActionListener((tv,actionId,ev) -> {
+            if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                view.deckSearchQuery = deckSearchInput.getText().toString();
+                view.invalidate();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm!=null) imm.hideSoftInputFromWindow(deckSearchInput.getWindowToken(), 0);
+                return true;
+            }
+            return false;
         });
 
         rootContainer.addView(deckSearchBar, new FrameLayout.LayoutParams(dp(44), dp(44)));
@@ -546,10 +554,17 @@ public class MainActivity extends Activity {
             searchLp.width = dp(44); searchBar.setLayoutParams(searchLp);
             doFilter[0].run();
         });
-        searchInput.addTextChangedListener(new android.text.TextWatcher(){
-            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
-            public void onTextChanged(CharSequence s,int a,int b,int c){ doFilter[0].run(); }
-            public void afterTextChanged(android.text.Editable s){}
+        // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il
+        // filtro si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
+        searchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        searchInput.setOnEditorActionListener((tv,actionId,ev) -> {
+            if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                doFilter[0].run();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm!=null) imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+                return true;
+            }
+            return false;
         });
 
         dialog.show();
@@ -685,8 +700,11 @@ public class MainActivity extends Activity {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
                 p.setColor(Color.rgb(255,138,61)); // stesso arancione usato per la Stagione attuale
-                // Stesso raggio (18) usato da box() per lo sfondo della card — prima era 12, non corrispondente.
-                c.drawRoundRect(new RectF(30,1.5f,w-30,90.5f), 18,18, p);
+                // Stesso rettangolo ESATTO della card (30,0,w-30,92) e stesso raggio (18) usato da box(): prima
+                // il rettangolo del bordo era leggermente piu' piccolo in verticale (1.5..90.5 invece di 0..92)
+                // ma non in orizzontale, un inset asimmetrico che faceva sembrare il raggio sbagliato agli
+                // angoli — coincidendo esattamente con la card non c'e' piu' alcun disallineamento.
+                c.drawRoundRect(new RectF(30,0,w-30,92), 18,18, p);
             }
             c.restore();
         }
@@ -785,7 +803,10 @@ public class MainActivity extends Activity {
         // Lista scrollabile delle card deck.
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(dp(14),dp(4),dp(14),dp(4));
+        // Solo padding verticale: quello orizzontale, insieme al margine di 30 unita' che la card disegna
+        // già da sé (deckCardVisual), creava un doppio inset — le card risultavano piu' strette del pulsante
+        // "Nuovo Deck" sotto (che ha solo 14dp), non allineate con esso.
+        list.setPadding(0,dp(4),0,dp(4));
         // LayoutParams espliciti (MATCH_PARENT): una ScrollView di default da' ai suoi figli WRAP_CONTENT in
         // larghezza, non MATCH_PARENT — "list" (e quindi ogni card dentro) si misurava contro una larghezza
         // piu' piccola di quella reale dello schermo, da qui le card sempre troppo strette anche dopo aver
@@ -847,10 +868,17 @@ public class MainActivity extends Activity {
             searchLp.width = dp(44); searchBar.setLayoutParams(searchLp);
             doFilter[0].run();
         });
-        searchInput.addTextChangedListener(new android.text.TextWatcher(){
-            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
-            public void onTextChanged(CharSequence s,int a,int b,int c){ doFilter[0].run(); }
-            public void afterTextChanged(android.text.Editable s){}
+        // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il
+        // filtro si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
+        searchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        searchInput.setOnEditorActionListener((tv,actionId,ev) -> {
+            if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                doFilter[0].run();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm!=null) imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+                return true;
+            }
+            return false;
         });
 
         // "Nuovo Deck" resta in fondo alla lista, come nel vecchio dialog.
@@ -882,8 +910,11 @@ public class MainActivity extends Activity {
         dialog.show();
 
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
-            selected[0] = newDeck;
-            refreshFromSource[0].run();
+            // Creare un nuovo deck qui e' un'azione completa: seleziona subito il deck (senza passare da
+            // "Conferma") e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
+            // evidenziata in attesa di un'ulteriore conferma.
+            s.currentDeck = newDeck.name; store.save(); view.invalidate();
+            dialog.dismiss();
         }));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
@@ -1492,11 +1523,15 @@ public class MainActivity extends Activity {
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3));
                 p.setColor(Color.rgb(255,138,61)); // arancione: stesso usato per lo stroke della Stagione attuale
                 float half=dp(1.5f);
-                // Stesso raggio (proporzionale) usato da drawPresetPreviewCard per la card stessa — prima era
-                // un dp(10) fisso, che non corrispondeva al raggio reale della card sotto.
+                // Il rettangolo del bordo e' leggermente piu' esterno di quello della card (inset "half" invece
+                // di "pad"): per restare concentrico e con la stessa curvatura visiva, il suo raggio deve
+                // essere quello della card PIU' il gap tra i due bordi, non lo stesso valore numerico — prima
+                // usavo lo stesso valore, che sui bordi esterni (piu' larghi) sembrava un raggio maggiore.
                 float cardW = getWidth()-2*pad;
-                float cr = 8f*cardW/64f;
-                c.drawRoundRect(new RectF(half,half,getWidth()-half,getHeight()-half), cr, cr, p);
+                float cardRadius = 8f*cardW/64f;
+                float gap = pad-half;
+                float strokeRadius = cardRadius + gap;
+                c.drawRoundRect(new RectF(half,half,getWidth()-half,getHeight()-half), strokeRadius, strokeRadius, p);
             }
         }
     }
