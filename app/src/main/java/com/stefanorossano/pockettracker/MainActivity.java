@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.186";
+    static final String APP_VERSION = "v0.2.187";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -106,9 +106,15 @@ public class MainActivity extends Activity {
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             dialog.dismiss();
+            // Diagnostica temporanea: mostra esattamente cosa vede il codice in questo momento, per capire
+            // se il problema e' nel riconoscere il tocco sulla riga, nel confronto, o in recreate() stesso.
+            Toast.makeText(this,"Selezionato: "+selectedLang[0]+" — attuale salvato: "+store.language,Toast.LENGTH_LONG).show();
             if (!selectedLang[0].equals(store.language)) {
                 store.language = selectedLang[0]; store.save();
+                Toast.makeText(this,"Salvato, sto ricreando l'app...",Toast.LENGTH_SHORT).show();
                 recreate();
+            } else {
+                Toast.makeText(this,"Nessun cambiamento: era già questa lingua.",Toast.LENGTH_SHORT).show();
             }
         });
     }
