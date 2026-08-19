@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.198";
+    static final String APP_VERSION = "v0.2.199";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1042,16 +1042,9 @@ public class MainActivity extends Activity {
     // getResources().getStringArray() restituisce un array NUOVO ad ogni chiamata: se lo richiamassimo
     // ogni volta, ogni pool sembrerebbe "nuovo" e la logica anti-ripetizione si romperebbe. Caricati
     // quindi una sola volta (pigro, alla prima vittoria/sconfitta registrata) e mantenuti in cache.
-    String[] winMsgsFirst, winMsgsLow, winMsgsHigh, lossMsgsLow, lossMsgsHigh, dayMsgsHot;
-    void ensureMessagePools(){
-        if (winMsgsFirst != null) return;
-        winMsgsFirst = getResources().getStringArray(R.array.msgs_win_first);
-        winMsgsLow = getResources().getStringArray(R.array.msgs_win_low);
-        winMsgsHigh = getResources().getStringArray(R.array.msgs_win_high);
-        lossMsgsLow = getResources().getStringArray(R.array.msgs_loss_low);
-        lossMsgsHigh = getResources().getStringArray(R.array.msgs_loss_high);
-        dayMsgsHot = getResources().getStringArray(R.array.msgs_day_hot);
-    }
+    String[] winMsgsFirst = {"Test1","Test2"}, winMsgsLow = {"Test1","Test2"}, winMsgsHigh = {"Test1","Test2"},
+        lossMsgsLow = {"Test1","Test2"}, lossMsgsHigh = {"Test1","Test2"}, dayMsgsHot = {"Test1","Test2"};
+    void ensureMessagePools(){ /* TEST DIAGNOSTICO: array hardcoded, nessuna risorsa coinvolta */ }
     // "Shuffle bag" per non ripetere le stesse frasi finche' non sono state usate tutte (poi si rimescola):
     // una coda separata per ciascuna fascia, tenuta in memoria per la durata della sessione dell'app.
     java.util.HashMap<Object, ArrayList<Integer>> messagePoolQueues = new java.util.HashMap<>();
@@ -2170,17 +2163,7 @@ public class MainActivity extends Activity {
         String cachedGreeting=null;
         String greetingMessage(){
             if(cachedGreeting!=null) return cachedGreeting;
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-            int namedArr, plainArr;
-            if(hour<6){ namedArr=R.array.greeting_night_named; plainArr=R.array.greeting_night_plain; }
-            else if(hour<12){ namedArr=R.array.greeting_morning_named; plainArr=R.array.greeting_morning_plain; }
-            else if(hour<18){ namedArr=R.array.greeting_afternoon_named; plainArr=R.array.greeting_afternoon_plain; }
-            else { namedArr=R.array.greeting_evening_named; plainArr=R.array.greeting_evening_plain; }
-            String[] named = getResources().getStringArray(namedArr);
-            String[] plain = getResources().getStringArray(plainArr);
-            int idx = new java.util.Random().nextInt(plain.length); // stesso indice per la coppia [con nome, senza nome]
-            boolean hasName = store.trainerName!=null && !store.trainerName.isEmpty();
-            cachedGreeting = hasName ? String.format(named[idx], store.trainerName) : plain[idx];
+            cachedGreeting = "Test greeting"; // TEST DIAGNOSTICO: nessuna risorsa array coinvolta
             return cachedGreeting;
         }
         boolean isDraggingDateBar=false, dateBarDragCandidate=false; float touchStartDateBarScrollX=0;
