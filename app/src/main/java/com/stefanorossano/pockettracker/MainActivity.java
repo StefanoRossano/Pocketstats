@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.2.162";
+    static final String APP_VERSION = "v0.2.164";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1482,7 +1482,7 @@ public class MainActivity extends Activity {
         if (d==null) { drawPresetPreviewCard(c, l,t,r,b, "spine", "arcobaleno"); return; }
         if ("custom".equals(d.previewStyle) && d.previewCustomUri!=null) {
             Bitmap bmp = getCustomPreviewBitmap(d);
-            if (bmp!=null) { drawCoverImage(c, bmp, l,t,r,b, 8*(r-l)/64f); return; }
+            if (bmp!=null) { view.drawCoverImage(c, bmp, l,t,r,b, 8*(r-l)/64f); return; }
             // File non piu' disponibile: ricade sul preimpostato come rete di sicurezza.
         }
         drawPresetPreviewCard(c, l,t,r,b, d.previewStyle==null?"spine":d.previewStyle, d.previewColor==null?"grigiochiaro":d.previewColor);
@@ -1565,15 +1565,20 @@ public class MainActivity extends Activity {
     // spostare; finito il primo trascinamento passa a mostrare SOLO l'area ritagliata, zoomata, per
     // un'ultima rifinitura fine (sempre solo spostamento, mai ridimensionamento). Risolve il problema delle
     // percentuali fisse di ritaglio che con risoluzioni/screenshot diversi finivano spesso storte.
+    // Editor di ritaglio: l'immagine e' mostrata GRANDE (adattata allo schermo, come nella galleria Liste —
+    // niente zoom oltre la sua risoluzione reale, che prima sgranava). Il riquadro di selezione resta FISSO
+    // al centro, alle dimensioni ESATTE della preview finale (proporzionali alla scala di visualizzazione,
+    // non ingrandite): e' l'IMMAGINE che si sposta sotto, come un classico pan-crop. Se il punto di ritaglio
+    // ricordato porta l'immagine a scoprire i margini, si vede lo sfondo scuro del dialog — normale, dato
+    // che l'immagine e' spesso piu' alta/larga dello schermo. Dentro il riquadro: colori veri. Fuori: overlay
+    // scuro semi-trasparente (immagine E sfondo), a dare l'effetto "disattivato/in grigio".
     class CropEditorView extends View {
         Bitmap sourceBitmap;
-        float cropCx, cropCy;
-        float cropWFrac, cropHFrac; // frazioni FISSE (calcolate una volta, in base alle dimensioni immagine)
-        int mode = 0; // 0 = immagine intera + riquadro spostabile, 1 = anteprima zoomata (rifinitura)
+        float cropCx, cropCy; // punto (frazione 0-1 dell'immagine) che deve cadere al centro del riquadro
+        float cropWFrac, cropHFrac; // frazioni FISSE del ritaglio (calcolate una volta, invariate durante il drag)
+        float dispScale, dispW, dispH; // scala/dimensioni di visualizzazione dell'immagine, ricalcolate ad ogni onDraw
         float touchStartX, touchStartY, startCx, startCy;
-        float lastOffX, lastOffY, lastDispW, lastDispH;
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Runnable onFirstDragEnd;
 
         CropEditorView(Context c, Bitmap bmp, float initCx, float initCy){
             super(c);
@@ -1587,34 +1592,25 @@ public class MainActivity extends Activity {
             super.onDraw(c);
             int vw=getWidth(), vh=getHeight();
             if (vw==0 || vh==0) return;
-            if (mode==0){
-                float scale = Math.min((float)vw/sourceBitmap.getWidth(), (float)vh/sourceBitmap.getHeight());
-                float dispW = sourceBitmap.getWidth()*scale, dispH = sourceBitmap.getHeight()*scale;
-                float offX=(vw-dispW)/2, offY=(vh-dispH)/2;
-                lastOffX=offX; lastOffY=offY; lastDispW=dispW; lastDispH=dispH;
-                c.drawBitmap(sourceBitmap, null, new RectF(offX,offY,offX+dispW,offY+dispH), null);
-                float rw=cropWFrac*dispW, rh=cropHFrac*dispH;
-                float rcx=offX+cropCx*dispW, rcy=offY+cropCy*dispH;
-                float rl=rcx-rw/2, rt=rcy-rh/2, rr=rcx+rw/2, rb=rcy+rh/2;
-                paint.setStyle(Paint.Style.FILL); paint.setColor(Color.argb(170,0,0,0));
-                c.drawRect(offX,offY,offX+dispW,rt,paint);
-                c.drawRect(offX,rb,offX+dispW,offY+dispH,paint);
-                c.drawRect(offX,rt,rl,rb,paint);
-                c.drawRect(rr,rt,offX+dispW,rb,paint);
-                paint.setStyle(Paint.Style.STROKE); paint.setColor(Color.WHITE); paint.setStrokeWidth(3);
-                c.drawRect(rl,rt,rr,rb,paint);
-            } else {
-                // Mostra SOLO l'area ritagliata, scalata per riempire la view (mantenendo l'aspect ratio).
-                int[] rect = computePreviewCropRect(sourceBitmap.getWidth(), sourceBitmap.getHeight(), cropCx, cropCy);
-                Rect src = new Rect(rect[0],rect[1],rect[0]+rect[2],rect[1]+rect[3]);
-                float scale = Math.min((float)vw/rect[2], (float)vh/rect[3]);
-                float dispW=rect[2]*scale, dispH=rect[3]*scale;
-                float offX=(vw-dispW)/2, offY=(vh-dispH)/2;
-                lastOffX=offX; lastOffY=offY; lastDispW=dispW; lastDispH=dispH;
-                c.drawBitmap(sourceBitmap, src, new RectF(offX,offY,offX+dispW,offY+dispH), null);
-                paint.setStyle(Paint.Style.STROKE); paint.setColor(Color.WHITE); paint.setStrokeWidth(4);
-                c.drawRect(offX,offY,offX+dispW,offY+dispH,paint);
-            }
+            dispScale = Math.min((float)vw/sourceBitmap.getWidth(), (float)vh/sourceBitmap.getHeight());
+            dispW = sourceBitmap.getWidth()*dispScale; dispH = sourceBitmap.getHeight()*dispScale;
+            float frameCx = vw/2f, frameCy = vh/2f;
+            // Posizione dell'immagine tale che il punto cropCx/cropCy cada esattamente al centro del riquadro.
+            float imgL = frameCx - cropCx*dispW, imgT = frameCy - cropCy*dispH;
+            c.drawBitmap(sourceBitmap, null, new RectF(imgL, imgT, imgL+dispW, imgT+dispH), null);
+
+            float frameW = cropWFrac*dispW, frameH = cropHFrac*dispH;
+            float fl=frameCx-frameW/2, ft=frameCy-frameH/2, fr=frameCx+frameW/2, fb=frameCy+frameH/2;
+
+            // Overlay scuro OVUNQUE fuori dal riquadro (sopra immagine e sfondo, effetto "disattivato").
+            paint.setStyle(Paint.Style.FILL); paint.setColor(Color.argb(180,0,0,0));
+            c.drawRect(0,0,vw,ft,paint);
+            c.drawRect(0,fb,vw,vh,paint);
+            c.drawRect(0,ft,fl,fb,paint);
+            c.drawRect(fr,ft,vw,fb,paint);
+
+            paint.setStyle(Paint.Style.STROKE); paint.setColor(Color.WHITE); paint.setStrokeWidth(3);
+            c.drawRect(fl,ft,fr,fb,paint);
         }
 
         @Override public boolean onTouchEvent(MotionEvent e){
@@ -1624,26 +1620,17 @@ public class MainActivity extends Activity {
                     return true;
                 case MotionEvent.ACTION_MOVE: {
                     float dx=e.getX()-touchStartX, dy=e.getY()-touchStartY;
-                    if (mode==0){
-                        cropCx = startCx + dx/lastDispW;
-                        cropCy = startCy + dy/lastDispH;
-                    } else {
-                        // Qui la vista mostra SOLO il ritaglio zoomato: spostare il dito a destra deve far
-                        // "scorrere" l'immagine sotto, quindi il centro si muove nella direzione OPPOSTA al
-                        // gesto (come un normale pan).
-                        float pxPerFracX = lastDispW/cropWFrac, pxPerFracY = lastDispH/cropHFrac;
-                        cropCx = startCx - dx/pxPerFracX;
-                        cropCy = startCy - dy/pxPerFracY;
-                    }
+                    // Il riquadro e' fisso: spostare il dito a destra sposta l'IMMAGINE a destra, quindi il
+                    // punto che finisce al centro si muove a SINISTRA nell'immagine — direzione opposta al
+                    // gesto, come un pan classico.
+                    cropCx = startCx - dx/dispW;
+                    cropCy = startCy - dy/dispH;
                     float halfW=cropWFrac/2, halfH=cropHFrac/2;
                     cropCx = Math.max(halfW, Math.min(1-halfW, cropCx));
                     cropCy = Math.max(halfH, Math.min(1-halfH, cropCy));
                     invalidate();
                     return true;
                 }
-                case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
-                    if (mode==0){ mode=1; invalidate(); if(onFirstDragEnd!=null) onFirstDragEnd.run(); }
-                    return true;
             }
             return true;
         }
@@ -1676,9 +1663,8 @@ public class MainActivity extends Activity {
 
         TextView hint = new TextView(this); hint.setTextColor(MUTED_TXT); hint.setTextSize(12); hint.setGravity(Gravity.CENTER);
         hint.setPadding(dp(16),dp(4),dp(16),dp(14));
-        hint.setText("Sposta l'immagine per inquadrare bene la carta del deck");
+        hint.setText("Sposta l'immagine per inquadrare bene la carta del deck, poi tocca \"Fatto\"");
         root.addView(hint);
-        cropView.onFirstDragEnd = () -> hint.setText("Ritocca se serve, poi tocca \"Fatto\"");
 
         doneBtn.setOnClickListener(v -> {
             targetDeck.previewCropCx = cropView.cropCx; targetDeck.previewCropCy = cropView.cropCy;
