@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.4.9";
+    static final String APP_VERSION = "v0.5.1";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -442,7 +442,7 @@ public class MainActivity extends Activity {
         }
         void startGlowAnimation(){
             android.animation.ValueAnimator anim = android.animation.ValueAnimator.ofFloat(0f, 1f);
-            anim.setDuration(750);
+            anim.setDuration(600);
             anim.addUpdateListener(a -> { glowProgress = (float)a.getAnimatedValue(); invalidate(); });
             anim.start();
         }
@@ -468,7 +468,7 @@ public class MainActivity extends Activity {
                     glowPaint.setStrokeWidth(dp(4));
                     glowPaint.setStrokeCap(Paint.Cap.ROUND);
                     glowPaint.setStrokeJoin(Paint.Join.ROUND);
-                    glowPaint.setColor(Color.rgb(0xFF,0xC7,0x4D)); // oro, stesso colore mid usato altrove
+                    glowPaint.setColor(Color.rgb(0xFF,0xF3,0xD1)); // oro chiaro (non piu' il mid): richiesto piu' luminoso
                     glowPaint.setMaskFilter(new android.graphics.BlurMaskFilter(dp(7), android.graphics.BlurMaskFilter.Blur.NORMAL));
                     c.drawPath(segment, glowPaint);
                 }
@@ -508,7 +508,7 @@ public class MainActivity extends Activity {
         // Sequenza temporizzata, leggermente piu' rilassata di un primo tentativo (300ms/600ms/1200ms):
         // per un'app di score-tracking aperta piu' volte al giorno un'attesa lunga stancherebbe, ma visto
         // che ora e' puramente automatica (nessun tocco richiesto) un margine in piu' regge bene.
-        outer.postDelayed(bgChart::startGlowAnimation, 400);
+        outer.postDelayed(bgChart::startGlowAnimation, 300);
         outer.postDelayed(() -> {
             android.animation.ObjectAnimator fade = android.animation.ObjectAnimator.ofFloat(outer, "alpha", 1f, 0f);
             fade.setDuration(300);
@@ -526,7 +526,7 @@ public class MainActivity extends Activity {
                 }
             });
             fade.start();
-        }, 1500);
+        }, 1200);
     }
 
     // Primo step del wizard (solo primissimo avvio): titolo + sottotitolo + pulsante, prima vivevano nello
@@ -1221,47 +1221,58 @@ public class MainActivity extends Activity {
     // "Nuovo Deck", Annulla/Conferma; cambia solo il titolo, la selezione di partenza e cosa fare col deck
     // scelto (parametrizzato con onConfirm).
     void showDeckSelectorDialog(Season s, String headerText, Deck initialSelection, java.util.function.Consumer<Deck> onConfirm) {
-        showDeckSelectorDialog(s, headerText, initialSelection, null, onConfirm);
-    }
-
-    // matchForOpponentEdit (facoltativo): quando non nullo, inietta sotto il titolo anche una sezione per
-    // modificare/impostare il deck AVVERSARIO di quella specifica partita — stesso dialog, un solo
-    // salvataggio complessivo. Cosi' un errore di battitura sul deck avversario (o la scelta iniziale di
-    // saltarlo) si puo' sempre correggere a posteriori, nello stesso posto in cui si corregge il proprio.
-    void showDeckSelectorDialog(Season s, String headerText, Deck initialSelection, Match matchForOpponentEdit, java.util.function.Consumer<Deck> onConfirm) {
-        Deck[] selected = { initialSelection };
-        ArrayList<Deck> allDecks = view.sortedDecks(s);
-        ArrayList<Deck> filtered = new ArrayList<>(allDecks);
-        // Dichiarato qui (assegnato piu' sotto): rebuildList lo referenzia nel listener del kebab, quindi
-        // deve esistere gia' come variabile prima — l'assegnazione effettiva puo' avvenire dopo, l'importante
-        // e' che sia pronta PRIMA che l'utente possa davvero toccare qualcosa (dialog.show() e' sempre l'ultimo passo).
-        Runnable[] refreshFromSource = new Runnable[1];
-
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
         TextView title = new TextView(this); title.setText(headerText); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
-        // MATCH_PARENT (non piu' WRAP_CONTENT) con margine destro: un titolo troppo lungo va a capo invece
-        // di sbordare fuori dallo schermo (come "Seleziona un deck diverso per la partita n.116").
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
 
-        // Mini-titolo "Il tuo deck": solo quando esiste anche la sezione avversario sotto, altrimenti questo
-        // dialog serve ad altro (es. scelta del deck attivo di Stagione) e non ha senso etichettare nulla —
-        // senza la sezione avversario non c'e' ambiguita' su "di quale deck si sta parlando".
-        if (matchForOpponentEdit != null) {
-            TextView ownLabel = new TextView(this); ownLabel.setText(getString(R.string.label_your_deck)); ownLabel.setTextColor(MUTED_TXT); ownLabel.setTextSize(12); ownLabel.setTypeface(Typeface.DEFAULT_BOLD);
-            LinearLayout.LayoutParams ownLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            ownLabelLp.topMargin=dp(14); ownLabelLp.leftMargin=dp(18); ownLabelLp.rightMargin=dp(18);
-            root.addView(ownLabel, ownLabelLp);
-        }
-        // Dichiarata qui (assegnata piu' sotto, dopo la sezione "Nuovo Deck" del tuo deck): serve gia' come
-        // variabile prima che i listener footer/nuovo-deck la referenzino piu' in basso nel metodo.
-        EditText[] opponentInputHolder = { null };
+        Dialog[] dialogHolder = new Dialog[1];
+        Deck[] selected = buildOwnDeckPickerSection(root, s, initialSelection, newDeck -> {
+            // Stesso comportamento di sempre per questo dialog generico (usato da chooseCurrentDeck ecc.):
+            // creare un deck qui lo applica subito, senza passare da "Conferma".
+            onConfirm.accept(newDeck);
+            dialogHolder[0].dismiss();
+        });
 
-        // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(cancelBtn); footer.addView(confirmBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialogHolder[0] = dialog;
+        dialog.show();
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        confirmBtn.setOnClickListener(v -> {
+            if (selected[0]!=null) onConfirm.accept(selected[0]);
+            dialog.dismiss();
+        });
+    }
+
+    // Componente riusabile: ricerca + lista scrollabile di card DEL TUO deck (con anteprima, statistiche,
+    // menu "⋮" per rinomina/anteprima/lista/elimina) + pulsante "Nuovo Deck" — usato sia dal dialog generico
+    // sopra sia dalla Fase 1 del flusso a 2 fasi di changeMatchDeck(). Aggiunge tutto dentro "parent" (non
+    // crea un proprio dialog): il chiamante decide header/footer/dialog attorno. onNewDeckCreated: il
+    // chiamante decide cosa succede dopo la creazione di un deck nuovo (applicarlo subito e chiudere, oppure
+    // solo selezionarlo e restare aperti — dipende dal flusso).
+    Deck[] buildOwnDeckPickerSection(LinearLayout parent, Season s, Deck initialSelection, java.util.function.Consumer<Deck> onNewDeckCreated) {
+        Deck[] selected = { initialSelection };
+        ArrayList<Deck> allDecks = view.sortedDecks(s);
+        ArrayList<Deck> filtered = new ArrayList<>(allDecks);
+        Runnable[] refreshFromSource = new Runnable[1];
+
         LinearLayout searchBar = new LinearLayout(this); searchBar.setOrientation(LinearLayout.HORIZONTAL);
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable searchBg = new GradientDrawable(); searchBg.setColor(Color.rgb(10,18,30)); searchBg.setCornerRadius(dp(16));
@@ -1269,13 +1280,10 @@ public class MainActivity extends Activity {
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        // Sempre visibile, niente piu' pulsante che si espande: la tastiera si apre semplicemente toccando
-        // il campo (comportamento normale di ogni EditText).
         EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
         searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        // "X" visibile SOLO quando c'e' del testo scritto (non il placeholder).
         TextView clearBtn = new TextView(this); clearBtn.setText("✕"); clearBtn.setTextColor(MUTED_TXT); clearBtn.setGravity(Gravity.CENTER); clearBtn.setTextSize(13);
         GradientDrawable clearCircle = new GradientDrawable(); clearCircle.setShape(GradientDrawable.OVAL); clearCircle.setColor(Color.rgb(24,36,52));
         clearBtn.setBackground(clearCircle); clearBtn.setVisibility(View.GONE);
@@ -1283,22 +1291,14 @@ public class MainActivity extends Activity {
         searchBar.addView(clearBtn, clearLp);
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
         searchLp.topMargin=dp(14); searchLp.leftMargin=dp(18); searchLp.rightMargin=dp(18); searchLp.bottomMargin=dp(10);
-        root.addView(searchBar, searchLp);
+        parent.addView(searchBar, searchLp);
 
-        // Lista scrollabile delle card deck.
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
-        // Solo padding verticale: quello orizzontale, insieme al margine di 18 unita' che la card disegna
-        // già da sé (deckCardVisual), creava un doppio inset — le card risultavano piu' strette del pulsante
-        // "Nuovo Deck" sotto.
         list.setPadding(0,dp(4),0,dp(4));
-        // LayoutParams espliciti (MATCH_PARENT): una ScrollView di default da' ai suoi figli WRAP_CONTENT in
-        // larghezza, non MATCH_PARENT — "list" (e quindi ogni card dentro) si misurava contro una larghezza
-        // piu' piccola di quella reale dello schermo, da qui le card sempre troppo strette anche dopo aver
-        // dato una larghezza esplicita alla finestra del dialog.
         scroll.addView(list, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(400));
-        root.addView(scroll, scrollLp);
+        parent.addView(scroll, scrollLp);
 
         Runnable[] rebuildList = new Runnable[1];
         rebuildList[0] = () -> {
@@ -1310,14 +1310,8 @@ public class MainActivity extends Activity {
                 row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(95)));
                 View kebabHotspot = new View(this);
                 android.widget.FrameLayout.LayoutParams khLp = new android.widget.FrameLayout.LayoutParams(dp(44), dp(44));
-                // Margine destro ricalcolato per il nuovo margine card (18, non piu' 30): il kebab e' ora
-                // disegnato a w-36 invece di w-48. topMargin=1.5 per seguire lo spostamento verticale della
-                // card (disegnata ora a partire da y=1.5, non 0, per fare spazio allo stroke di selezione).
                 khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(14); khLp.topMargin = dp(1.5f);
                 row.addView(kebabHotspot, khLp);
-                // Zona di tocco dedicata alla miniatura (stesse coordinate esatte usate da deckCardVisual:
-                // thumbX=28, thumbY=1.5+6=7.5, 64x80): tocco qui apre SEMPRE "Scegli anteprima" per questo
-                // deck, invece di limitarsi a selezionarlo per il dialog come farebbe il resto della riga.
                 View previewHotspot = new View(this);
                 android.widget.FrameLayout.LayoutParams phLp = new android.widget.FrameLayout.LayoutParams(dp(64), dp(80));
                 phLp.gravity = Gravity.TOP|Gravity.START; phLp.leftMargin = dp(28); phLp.topMargin = dp(7.5f);
@@ -1330,10 +1324,6 @@ public class MainActivity extends Activity {
                 previewHotspot.setOnClickListener(v -> showPreviewPicker(d, cardView::invalidate));
                 kebabHotspot.setOnClickListener(v -> showDeckRowMenu(s, d, kebabHotspot, refreshFromSource[0]));
             }
-            // Altezza della lista adattiva: 0 se non ci sono deck (nessuno spazio vuoto sprecato), altrimenti
-            // proporzionale al numero di deck effettivamente mostrati (dopo un eventuale filtro di ricerca),
-            // con un tetto massimo uguale all'altezza fissa di prima (400dp) — oltre quel numero di deck si
-            // scorre, come faceva gia'.
             int rowHeightPx = dp(95)+dp(10);
             int wantedHeight = filtered.size()*rowHeightPx;
             scrollLp.height = Math.min(wantedHeight, dp(400));
@@ -1341,13 +1331,10 @@ public class MainActivity extends Activity {
         };
         rebuildList[0].run();
 
-        // Scorre subito verso il deck di partenza (quello attuale, o quello appena creato se questo dialog
-        // e' stato aperto giusto dopo — es. da changeMatchDeck), cosi' e' visibile senza dover scorrere a
-        // mano se si trova piu' in basso nella lista ordinata.
         if (selected[0]!=null) {
             int idx = filtered.indexOf(selected[0]);
             if (idx>=0) {
-                int rowH = dp(95)+dp(10); // altezza riga + margine sotto, stessi valori usati in rebuildList
+                int rowH = dp(95)+dp(10);
                 int targetY = Math.max(0, idx*rowH - dp(10));
                 scroll.post(() -> scroll.scrollTo(0, targetY));
             }
@@ -1360,33 +1347,19 @@ public class MainActivity extends Activity {
             for (Deck d: allDecks) if (q.isEmpty() || d.name.toLowerCase(Locale.ITALY).contains(q)) filtered.add(d);
             rebuildList[0].run();
         };
-        // Aggiornamento completo dopo rinomina/anteprima/elimina/creazione: ri-deriva SEMPRE allDecks dalla
-        // fonte di verita' (s.decks), non solo un ridisegno — necessario per l'eliminazione (la riga va
-        // rimossa dalla lista, non solo ridisegnata) e per la rinomina (l'ordine puo' cambiare). Prima
-        // "Nuovo Deck" faceva questo a mano per conto suo; ora e' condiviso da tutte le azioni del menu "⋮".
         refreshFromSource[0] = () -> {
             allDecks.clear(); allDecks.addAll(view.sortedDecks(s));
-            // Se il deck selezionato era proprio quello appena eliminato, si va sul primo della lista COMPLETA
-            // (non filtrata da un'eventuale ricerca attiva) — coerente anche se la ricerca in corso non lo
-            // includerebbe.
             if (selected[0]!=null && !allDecks.contains(selected[0])) {
                 selected[0] = allDecks.isEmpty() ? null : allDecks.get(0);
             }
             doFilter[0].run();
         };
-        // "X": azzera il campo E applica subito il filtro vuoto (mostra di nuovo tutti i deck) — niente piu'
-        // logica di espansione, dato che la barra e' sempre a piena larghezza.
-        clearBtn.setOnClickListener(v -> {
-            searchInput.setText("");
-            doFilter[0].run();
-        });
+        clearBtn.setOnClickListener(v -> { searchInput.setText(""); doFilter[0].run(); });
         searchInput.addTextChangedListener(new android.text.TextWatcher(){
-            public void beforeTextChanged(CharSequence s,int a,int b,int c){}
-            public void onTextChanged(CharSequence s,int a,int b,int c){ clearBtn.setVisibility(s.length()>0?View.VISIBLE:View.GONE); }
-            public void afterTextChanged(android.text.Editable s){}
+            public void beforeTextChanged(CharSequence s2,int a,int b,int c){}
+            public void onTextChanged(CharSequence s2,int a,int b,int c){ clearBtn.setVisibility(s2.length()>0?View.VISIBLE:View.GONE); }
+            public void afterTextChanged(android.text.Editable s2){}
         });
-        // Niente piu' filtro live ad ogni tasto: tastiera con pulsante "Cerca" (invece di "Fatto"), il
-        // filtro si applica solo quando lo si tocca — e a quel punto la tastiera si chiude da sola.
         searchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         searchInput.setOnEditorActionListener((tv,actionId,ev) -> {
             if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
@@ -1398,65 +1371,21 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // "Nuovo Deck" resta in fondo alla lista, come nel vecchio dialog.
         Button newDeckBtn = new Button(this); newDeckBtn.setText(getString(R.string.btn_new_deck)); styleSecondaryButton(newDeckBtn);
         LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(18); newBtnLp.rightMargin=dp(18); newBtnLp.bottomMargin=dp(10);
-        root.addView(newDeckBtn, newBtnLp);
-
-        // Sezione deck AVVERSARIO (solo se richiesta), DOPO quella del tuo deck — prima veniva mostrata
-        // sopra, che si leggeva ambiguo ("di quale deck stiamo parlando?"). Un mini-titolo per ciascuna
-        // sezione toglie ogni dubbio.
-        EditText opponentInput = null;
-        if (matchForOpponentEdit != null) {
-            TextView oppSectionLabel = new TextView(this); oppSectionLabel.setText(getString(R.string.label_opponent_deck)); oppSectionLabel.setTextColor(MUTED_TXT); oppSectionLabel.setTextSize(12); oppSectionLabel.setTypeface(Typeface.DEFAULT_BOLD);
-            LinearLayout.LayoutParams oppSectionLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            oppSectionLabelLp.topMargin=dp(10); oppSectionLabelLp.leftMargin=dp(18); oppSectionLabelLp.rightMargin=dp(18);
-            root.addView(oppSectionLabel, oppSectionLabelLp);
-
-            LinearLayout oppBox = new LinearLayout(this); oppBox.setOrientation(LinearLayout.VERTICAL);
-            oppBox.setPadding(dp(18),dp(4),dp(18),0);
-            root.addView(oppBox, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            opponentInput = buildOpponentDeckSection(oppBox, s, matchForOpponentEdit.opponentDeck);
-        }
-        opponentInputHolder[0] = opponentInput;
-
-        // Footer: Annulla / Conferma.
-        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
-        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
-        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
-        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
-        confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
-        footer.addView(cancelBtn); footer.addView(confirmBtn);
-        root.addView(footer);
-
-        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
-        // Rimuove l'area titolo che PocketDialogTheme (basato su Theme.Material.Dialog.Alert) riserva di
-        // default anche senza alcun titolo impostato — invisibile nei dialog a schermo intero con sfondo
-        // nero (nero su nero), ma ben visibile qui sopra lo sfondo colorato della card.
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setContentView(root);
-        // Larghezza esplicita: senza, la finestra del dialog si dimensiona in modo ambiguo e le view a
-        // MATCH_PARENT dentro si misurano storte (card strette, testo che sborda, tocchi che non registrano
-        // sempre correttamente).
-        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
-        dialog.show();
-
+        parent.addView(newDeckBtn, newBtnLp);
+        // Default sempre applicato: il deck appena creato viene selezionato e la lista aggiornata, cosi'
+        // resta visibile ed evidenziato subito. onNewDeckCreated e' un'azione AGGIUNTIVA facoltativa del
+        // chiamante (es. applicarlo subito e chiudere tutto il dialog) — non sostituisce il comportamento
+        // di base, altrimenti chi non la fornisce si ritroverebbe un deck creato ma non selezionato.
         newDeckBtn.setOnClickListener(v -> addDeck(newDeck -> {
-            // Creare un nuovo deck qui e' un'azione completa: lo applica subito (senza passare da
-            // getString(R.string.btn_confirm)) e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
-            // evidenziata in attesa di un'ulteriore conferma.
-            onConfirm.accept(newDeck);
-            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputHolder[0]);
-            dialog.dismiss();
+            selected[0] = newDeck;
+            refreshFromSource[0].run();
+            if (onNewDeckCreated!=null) onNewDeckCreated.accept(newDeck);
         }));
-        cancelBtn.setOnClickListener(v -> dialog.dismiss());
-        confirmBtn.setOnClickListener(v -> {
-            if (selected[0]!=null) onConfirm.accept(selected[0]);
-            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputHolder[0]);
-            dialog.dismiss();
-        });
+
+        return selected;
     }
 
     // Salva (o cancella, se lasciato vuoto) il deck avversario per la partita in modifica, se questo dialog
@@ -1496,14 +1425,6 @@ public class MainActivity extends Activity {
             .show();
     }
 
-    void saveOpponentDeckEdit(Match matchForOpponentEdit, EditText opponentInputFinal){
-        if (matchForOpponentEdit==null || opponentInputFinal==null) return;
-        String name = opponentInputFinal.getText().toString().trim();
-        matchForOpponentEdit.opponentDeck = name.isEmpty() ? null : name;
-        if (!name.isEmpty() && !store.knownOpponentDecks.contains(name)) store.knownOpponentDecks.add(name);
-        store.save(); view.invalidate();
-    }
-
     void chooseCurrentDeck() {
         Season s = store.seasons.get(store.current);
         showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_title), findDeck(s, s.currentDeck), chosen -> {
@@ -1511,13 +1432,97 @@ public class MainActivity extends Activity {
         });
     }
 
-    // Cambia retroattivamente il deck di una partita GIA' giocata: le statistiche per deck sono sempre
-    // calcolate al volo dal campo 'deck' di ogni partita, quindi si aggiornano da sole.
+    // Cambia retroattivamente il deck (tuo e/o avversario) di una partita GIA' giocata — flusso a 2 fasi:
+    // Fase 1 sceglie il tuo deck, Fase 2 (dopo "Continua") sceglie quello avversario. Le statistiche per deck
+    // sono sempre calcolate al volo dai campi di ogni partita, quindi si aggiornano da sole.
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
         int num = matchNumberOf(s, m);
-        showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_for_match,num), findDeck(s, m.deck), m, chosen -> {
-            m.deck = chosen.name; store.save(); view.invalidate();
+        showMatchDeckPhase1(s, m, num, findDeck(s, m.deck));
+    }
+
+    // Fase 1: solo il TUO deck. Titolo piu' grande del solito (era 18, qui 22) per marcare che e' il titolo
+    // di un intero step, non un mini-titolo di sezione. Footer Annulla/Continua: niente si salva finche' non
+    // si conferma la Fase 2 — "Annulla" qui chiude tutto senza applicare nulla.
+    void showMatchDeckPhase1(Season s, Match m, int num, Deck currentOwnSelection){
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText(getString(R.string.label_your_deck)); title.setTextColor(Color.WHITE); title.setTextSize(22); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
+        root.addView(title, titleLp);
+
+        Deck[] selected = buildOwnDeckPickerSection(root, s, currentOwnSelection, null);
+
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView continueBtn = new TextView(this); continueBtn.setText(getString(R.string.btn_continue)); continueBtn.setTextColor(blueColor()); continueBtn.setTextSize(14);
+        continueBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(cancelBtn); footer.addView(continueBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        continueBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            showMatchDeckPhase2(s, m, num, selected[0]);
+        });
+    }
+
+    // Fase 2: solo il deck AVVERSARIO. Footer Indietro/Conferma: "Indietro" torna alla Fase 1 mantenendo la
+    // scelta gia' fatta li' (non un "Annulla" che butterebbe via tutto), "Conferma" salva ENTRAMBI i campi
+    // in un colpo solo (il tuo deck scelto in Fase 1 + quello avversario scelto qui).
+    void showMatchDeckPhase2(Season s, Match m, int num, Deck chosenOwnDeck){
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText(getString(R.string.label_opponent_deck)); title.setTextColor(Color.WHITE); title.setTextSize(22); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
+        root.addView(title, titleLp);
+
+        String[] selectedOpp = buildOpponentDeckPickerSection(root, s, m.opponentDeck);
+
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
+        TextView backBtn = new TextView(this); backBtn.setText(getString(R.string.btn_back)); backBtn.setTextColor(MUTED_TXT); backBtn.setTextSize(14);
+        backBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_confirm)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(14);
+        confirmBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(backBtn); footer.addView(confirmBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        backBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            showMatchDeckPhase1(s, m, num, chosenOwnDeck);
+        });
+        confirmBtn.setOnClickListener(v -> {
+            m.deck = chosenOwnDeck.name;
+            String opp = selectedOpp[0];
+            if (opp!=null && !opp.trim().isEmpty()){
+                m.opponentDeck = opp;
+                if (!store.knownOpponentDecks.contains(opp)) store.knownOpponentDecks.add(opp);
+            } else {
+                m.opponentDeck = null;
+            }
+            store.save(); view.invalidate();
+            dialog.dismiss();
         });
     }
 
@@ -1653,50 +1658,124 @@ public class MainActivity extends Activity {
     // numeri, niente anteprima grafica: decisione presa esplicitamente, gli avversari non hanno una vera
     // "identita' visiva" nell'app) dentro il LinearLayout dato. Restituisce il campo di ricerca/nome: il
     // suo testo al momento della conferma E' il nome scelto (digitato o riempito toccando una card).
-    EditText buildOpponentDeckSection(LinearLayout parent, Season s, String initialValue){
-        EditText searchInput = new EditText(this);
-        searchInput.setHint(getString(R.string.hint_opponent_deck));
-        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT);
-        if (initialValue!=null) searchInput.setText(initialValue);
-        parent.addView(searchInput);
+    // Elimina un deck avversario: stesso identico pattern usato per i tuoi deck (confirmDeleteDeck) — conteggio
+    // partite di QUESTA Stagione, avviso singolare/plurale, il campo torna vuoto (non "Sconosciuto" come per
+    // i tuoi, dato che qui il tracciamento e' facoltativo: vuoto = "non tracciato", non un valore segnaposto).
+    void confirmDeleteOpponentDeck(Season s, String name, Runnable onChanged){
+        int usedCount = 0;
+        String key = name.toLowerCase(Locale.US);
+        for (Match m: s.matches) if (m.opponentDeck!=null && m.opponentDeck.toLowerCase(Locale.US).equals(key)) usedCount++;
+        String message = usedCount>0
+            ? getString(usedCount==1 ? R.string.confirm_delete_opponent_deck_used_singular : R.string.confirm_delete_opponent_deck_used_plural, usedCount)
+            : getString(R.string.confirm_delete_opponent_deck_msg);
+        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_delete_deck_title_fmt, name))
+            .setMessage(message)
+            .setPositiveButton(getString(R.string.btn_delete), (dlg,w) -> {
+                for (Match m: s.matches) if (m.opponentDeck!=null && m.opponentDeck.toLowerCase(Locale.US).equals(key)) m.opponentDeck = null;
+                store.knownOpponentDecks.removeIf(k -> k.equalsIgnoreCase(name));
+                store.save(); if (view!=null) view.invalidate();
+                if (onChanged!=null) onChanged.run();
+            })
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show();
+    }
 
+    // Menu "⋮" per una card deck avversario — stesse regole di apertura di showDeckRowMenu (ancorato alla
+    // view toccata, via showDialogMenu): Rinomina / Elimina.
+    void showOpponentDeckRowMenu(Season s, String name, View anchorView, Runnable onChanged){
+        showDialogMenu(anchorView,
+            new String[]{getString(R.string.action_rename_opponent_deck), getString(R.string.action_delete_opponent_deck)},
+            new int[]{Color.WHITE, red()},
+            new Runnable[]{ () -> promptRenameOpponentDeck(name, onChanged), () -> confirmDeleteOpponentDeck(s, name, onChanged) });
+    }
+
+    // Prompt minimo per creare un deck avversario nuovo: solo il nome (niente stile/colore/finitura, decisione
+    // presa esplicitamente — un avversario non ha una vera identita' visiva nell'app).
+    void promptNewOpponentDeck(java.util.function.Consumer<String> onCreated){
+        LinearLayout box = formBox();
+        EditText input = new EditText(this);
+        input.setHint(getString(R.string.hint_opponent_deck));
+        input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED_TXT);
+        box.addView(input);
+        new AlertDialog.Builder(this).setTitle(getString(R.string.btn_new_deck))
+            .setView(box)
+            .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
+                String name = input.getText().toString().trim();
+                if (!name.isEmpty()) onCreated.accept(name);
+            })
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show();
+    }
+
+    boolean listContainsIgnoreCase(ArrayList<String> list, String val){
+        for (String x: list) if (x.equalsIgnoreCase(val)) return true;
+        return false;
+    }
+
+    // Componente riusabile per il deck AVVERSARIO — stessa fisionomia della Fase 1 (vera barra di ricerca,
+    // non piu' un campo di testo che fa doppio uso da ricerca+valore): lista di card statistiche (solo nome,
+    // niente anteprima grafica), selezione evidenziata con un bordo, menu "⋮" per rinomina/elimina, "Nuovo
+    // Deck" con un prompt dedicato invece di dover digitare-e-sperare nel campo di ricerca.
+    String[] buildOpponentDeckPickerSection(LinearLayout parent, Season s, String initialSelection){
+        String[] selected = { initialSelection };
         java.util.LinkedHashMap<String,int[]> stats = view.opponentDeckStats(s);
-        // Suggerimenti: nomi avversari gia' visti (su questa Stagione) + i nomi dei TUOI deck (su tutte le
-        // Stagioni) — se lo giochi tu, e' plausibile incontrarlo prima o poi anche come avversario.
-        java.util.LinkedHashSet<String> suggestions = new java.util.LinkedHashSet<>(stats.keySet());
-        suggestions.addAll(store.knownOpponentDecks);
-        for (Season sn: store.seasons) for (Deck d: sn.decks) suggestions.add(d.name);
+        ArrayList<String> allNames = new ArrayList<>(stats.keySet());
+        for (String k: store.knownOpponentDecks) if (!listContainsIgnoreCase(allNames,k)) allNames.add(k);
+        for (Season sn: store.seasons) for (Deck d: sn.decks) if (!listContainsIgnoreCase(allNames,d.name)) allNames.add(d.name);
+        ArrayList<String> filtered = new ArrayList<>(allNames);
 
+        LinearLayout searchBar = new LinearLayout(this); searchBar.setOrientation(LinearLayout.HORIZONTAL);
+        searchBar.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable searchBg = new GradientDrawable(); searchBg.setColor(Color.rgb(10,18,30)); searchBg.setCornerRadius(dp(16));
+        searchBar.setBackground(searchBg);
+        ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
+        searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
+        searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
+        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
+        searchInput.setPadding(0,0,0,0);
+        searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        TextView clearBtn = new TextView(this); clearBtn.setText("✕"); clearBtn.setTextColor(MUTED_TXT); clearBtn.setGravity(Gravity.CENTER); clearBtn.setTextSize(13);
+        GradientDrawable clearCircle = new GradientDrawable(); clearCircle.setShape(GradientDrawable.OVAL); clearCircle.setColor(Color.rgb(24,36,52));
+        clearBtn.setBackground(clearCircle); clearBtn.setVisibility(View.GONE);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(22), dp(22)); clearLp.leftMargin=dp(6); clearLp.rightMargin=dp(6);
+        searchBar.addView(clearBtn, clearLp);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
+        searchLp.topMargin=dp(14); searchLp.leftMargin=dp(18); searchLp.rightMargin=dp(18); searchLp.bottomMargin=dp(10);
+        parent.addView(searchBar, searchLp);
+
+        ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scroll = new ScrollView(this); scroll.addView(list);
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
-        scrollLp.topMargin = dp(10);
+        list.setPadding(0,dp(4),0,dp(4));
+        scroll.addView(list, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(400));
         parent.addView(scroll, scrollLp);
 
-        Runnable[] rebuild = new Runnable[1];
-        rebuild[0] = () -> {
+        int rowH = 72; // altezza fissa in dp di ogni card statistiche (nome + riga stats)
+
+        Runnable[] rebuildList = new Runnable[1];
+        Runnable[] refreshFromSource = new Runnable[1];
+        rebuildList[0] = () -> {
             list.removeAllViews();
-            String filter = searchInput.getText().toString().trim().toLowerCase(Locale.US);
-            for (String name : suggestions){
-                if (!filter.isEmpty() && !name.toLowerCase(Locale.US).contains(filter)) continue;
+            for (String name: filtered) {
                 LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
                 row.setPadding(dp(14),dp(10),dp(14),dp(10));
+                boolean isSelected = name.equalsIgnoreCase(selected[0]);
                 GradientDrawable rowBg = new GradientDrawable(); rowBg.setCornerRadius(dp(10)); rowBg.setColor(Color.rgb(20,30,46));
+                if (isSelected) rowBg.setStroke(dp(2), Color.argb(191,255,250,235));
                 row.setBackground(rowBg);
                 LinearLayout nameRow = new LinearLayout(this); nameRow.setOrientation(LinearLayout.HORIZONTAL); nameRow.setGravity(Gravity.CENTER_VERTICAL);
                 TextView nameTv = new TextView(this); nameTv.setText(name); nameTv.setTextColor(Color.WHITE); nameTv.setTextSize(15); nameTv.setTypeface(Typeface.DEFAULT_BOLD);
                 nameRow.addView(nameTv, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-                // Icona rinomina: un errore di battitura sul nome ("Altaris" invece di "Altaria") si poteva
-                // prima tenere a vita, senza nessun modo di correggerlo su tutte le partite gia' registrate.
-                TextView renameBtn = new TextView(this); renameBtn.setText("✎"); renameBtn.setTextColor(MUTED_TXT); renameBtn.setTextSize(16);
-                renameBtn.setPadding(dp(10),dp(2),dp(2),dp(2));
-                nameRow.addView(renameBtn);
+                TextView kebabBtn = new TextView(this); kebabBtn.setText("⋮"); kebabBtn.setTextColor(MUTED_TXT); kebabBtn.setTextSize(18);
+                kebabBtn.setPadding(dp(10),dp(2),dp(2),dp(2));
+                nameRow.addView(kebabBtn);
                 row.addView(nameRow);
                 int[] st = stats.get(name);
                 TextView statsTv = new TextView(this); statsTv.setTextColor(MUTED_TXT); statsTv.setTextSize(12);
                 if (st!=null){
                     int wr = Math.round(100f*st[1]/st[0]);
-                    statsTv.setText(getString(R.string.label_played_against_n_times,st[0])+" · "+st[1]+"V "+st[2]+"S · "+wr+"% · "+(st[3]>=0?"+":"")+st[3]+"pt");
+                    statsTv.setText(getString(R.string.label_played_against_n_times,st[0])+" · "+st[1]+"W "+st[2]+"L · "+wr+"%");
                 } else {
                     statsTv.setText(getString(R.string.label_played_against_n_times,0));
                 }
@@ -1706,23 +1785,76 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 rowLp.bottomMargin = dp(8);
                 list.addView(row, rowLp);
-                row.setOnClickListener(v -> { searchInput.setText(name); searchInput.setSelection(name.length()); });
-                renameBtn.setOnClickListener(v -> promptRenameOpponentDeck(name, rebuild[0]));
+                row.setOnClickListener(v -> { selected[0]=name; rebuildList[0].run(); });
+                kebabBtn.setOnClickListener(v -> showOpponentDeckRowMenu(s, name, kebabBtn, refreshFromSource[0]));
             }
+            int rowHeightPx = dp(rowH)+dp(8);
+            int wantedHeight = filtered.size()*rowHeightPx;
+            scrollLp.height = Math.min(wantedHeight, dp(400));
+            scroll.setLayoutParams(scrollLp);
         };
-        rebuild[0].run();
+        rebuildList[0].run();
+
+        if (selected[0]!=null) {
+            int idx = -1;
+            for (int i=0;i<filtered.size();i++) if (filtered.get(i).equalsIgnoreCase(selected[0])) { idx=i; break; }
+            if (idx>=0) {
+                int rp = dp(rowH)+dp(8);
+                int targetY = Math.max(0, idx*rp - dp(10));
+                scroll.post(() -> scroll.scrollTo(0, targetY));
+            }
+        }
+
+        Runnable[] doFilter = new Runnable[1];
+        doFilter[0] = () -> {
+            String q = searchInput.getText().toString().trim().toLowerCase(Locale.ITALY);
+            filtered.clear();
+            for (String name: allNames) if (q.isEmpty() || name.toLowerCase(Locale.ITALY).contains(q)) filtered.add(name);
+            rebuildList[0].run();
+        };
+        refreshFromSource[0] = () -> {
+            java.util.LinkedHashMap<String,int[]> freshStats = view.opponentDeckStats(s);
+            stats.clear(); stats.putAll(freshStats);
+            allNames.clear(); allNames.addAll(freshStats.keySet());
+            for (String k: store.knownOpponentDecks) if (!listContainsIgnoreCase(allNames,k)) allNames.add(k);
+            for (Season sn: store.seasons) for (Deck d: sn.decks) if (!listContainsIgnoreCase(allNames,d.name)) allNames.add(d.name);
+            if (selected[0]!=null && !listContainsIgnoreCase(allNames, selected[0])) selected[0] = null;
+            doFilter[0].run();
+        };
+        clearBtn.setOnClickListener(v -> { searchInput.setText(""); doFilter[0].run(); });
         searchInput.addTextChangedListener(new android.text.TextWatcher(){
-            @Override public void beforeTextChanged(CharSequence cs,int a,int b,int c){}
-            @Override public void onTextChanged(CharSequence cs,int a,int b,int c){}
-            @Override public void afterTextChanged(android.text.Editable ed){ rebuild[0].run(); }
+            public void beforeTextChanged(CharSequence s2,int a,int b,int c){}
+            public void onTextChanged(CharSequence s2,int a,int b,int c){ clearBtn.setVisibility(s2.length()>0?View.VISIBLE:View.GONE); }
+            public void afterTextChanged(android.text.Editable s2){}
         });
-        return searchInput;
+        searchInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        searchInput.setOnEditorActionListener((tv,actionId,ev) -> {
+            if (actionId==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                doFilter[0].run();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm!=null) imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+                return true;
+            }
+            return false;
+        });
+
+        Button newDeckBtn = new Button(this); newDeckBtn.setText(getString(R.string.btn_new_deck)); styleSecondaryButton(newDeckBtn);
+        LinearLayout.LayoutParams newBtnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(18); newBtnLp.rightMargin=dp(18); newBtnLp.bottomMargin=dp(10);
+        parent.addView(newDeckBtn, newBtnLp);
+        newDeckBtn.setOnClickListener(v -> promptNewOpponentDeck(newName -> {
+            selected[0] = newName;
+            if (!store.knownOpponentDecks.contains(newName)) store.knownOpponentDecks.add(newName);
+            refreshFromSource[0].run();
+        }));
+
+        return selected;
     }
 
     void showOpponentDeckPicker(Match m, boolean showSettingsHint){
         Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
-        EditText input = buildOpponentDeckSection(box, s, m.opponentDeck);
+        String[] selected = buildOpponentDeckPickerSection(box, s, m.opponentDeck);
 
         if (showSettingsHint){
             TextView hint = new TextView(this); hint.setText(getString(R.string.hint_disable_in_settings)); hint.setTextColor(MUTED_TXT); hint.setTextSize(12);
@@ -1736,10 +1868,9 @@ public class MainActivity extends Activity {
             .setCancelable(true)
             .setNegativeButton(getString(R.string.btn_skip), null)
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
-                String name = input.getText().toString().trim();
-                if (!name.isEmpty()){
-                    m.opponentDeck = name;
-                    if (!store.knownOpponentDecks.contains(name)) store.knownOpponentDecks.add(name);
+                if (selected[0]!=null && !selected[0].trim().isEmpty()){
+                    m.opponentDeck = selected[0];
+                    if (!store.knownOpponentDecks.contains(selected[0])) store.knownOpponentDecks.add(selected[0]);
                     store.save(); view.invalidate();
                 }
             })
