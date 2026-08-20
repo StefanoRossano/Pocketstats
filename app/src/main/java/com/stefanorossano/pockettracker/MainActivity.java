@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.4.3";
+    static final String APP_VERSION = "v0.4.4";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1248,47 +1248,18 @@ public class MainActivity extends Activity {
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
 
-        // Sezione deck avversario (solo se richiesta): stesso identico meccanismo del popup dedicato
-        // (campo testo + chip di suggerimento), ma qui vive dentro questo stesso dialog invece che in uno
-        // separato — un solo salvataggio complessivo alla conferma.
-        EditText opponentInput = null;
+        // Mini-titolo "Il tuo deck": solo quando esiste anche la sezione avversario sotto, altrimenti questo
+        // dialog serve ad altro (es. scelta del deck attivo di Stagione) e non ha senso etichettare nulla —
+        // senza la sezione avversario non c'e' ambiguita' su "di quale deck si sta parlando".
         if (matchForOpponentEdit != null) {
-            TextView oppLabel = new TextView(this); oppLabel.setText(getString(R.string.label_opponent_deck)); oppLabel.setTextColor(MUTED_TXT); oppLabel.setTextSize(12);
-            LinearLayout.LayoutParams oppLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            oppLabelLp.topMargin=dp(14); oppLabelLp.leftMargin=dp(18); oppLabelLp.rightMargin=dp(18);
-            root.addView(oppLabel, oppLabelLp);
-
-            opponentInput = new EditText(this);
-            opponentInput.setHint(getString(R.string.hint_opponent_deck));
-            opponentInput.setTextColor(Color.WHITE); opponentInput.setHintTextColor(MUTED_TXT);
-            if (matchForOpponentEdit.opponentDeck!=null) opponentInput.setText(matchForOpponentEdit.opponentDeck);
-            LinearLayout.LayoutParams oppInputLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            oppInputLp.leftMargin=dp(18); oppInputLp.rightMargin=dp(18); oppInputLp.topMargin=dp(4);
-            root.addView(opponentInput, oppInputLp);
-
-            java.util.LinkedHashSet<String> oppSuggestions = new java.util.LinkedHashSet<>(store.knownOpponentDecks);
-            for (Deck d: s.decks) oppSuggestions.add(d.name);
-            if (!oppSuggestions.isEmpty()){
-                final EditText oppInputFinal = opponentInput;
-                LinearLayout oppChipsRow = new LinearLayout(this); oppChipsRow.setOrientation(LinearLayout.HORIZONTAL);
-                HorizontalScrollView oppHscroll = new HorizontalScrollView(this);
-                oppHscroll.addView(oppChipsRow);
-                LinearLayout.LayoutParams oppHscrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                oppHscrollLp.topMargin = dp(8); oppHscrollLp.leftMargin=dp(18); oppHscrollLp.rightMargin=dp(18);
-                root.addView(oppHscroll, oppHscrollLp);
-                for (String known : oppSuggestions){
-                    TextView chip = new TextView(this); chip.setText(known); chip.setTextColor(MUTED_TXT); chip.setTextSize(13);
-                    chip.setPadding(dp(14),dp(6),dp(14),dp(6));
-                    GradientDrawable chipBg = new GradientDrawable(); chipBg.setCornerRadius(dp(14)); chipBg.setColor(Color.rgb(24,36,52));
-                    chip.setBackground(chipBg);
-                    LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    chipLp.rightMargin = dp(8);
-                    oppChipsRow.addView(chip, chipLp);
-                    chip.setOnClickListener(v -> oppInputFinal.setText(known));
-                }
-            }
+            TextView ownLabel = new TextView(this); ownLabel.setText(getString(R.string.label_your_deck)); ownLabel.setTextColor(MUTED_TXT); ownLabel.setTextSize(12); ownLabel.setTypeface(Typeface.DEFAULT_BOLD);
+            LinearLayout.LayoutParams ownLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            ownLabelLp.topMargin=dp(14); ownLabelLp.leftMargin=dp(18); ownLabelLp.rightMargin=dp(18);
+            root.addView(ownLabel, ownLabelLp);
         }
-        final EditText opponentInputFinal = opponentInput;
+        // Dichiarata qui (assegnata piu' sotto, dopo la sezione "Nuovo Deck" del tuo deck): serve gia' come
+        // variabile prima che i listener footer/nuovo-deck la referenzino piu' in basso nel metodo.
+        EditText[] opponentInputHolder = { null };
 
         // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
         LinearLayout searchBar = new LinearLayout(this); searchBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -1433,6 +1404,23 @@ public class MainActivity extends Activity {
         newBtnLp.topMargin=dp(4); newBtnLp.leftMargin=dp(18); newBtnLp.rightMargin=dp(18); newBtnLp.bottomMargin=dp(10);
         root.addView(newDeckBtn, newBtnLp);
 
+        // Sezione deck AVVERSARIO (solo se richiesta), DOPO quella del tuo deck — prima veniva mostrata
+        // sopra, che si leggeva ambiguo ("di quale deck stiamo parlando?"). Un mini-titolo per ciascuna
+        // sezione toglie ogni dubbio.
+        EditText opponentInput = null;
+        if (matchForOpponentEdit != null) {
+            TextView oppSectionLabel = new TextView(this); oppSectionLabel.setText(getString(R.string.label_opponent_deck)); oppSectionLabel.setTextColor(MUTED_TXT); oppSectionLabel.setTextSize(12); oppSectionLabel.setTypeface(Typeface.DEFAULT_BOLD);
+            LinearLayout.LayoutParams oppSectionLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            oppSectionLabelLp.topMargin=dp(10); oppSectionLabelLp.leftMargin=dp(18); oppSectionLabelLp.rightMargin=dp(18);
+            root.addView(oppSectionLabel, oppSectionLabelLp);
+
+            LinearLayout oppBox = new LinearLayout(this); oppBox.setOrientation(LinearLayout.VERTICAL);
+            oppBox.setPadding(dp(18),dp(4),dp(18),0);
+            root.addView(oppBox, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            opponentInput = buildOpponentDeckSection(oppBox, s, matchForOpponentEdit.opponentDeck);
+        }
+        opponentInputHolder[0] = opponentInput;
+
         // Footer: Annulla / Conferma.
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
@@ -1460,13 +1448,13 @@ public class MainActivity extends Activity {
             // getString(R.string.btn_confirm)) e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
             // evidenziata in attesa di un'ulteriore conferma.
             onConfirm.accept(newDeck);
-            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputFinal);
+            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputHolder[0]);
             dialog.dismiss();
         }));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selected[0]!=null) onConfirm.accept(selected[0]);
-            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputFinal);
+            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputHolder[0]);
             dialog.dismiss();
         });
     }
@@ -1474,7 +1462,7 @@ public class MainActivity extends Activity {
     // Salva (o cancella, se lasciato vuoto) il deck avversario per la partita in modifica, se questo dialog
     // e' stato aperto in modalita' "modifica anche l'avversario" (matchForOpponentEdit non nullo).
     void saveOpponentDeckEdit(Match matchForOpponentEdit, EditText opponentInputFinal){
-        if (matchForOpponentEdit==null) return;
+        if (matchForOpponentEdit==null || opponentInputFinal==null) return;
         String name = opponentInputFinal.getText().toString().trim();
         matchForOpponentEdit.opponentDeck = name.isEmpty() ? null : name;
         if (!name.isEmpty() && !store.knownOpponentDecks.contains(name)) store.knownOpponentDecks.add(name);
@@ -1626,39 +1614,72 @@ public class MainActivity extends Activity {
     // "Salta"), mostrato dopo OGNI partita una volta che store.trackOpponentDeck e' attivo. I nomi gia' usati
     // in passato appaiono come "chip" toccabili sopra il campo di testo, per non dover ridigitare ogni volta
     // lo stesso nome di deck avversario incontrato piu' volte.
-    void showOpponentDeckPicker(Match m, boolean showSettingsHint){
-        LinearLayout box = formBox();
-        EditText input = new EditText(this);
-        input.setHint(getString(R.string.hint_opponent_deck));
-        input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED_TXT);
-        if (m.opponentDeck!=null) input.setText(m.opponentDeck);
-        box.addView(input);
+    // Costruisce la sezione di scelta deck avversario (ricerca + lista di card statistiche — SOLO nome e
+    // numeri, niente anteprima grafica: decisione presa esplicitamente, gli avversari non hanno una vera
+    // "identita' visiva" nell'app) dentro il LinearLayout dato. Restituisce il campo di ricerca/nome: il
+    // suo testo al momento della conferma E' il nome scelto (digitato o riempito toccando una card).
+    EditText buildOpponentDeckSection(LinearLayout parent, Season s, String initialValue){
+        EditText searchInput = new EditText(this);
+        searchInput.setHint(getString(R.string.hint_opponent_deck));
+        searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT);
+        if (initialValue!=null) searchInput.setText(initialValue);
+        parent.addView(searchInput);
 
-        // Suggerimenti: sia i nomi avversari gia' visti in passato, sia i nomi dei TUOI deck (su tutte le
-        // Stagioni) — se lo giochi tu, e' plausibile incontrarlo prima o poi anche come avversario. Un
-        // LinkedHashSet toglie i duplicati mantenendo l'ordine di inserimento (prima gli avversari gia'
-        // visti, piu' rilevanti perche' gia' incontrati, poi i tuoi nomi).
-        java.util.LinkedHashSet<String> suggestions = new java.util.LinkedHashSet<>(store.knownOpponentDecks);
+        java.util.LinkedHashMap<String,int[]> stats = opponentDeckStats(s);
+        // Suggerimenti: nomi avversari gia' visti (su questa Stagione) + i nomi dei TUOI deck (su tutte le
+        // Stagioni) — se lo giochi tu, e' plausibile incontrarlo prima o poi anche come avversario.
+        java.util.LinkedHashSet<String> suggestions = new java.util.LinkedHashSet<>(stats.keySet());
+        suggestions.addAll(store.knownOpponentDecks);
         for (Season sn: store.seasons) for (Deck d: sn.decks) suggestions.add(d.name);
 
-        if (!suggestions.isEmpty()){
-            LinearLayout chipsRow = new LinearLayout(this); chipsRow.setOrientation(LinearLayout.HORIZONTAL);
-            HorizontalScrollView hscroll = new HorizontalScrollView(this);
-            hscroll.addView(chipsRow);
-            LinearLayout.LayoutParams hscrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            hscrollLp.topMargin = dp(10);
-            box.addView(hscroll, hscrollLp);
-            for (String known : suggestions){
-                TextView chip = new TextView(this); chip.setText(known); chip.setTextColor(MUTED_TXT); chip.setTextSize(13);
-                chip.setPadding(dp(14),dp(6),dp(14),dp(6));
-                GradientDrawable chipBg = new GradientDrawable(); chipBg.setCornerRadius(dp(14)); chipBg.setColor(Color.rgb(24,36,52));
-                chip.setBackground(chipBg);
-                LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                chipLp.rightMargin = dp(8);
-                chipsRow.addView(chip, chipLp);
-                chip.setOnClickListener(v -> input.setText(known));
+        LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll = new ScrollView(this); scroll.addView(list);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
+        scrollLp.topMargin = dp(10);
+        parent.addView(scroll, scrollLp);
+
+        Runnable[] rebuild = new Runnable[1];
+        rebuild[0] = () -> {
+            list.removeAllViews();
+            String filter = searchInput.getText().toString().trim().toLowerCase(Locale.US);
+            for (String name : suggestions){
+                if (!filter.isEmpty() && !name.toLowerCase(Locale.US).contains(filter)) continue;
+                LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
+                row.setPadding(dp(14),dp(10),dp(14),dp(10));
+                GradientDrawable rowBg = new GradientDrawable(); rowBg.setCornerRadius(dp(10)); rowBg.setColor(Color.rgb(20,30,46));
+                row.setBackground(rowBg);
+                TextView nameTv = new TextView(this); nameTv.setText(name); nameTv.setTextColor(Color.WHITE); nameTv.setTextSize(15); nameTv.setTypeface(Typeface.DEFAULT_BOLD);
+                row.addView(nameTv);
+                int[] st = stats.get(name);
+                TextView statsTv = new TextView(this); statsTv.setTextColor(MUTED_TXT); statsTv.setTextSize(12);
+                if (st!=null){
+                    int wr = Math.round(100f*st[1]/st[0]);
+                    statsTv.setText(getString(R.string.label_played_against_n_times,st[0])+" · "+st[1]+"V "+st[2]+"S · "+wr+"% · "+(st[3]>=0?"+":"")+st[3]+"pt");
+                } else {
+                    statsTv.setText(getString(R.string.label_played_against_n_times,0));
+                }
+                LinearLayout.LayoutParams statsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                statsLp.topMargin = dp(2);
+                row.addView(statsTv, statsLp);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowLp.bottomMargin = dp(8);
+                list.addView(row, rowLp);
+                row.setOnClickListener(v -> { searchInput.setText(name); searchInput.setSelection(name.length()); });
             }
-        }
+        };
+        rebuild[0].run();
+        searchInput.addTextChangedListener(new android.text.TextWatcher(){
+            @Override public void beforeTextChanged(CharSequence cs,int a,int b,int c){}
+            @Override public void onTextChanged(CharSequence cs,int a,int b,int c){}
+            @Override public void afterTextChanged(android.text.Editable ed){ rebuild[0].run(); }
+        });
+        return searchInput;
+    }
+
+    void showOpponentDeckPicker(Match m, boolean showSettingsHint){
+        Season s = store.seasons.get(store.current);
+        LinearLayout box = formBox();
+        EditText input = buildOpponentDeckSection(box, s, m.opponentDeck);
 
         if (showSettingsHint){
             TextView hint = new TextView(this); hint.setText(getString(R.string.hint_disable_in_settings)); hint.setTextColor(MUTED_TXT); hint.setTextSize(12);
@@ -3890,6 +3911,33 @@ public class MainActivity extends Activity {
             return total;
         }
 
+        // Statistiche per deck AVVERSARIO, raggruppate senza distinguere maiuscole/minuscole (a differenza
+        // dei tuoi deck, il nome dell'avversario e' testo libero: "Charizard ex" e "charizard EX" devono
+        // contare come lo stesso matchup, non spezzarsi in due righe distinte). Il nome mostrato e' quello
+        // scritto nella partita PIU' RECENTE di quel gruppo (non forzato tutto minuscolo, resta leggibile).
+        // Restituisce: nome canonico -> {partite giocate, vittorie, sconfitte, variazione punti totale}.
+        java.util.LinkedHashMap<String,int[]> opponentDeckStats(Season s){
+            java.util.LinkedHashMap<String,int[]> stats = new java.util.LinkedHashMap<>();
+            java.util.HashMap<String,String> canonicalName = new java.util.HashMap<>(); // chiave lowercase -> ultima grafia vista
+            java.util.HashMap<String,Long> lastSeen = new java.util.HashMap<>();
+            for (Match m: s.matches){
+                if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
+                String key = m.opponentDeck.toLowerCase(Locale.US);
+                Long prevSeen = lastSeen.get(key);
+                if (prevSeen==null || m.timestamp>=prevSeen){ canonicalName.put(key, m.opponentDeck); lastSeen.put(key, m.timestamp); }
+            }
+            for (Match m: s.matches){
+                if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
+                String key = m.opponentDeck.toLowerCase(Locale.US);
+                String canon = canonicalName.get(key);
+                int[] st = stats.computeIfAbsent(canon, k -> new int[4]);
+                st[0]++; // partite giocate
+                if (m.win) st[1]++; else st[2]++;
+                st[3] += (m.after-m.before); // variazione
+            }
+            return stats;
+        }
+
         // Longest win streak *davvero attribuibile* a un deck: attraversa la cronologia in ordine e mantiene
         // una serie SOLO finche' le vittorie consecutive sono state giocate tutte con questo stesso deck.
         // Una sconfitta, una vittoria con un deck diverso, o una correzione manuale interrompono la serie.
@@ -4066,32 +4114,39 @@ public class MainActivity extends Activity {
             // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni)
             // E almeno un matchup ha un numero sufficiente di partite per essere significativo (min 3) —
             // altrimenti la sezione non appare affatto, per non mostrare percentuali fuorvianti su 1-2
-            // partite. Ordinati per numero di partite (i piu' giocati prima). =====
+            // partite. Raggruppamento case-insensitive (opponentDeckStats). Ordinati per win rate crescente
+            // (il matchup peggiore in cima): e' l'insight piu' azionabile ("contro chi soffro di piu'"),
+            // non "contro chi ho giocato di piu'" (quello e' gia' visibile nella card sopra). Un richiamo
+            // esplicito al matchup peggiore in assoluto, sopra la lista, da' il valore a colpo d'occhio
+            // senza dover leggere l'intera tabella. =====
             if (store.trackOpponentDeck) {
-                java.util.LinkedHashMap<String,int[]> matchupWL = new java.util.LinkedHashMap<>();
-                for (Match m: all) {
-                    if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
-                    int[] wlArr = matchupWL.computeIfAbsent(m.opponentDeck, k -> new int[2]);
-                    if (m.win) wlArr[0]++; else wlArr[1]++;
-                }
+                java.util.LinkedHashMap<String,int[]> matchupStats = opponentDeckStats(s);
                 ArrayList<String> qualifying = new ArrayList<>();
-                for (java.util.Map.Entry<String,int[]> en: matchupWL.entrySet()) if (en.getValue()[0]+en.getValue()[1] >= 3) qualifying.add(en.getKey());
+                for (java.util.Map.Entry<String,int[]> en: matchupStats.entrySet()) if (en.getValue()[0] >= 3) qualifying.add(en.getKey());
                 if (!qualifying.isEmpty()) {
-                    qualifying.sort((a,b) -> (matchupWL.get(b)[0]+matchupWL.get(b)[1]) - (matchupWL.get(a)[0]+matchupWL.get(a)[1]));
+                    qualifying.sort((a,b) -> {
+                        int[] sa=matchupStats.get(a), sb=matchupStats.get(b);
+                        float wra = 100f*sa[1]/sa[0], wrb = 100f*sb[1]/sb[0];
+                        return Float.compare(wra, wrb); // crescente: il peggiore (win rate piu' basso) prima
+                    });
                     float sectionTop = sectionBottom+20;
-                    txt(c,getString(R.string.label_matchups), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
-                    float rowH=48, rowTop=sectionTop+26;
+                    // Richiamo al matchup peggiore in assoluto.
+                    String worstOpp = qualifying.get(0);
+                    int[] worstSt = matchupStats.get(worstOpp);
+                    int worstWr = Math.round(100f*worstSt[1]/worstSt[0]);
+                    txt(c, getString(R.string.label_worst_matchup_callout, worstOpp, worstWr, worstSt[0]), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
+                    float rowH=48, rowTop=sectionTop+30;
                     box(c, 18, rowTop, w-18, rowTop+rowH*qualifying.size(), card);
                     for (int i=0;i<qualifying.size();i++){
                         String opp = qualifying.get(i);
-                        int[] wlArr = matchupWL.get(opp);
-                        float rowWr = 100f*wlArr[0]/(wlArr[0]+wlArr[1]);
+                        int[] st = matchupStats.get(opp);
+                        float rowWr = 100f*st[1]/st[0];
                         float ry = rowTop + i*rowH;
                         if (i>0) { p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(18,ry,w-18,ry,p); }
                         txt(c, opp, 32, ry+rowH/2+5, 14, white, Paint.Align.LEFT);
                         txtRowRight(c, w-18, ry+rowH/2+5, 13,
-                            new String[]{wlArr[0]+"W  ", wlArr[1]+"L  ", String.format(Locale.US,"%.0f%%",rowWr)},
-                            new int[]{green, red, wrColor(rowWr,wlArr[0]+wlArr[1])});
+                            new String[]{st[1]+"W  ", st[2]+"L  ", String.format(Locale.US,"%.0f%%",rowWr)},
+                            new int[]{green, red, wrColor(rowWr,st[0])});
                     }
                     sectionBottom = rowTop + rowH*qualifying.size();
                 }
