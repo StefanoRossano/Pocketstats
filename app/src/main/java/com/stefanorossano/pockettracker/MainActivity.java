@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.34";
+    static final String APP_VERSION = "v0.3.35";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -363,18 +363,21 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
             float w=getWidth(), h=getHeight();
-            float cardW = w*0.30f, cardH = cardW*1.25f;
-            String[] styles = {"crescent","waves","sun"};
-            float[] rot = {-10f, 0f, 10f};
-            float[] offX = {-w*0.19f, 0f, w*0.19f};
+            // Solo 2 card (falce di luna + sole), stessa disposizione dell'icona dell'app — non piu' 3, per
+            // coerenza visiva tra le due.
+            float cardW = w*0.36f, cardH = cardW*1.25f;
+            String[] styles = {"crescent","sun"};
+            float[] rot = {-8f, 8f};
+            float[] offX = {-w*0.11f, w*0.11f};
             Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             strokePaint.setStyle(Paint.Style.STROKE);
-            strokePaint.setColor(Color.argb(170,255,250,235)); // crema/bianco, semi-trasparente
-            strokePaint.setStrokeWidth(dp(1.5f));
+            strokePaint.setColor(Color.argb(191,255,250,235)); // crema/bianco, semi-trasparente, piu' marcato
+            strokePaint.setStrokeWidth(dp(3f)); // molto piu' spesso di prima: a dimensioni piccole (icona) un
+                                                  // contorno troppo sottile risultava seghettato/tremolante.
             float cr = 8f*cardW/64f; // stesso raggio d'angolo usato dentro drawPresetPreviewCard
             // Il riflesso lucido ora e' dentro drawPresetPreviewCard stessa (si applica a ogni card
             // dell'app, non solo qui): niente piu' bisogno di ridisegnarlo separatamente in questo punto.
-            for (int i=0;i<3;i++){
+            for (int i=0;i<2;i++){
                 c.save();
                 c.translate(w/2f+offX[i], h/2f);
                 c.rotate(rot[i]);
@@ -391,6 +394,24 @@ public class MainActivity extends Activity {
     // Grafico di sfondo condiviso: una linea di andamento sottile e tenue che attraversa tutto lo schermo,
     // usata come sfondo discreto sia nello screen iniziale (con sopra il ventaglio di card) sia in TUTTE le
     // altre schermate dell'app (qui invece SENZA nessuna card sopra, solo la linea).
+    // Percorso condiviso: usato sia per disegnare la linea base (tenue) sia per calcolare il bagliore che
+    // vi scorre sopra durante l'animazione (PathMeasure, stessa identica geometria).
+    Path buildBackgroundChartPath(float w, float h){
+        // Punti cumulativi realistici: 2 vittorie (streak, bonus crescente), 1 sconfitta (-10 fisso, azzera
+        // lo streak), 4 vittorie (streak lungo), 1 sconfitta, 2 vittorie. Ampiezza verticale ridotta
+        // (0.22 dell'altezza, non piu' 0.75): su uno schermo verticale molto alto, un'oscillazione cosi'
+        // ampia risultava troppo "vertiginosa" per un elemento di sfondo che deve restare discreto.
+        int[] cum = {0,10,22,12,22,34,48,64,54,64,76};
+        int vmin=0, vmax=76, n=cum.length-1;
+        Path chart = new Path();
+        for (int i=0;i<cum.length;i++){
+            float px = (i/(float)n)*w;
+            float py = (0.58f - (cum[i]-vmin)/(float)(vmax-vmin)*0.22f)*h;
+            if (i==0) chart.moveTo(px,py); else chart.lineTo(px,py);
+        }
+        return chart;
+    }
+
     void drawBackgroundChartLine(Canvas c, float w, float h){
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
@@ -398,20 +419,60 @@ public class MainActivity extends Activity {
         p.setStrokeCap(Paint.Cap.ROUND);
         p.setStrokeJoin(Paint.Join.ROUND);
         p.setColor(Color.argb(38,90,98,112)); // grigioscuro chiaro, molto tenue
-        float[][] pts = {{0f,0.62f},{0.18f,0.45f},{0.34f,0.55f},{0.50f,0.30f},{0.66f,0.42f},{0.82f,0.18f},{1.0f,0.10f}};
-        Path chart = new Path();
-        for (int i=0;i<pts.length;i++){
-            float px=pts[i][0]*w, py=pts[i][1]*h;
-            if (i==0) chart.moveTo(px,py); else chart.lineTo(px,py);
+        c.drawPath(buildBackgroundChartPath(w,h), p);
+        // Pallini su ogni punto, leggermente piu' marcati della linea.
+        Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dotPaint.setColor(Color.argb(78,90,98,112));
+        int[] cum = {0,10,22,12,22,34,48,64,54,64,76};
+        int vmin=0, vmax=76, n=cum.length-1;
+        for (int i=0;i<cum.length;i++){
+            float px = (i/(float)n)*w;
+            float py = (0.58f - (cum[i]-vmin)/(float)(vmax-vmin)*0.22f)*h;
+            c.drawCircle(px, py, dp(3), dotPaint);
         }
-        c.drawPath(chart, p);
     }
 
     class BackgroundChartView extends View {
-        BackgroundChartView(Context c){ super(c); }
+        float glowProgress = -1f; // -1 = animazione non attiva
+        BackgroundChartView(Context c){
+            super(c);
+            // Necessario per il BlurMaskFilter del bagliore: su canvas hardware-accelerato non renderizza
+            // senza forzare questa view al livello software.
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        }
+        void startGlowAnimation(){
+            android.animation.ValueAnimator anim = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            anim.setDuration(600);
+            anim.addUpdateListener(a -> { glowProgress = (float)a.getAnimatedValue(); invalidate(); });
+            anim.start();
+        }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
-            drawBackgroundChartLine(c, getWidth(), getHeight());
+            float w=getWidth(), h=getHeight();
+            drawBackgroundChartLine(c, w, h);
+            if (glowProgress >= 0f) {
+                Path chart = buildBackgroundChartPath(w, h);
+                android.graphics.PathMeasure pm = new android.graphics.PathMeasure(chart, false);
+                float len = pm.getLength();
+                float glowWindow = len * 0.24f;
+                // Il bagliore entra ed esce dai margini del percorso (centro va da -mezza finestra a
+                // lunghezza+mezza finestra), non resta "tagliato" bruscamente ai due estremi.
+                float centerD = glowProgress * (len + glowWindow) - glowWindow/2f;
+                float startD = Math.max(0, centerD - glowWindow/2f);
+                float endD = Math.min(len, centerD + glowWindow/2f);
+                if (endD > startD) {
+                    Path segment = new Path();
+                    pm.getSegment(startD, endD, segment, true);
+                    Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    glowPaint.setStyle(Paint.Style.STROKE);
+                    glowPaint.setStrokeWidth(dp(4));
+                    glowPaint.setStrokeCap(Paint.Cap.ROUND);
+                    glowPaint.setStrokeJoin(Paint.Join.ROUND);
+                    glowPaint.setColor(Color.rgb(0xFF,0xC7,0x4D)); // oro, stesso colore mid usato altrove
+                    glowPaint.setMaskFilter(new android.graphics.BlurMaskFilter(dp(7), android.graphics.BlurMaskFilter.Blur.NORMAL));
+                    c.drawPath(segment, glowPaint);
+                }
+            }
         }
     }
 
@@ -419,31 +480,18 @@ public class MainActivity extends Activity {
         android.widget.FrameLayout outer = new android.widget.FrameLayout(this);
         outer.setBackgroundColor(Color.rgb(7,11,18)); // stesso sfondo scuro di tutta l'app
 
+        // Il grafico di sfondo appare insieme alle card (nessun ritardo su questo): dopo 300ms un bagliore
+        // dorato lo percorre (durata 600ms, quindi finisce a 900ms), poi a 1200ms tutto dissolve nella
+        // schermata successiva.
         BackgroundChartView bgChart = new BackgroundChartView(this);
         outer.addView(bgChart, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
 
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-
+        // Solo le 2 card, centrate — niente piu' titolo/sottotitolo/testo "tocca per iniziare": questa
+        // schermata e' ora puramente animata/automatica, non richiede piu' un tocco dell'utente.
         WelcomeHeroView hero = new WelcomeHeroView(this);
-        LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(dp(260), dp(160));
-        heroLp.bottomMargin = dp(30);
-        root.addView(hero, heroLp);
-
-        TextView title = new TextView(this); title.setText(getString(R.string.welcome_hero_title)); title.setTextColor(Color.WHITE); title.setTextSize(28); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
-        root.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-        TextView tagline = new TextView(this); tagline.setText(getString(R.string.welcome_hero_tagline)); tagline.setTextColor(MUTED_TXT); tagline.setTextSize(15); tagline.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams taglineLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        taglineLp.topMargin=dp(8); taglineLp.leftMargin=dp(32); taglineLp.rightMargin=dp(32);
-        root.addView(tagline, taglineLp);
-
-        TextView tapHint = new TextView(this); tapHint.setText(getString(R.string.hint_tap_anywhere_start)); tapHint.setTextColor(MUTED_TXT); tapHint.setTextSize(13); tapHint.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tapHintLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tapHintLp.topMargin = dp(40);
-        root.addView(tapHint, tapHintLp);
-
-        outer.addView(root, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        android.widget.FrameLayout.LayoutParams heroLp = new android.widget.FrameLayout.LayoutParams(dp(260), dp(160));
+        heroLp.gravity = Gravity.CENTER;
+        outer.addView(hero, heroLp);
 
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -457,15 +505,61 @@ public class MainActivity extends Activity {
         }
         dialog.show();
 
-        // Tocco OVUNQUE sullo schermo (non solo su un pulsante): questo screen appare ora a OGNI avvio
-        // dell'app, non solo alla primissima volta. Dopo il tocco, si prosegue col flusso giusto: onboarding
-        // se non ancora fatto, il wizard Stagione se non ce n'e' nessuna (es. utente che le ha cancellate
-        // tutte), altrimenti nulla di piu' — la schermata sotto e' gia' pronta (ripristinata in onCreate).
-        outer.setOnClickListener(v -> {
-            dialog.dismiss();
-            if (!store.onboardingDone) { askTrainerName(); }
-            else if (store.seasons.isEmpty()) { wizardStep1(true, null); }
-        });
+        outer.postDelayed(bgChart::startGlowAnimation, 300);
+        outer.postDelayed(() -> {
+            android.animation.ObjectAnimator fade = android.animation.ObjectAnimator.ofFloat(outer, "alpha", 1f, 0f);
+            fade.setDuration(300);
+            fade.addListener(new android.animation.AnimatorListenerAdapter(){
+                @Override public void onAnimationEnd(android.animation.Animator animation){
+                    dialog.dismiss();
+                    // Onboarding ("come ti chiami, allenatore?") ha sempre la priorita': se non ancora
+                    // fatto, il primo step del wizard e' ora questa schermata titolo+sottotitolo+pulsante
+                    // (prima viveva qui nello splash stesso), poi si chiede il nome. Altrimenti, se l'utente
+                    // ha gia' un profilo ma nessuna Stagione (es. le ha cancellate tutte), il wizard
+                    // Stagione parte diretto; se nessuno di questi casi, non serve altro — la schermata
+                    // sotto e' gia' pronta (ripristinata in onCreate).
+                    if (!store.onboardingDone) { showWizardIntroStep(); }
+                    else if (store.seasons.isEmpty()) { wizardStep1(true, null); }
+                }
+            });
+            fade.start();
+        }, 1200);
+    }
+
+    // Primo step del wizard (solo primissimo avvio): titolo + sottotitolo + pulsante, prima vivevano nello
+    // splash automatico; ora e' un vero step del wizard, con un pulsante esplicito su cui l'utente clicca
+    // per procedere (invece dello splash, che ora e' del tutto automatico/temporizzato).
+    void showWizardIntroStep(){
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setBackgroundColor(Color.rgb(7,11,18));
+
+        TextView title = new TextView(this); title.setText(getString(R.string.welcome_hero_title)); title.setTextColor(Color.WHITE); title.setTextSize(28); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
+        root.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView tagline = new TextView(this); tagline.setText(getString(R.string.welcome_hero_tagline)); tagline.setTextColor(MUTED_TXT); tagline.setTextSize(15); tagline.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams taglineLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        taglineLp.topMargin=dp(8); taglineLp.leftMargin=dp(32); taglineLp.rightMargin=dp(32);
+        root.addView(tagline, taglineLp);
+
+        TextView startBtn = new TextView(this); startBtn.setText(getString(R.string.btn_get_started)); startBtn.setTextColor(Color.WHITE); startBtn.setTextSize(16); startBtn.setTypeface(Typeface.DEFAULT_BOLD); startBtn.setGravity(Gravity.CENTER);
+        GradientDrawable btnBg = new GradientDrawable(); btnBg.setColor(blueColor()); btnBg.setCornerRadius(dp(24));
+        startBtn.setBackground(btnBg);
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(dp(220), dp(48));
+        startLp.topMargin = dp(36);
+        root.addView(startBtn, startLp);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(false);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) {
+            dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.rgb(7,11,18)));
+        }
+        dialog.show();
+
+        startBtn.setOnClickListener(v -> { dialog.dismiss(); askTrainerName(); });
     }
 
     void askTrainerName(){
@@ -1894,7 +1988,12 @@ public class MainActivity extends Activity {
     // chiaro" (quello di default) — non c'e' nessun deck coinvolto, e' una preferenza globale usata come
     // punto di partenza per l'anteprima di ogni nuovo deck creato.
     void showCardStylePreferenceDialog(){
-        String[] selectedStyle = { store.preferredCardStyle };
+        // Stessa rete di sicurezza usata in showPreviewPicker: se la preferenza salvata e' una chiave di
+        // stile ormai storica (rinominata nel tempo), nessuna tab corrisponderebbe piu' a nessuna di quelle
+        // attuali, e nessuna risulterebbe selezionata all'apertura.
+        String[] styleKeysCheck = {"spine","gem","crescent","waves","sun","zigzag"};
+        String initialStyle = java.util.Arrays.asList(styleKeysCheck).contains(store.preferredCardStyle) ? store.preferredCardStyle : "spine";
+        String[] selectedStyle = { initialStyle };
         String[] selectedFinish = { "matte".equals(store.preferredCardFinish) ? "matte" : "glossy" };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
