@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.31";
+    static final String APP_VERSION = "v0.3.32";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1019,7 +1019,7 @@ public class MainActivity extends Activity {
             if (selected) {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
-                p.setColor(Color.rgb(255,138,61)); // stesso arancione usato per la Stagione attuale
+                p.setColor(Color.argb(170,255,250,235)); // crema, stesso colore dello stroke del ventaglio nello screen iniziale
                 // Stesso rettangolo ESATTO della card (18,1.5,w-18,93.5) e stesso raggio (18) usato da box().
                 c.drawRoundRect(new RectF(18,1.5f,w-18,93.5f), 18,18, p);
             }
@@ -1163,11 +1163,19 @@ public class MainActivity extends Activity {
                 // card (disegnata ora a partire da y=1.5, non 0, per fare spazio allo stroke di selezione).
                 khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(14); khLp.topMargin = dp(1.5f);
                 row.addView(kebabHotspot, khLp);
+                // Zona di tocco dedicata alla miniatura (stesse coordinate esatte usate da deckCardVisual:
+                // thumbX=28, thumbY=1.5+6=7.5, 64x80): tocco qui apre SEMPRE "Scegli anteprima" per questo
+                // deck, invece di limitarsi a selezionarlo per il dialog come farebbe il resto della riga.
+                View previewHotspot = new View(this);
+                android.widget.FrameLayout.LayoutParams phLp = new android.widget.FrameLayout.LayoutParams(dp(64), dp(80));
+                phLp.gravity = Gravity.TOP|Gravity.START; phLp.leftMargin = dp(28); phLp.topMargin = dp(7.5f);
+                row.addView(previewHotspot, phLp);
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(95));
                 rowLp.bottomMargin = dp(10);
                 list.addView(row, rowLp);
 
                 cardView.setOnClickListener(v -> { selected[0]=d; rebuildList[0].run(); });
+                previewHotspot.setOnClickListener(v -> showPreviewPicker(d, cardView::invalidate));
                 kebabHotspot.setOnClickListener(v -> showDeckRowMenu(s, d, kebabHotspot, refreshFromSource[0]));
             }
             // Altezza della lista adattiva: 0 se non ci sono deck (nessuno spazio vuoto sprecato), altrimenti
@@ -1832,7 +1840,7 @@ public class MainActivity extends Activity {
             if (selected) {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3));
-                p.setColor(Color.rgb(255,138,61)); // arancione: stesso usato per lo stroke della Stagione attuale
+                p.setColor(Color.argb(170,255,250,235)); // crema, stesso colore dello stroke del ventaglio nello screen iniziale
                 float half=dp(1.5f);
                 // Il rettangolo del bordo e' leggermente piu' esterno di quello della card (inset "half" invece
                 // di "pad"): per restare concentrico e con la stessa curvatura visiva, il suo raggio deve
@@ -1915,8 +1923,15 @@ public class MainActivity extends Activity {
     // aperto questo picker (es. getString(R.string.action_change_deck)) ha una sua vista separata che altrimenti non si aggiorna da
     // sola — invalidate() sulla TrackerView principale non tocca le view native di ALTRI dialog aperti.
     void showPreviewPicker(Deck d, Runnable onChanged){
-        String[] activeStyle = { d.previewStyle };
-        String[] selectedColor = { d.previewColor };
+        // Rete di sicurezza: se il deck ha ancora salvata una chiave di stile/colore ormai storica (nel
+        // corso dello sviluppo alcuni stili sono stati rinominati piu' volte — es. "mountains"->"crescent"),
+        // nessuna tab/card corrisponderebbe piu' a nessuna di quelle attuali, e nessuna risulterebbe
+        // selezionata all'apertura. Si ricade sullo stesso default usato altrove ("spine"/"grigiochiaro").
+        String[] styleKeysCheck = {"spine","gem","crescent","waves","sun","zigzag"};
+        String initialStyle = java.util.Arrays.asList(styleKeysCheck).contains(d.previewStyle) ? d.previewStyle : "spine";
+        String initialColor = PREVIEW_COLORS.containsKey(d.previewColor) ? d.previewColor : "grigiochiaro";
+        String[] activeStyle = { initialStyle };
+        String[] selectedColor = { initialColor };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
@@ -2008,6 +2023,19 @@ public class MainActivity extends Activity {
         // sempre correttamente).
         if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
+        // Scorre automaticamente fino alla card attualmente selezionata, se non e' gia' visibile (es. e'
+        // una delle ultime nei 10 colori disponibili). Aspetta il primo layout (post) e usa la posizione
+        // REALE misurata della card scelta — non un calcolo manuale di altezze/margini, che al minimo
+        // disallineamento futuro (es. cambio spaziatura) romperebbe lo scroll con un salto storto.
+        int selIdx = java.util.Arrays.asList(PREVIEW_COLOR_ORDER).indexOf(selectedColor[0]);
+        if (selIdx >= 0) {
+            PreviewSwatchView selSwatch = swatches[selIdx];
+            scroll.post(() -> {
+                View rowOfSwatch = (View) selSwatch.getParent();
+                int targetY = Math.max(0, rowOfSwatch.getTop() - dp(20));
+                scroll.scrollTo(0, targetY);
+            });
+        }
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selectedColor[0]!=null){
@@ -2894,9 +2922,9 @@ public class MainActivity extends Activity {
             txt(c,getString(R.string.label_current_season),24,y+8,12,muted,Paint.Align.LEFT);
             y+=16;
             box(c,18,y,w-18,y+110, Color.rgb(20,44,80));
-            // Bordo arancione distintivo, solo su questa card — era usato in passato nell'app per segnalare
-            // la sessione attiva, lo recupero qui per lo stesso concetto ("questa e' quella su cui giochi").
-            strokeBox(c,18,y,w-18,y+110, Color.rgb(255,138,61));
+            // Bordo crema distintivo, solo su questa card — stesso colore dello stroke del ventaglio nello
+            // screen iniziale, per lo stesso concetto ("questa e' quella su cui giochi").
+            strokeBox(c,18,y,w-18,y+110, Color.argb(170,255,250,235));
             drawKebabIcon(c, w-40, y+22, muted);
             seasonKebabPos.add(new float[]{w-40, y+22, lastIdx});
             txt(c,current.name,34,y+28,18,white,Paint.Align.LEFT);
