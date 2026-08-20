@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.38";
+    static final String APP_VERSION = "v0.4.0";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1529,6 +1529,92 @@ public class MainActivity extends Activity {
         s.matches.add(m);
         store.save(); view.invalidate();
         showMotivationalMessage(win, win?s.streak:s.lossStreak);
+        // Dopo la primissima partita MAI registrata (in qualsiasi Stagione): propone il tracciamento del
+        // deck avversario. Una tantum — non si ripresenta mai piu' dopo questa singola occasione.
+        if (!store.firstMatchTipShown && totalMatchesEverPlayed()==1) {
+            showOpponentDeckTip(m);
+        } else if (store.trackOpponentDeck) {
+            showOpponentDeckPicker(m, false);
+        }
+    }
+
+    // Conta le partite VERE (non le correzioni) su TUTTE le Stagioni: serve solo per riconoscere "questa e'
+    // la primissima partita in assoluto mai registrata nell'app", indipendentemente da quale Stagione.
+    int totalMatchesEverPlayed(){
+        int total=0;
+        for (Season s: store.seasons) for (Match m: s.matches) if (!m.unknown) total++;
+        return total;
+    }
+
+    // Popup "Lo sapevi?", mostrato una tantum dopo la primissima partita mai registrata: spiega che si puo'
+    // tracciare anche il deck avversario. Se accettato, la preferenza si accende E si mostra SUBITO il vero
+    // popup di scelta deck per la partita appena giocata — una dimostrazione dal vivo, non solo a parole, e
+    // recupera anche il dato di quella primissima partita invece di perderlo per sempre.
+    void showOpponentDeckTip(Match m){
+        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_opponent_tip_title))
+            .setMessage(getString(R.string.dialog_opponent_tip_body))
+            .setCancelable(false)
+            .setNegativeButton(getString(R.string.btn_no_thanks), (d,w) -> {
+                store.firstMatchTipShown = true; store.save();
+            })
+            .setPositiveButton(getString(R.string.btn_yes_enable), (d,w) -> {
+                store.trackOpponentDeck = true; store.firstMatchTipShown = true; store.save();
+                showOpponentDeckPicker(m, true);
+            })
+            .show();
+    }
+
+    // Popup di scelta del deck avversario per una specifica partita — sempre facoltativo/saltabile (pulsante
+    // "Salta"), mostrato dopo OGNI partita una volta che store.trackOpponentDeck e' attivo. I nomi gia' usati
+    // in passato appaiono come "chip" toccabili sopra il campo di testo, per non dover ridigitare ogni volta
+    // lo stesso nome di deck avversario incontrato piu' volte.
+    void showOpponentDeckPicker(Match m, boolean showSettingsHint){
+        LinearLayout box = formBox();
+        EditText input = new EditText(this);
+        input.setHint(getString(R.string.hint_opponent_deck));
+        input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED_TXT);
+        if (m.opponentDeck!=null) input.setText(m.opponentDeck);
+        box.addView(input);
+
+        if (!store.knownOpponentDecks.isEmpty()){
+            LinearLayout chipsRow = new LinearLayout(this); chipsRow.setOrientation(LinearLayout.HORIZONTAL);
+            HorizontalScrollView hscroll = new HorizontalScrollView(this);
+            hscroll.addView(chipsRow);
+            LinearLayout.LayoutParams hscrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            hscrollLp.topMargin = dp(10);
+            box.addView(hscroll, hscrollLp);
+            for (String known : store.knownOpponentDecks){
+                TextView chip = new TextView(this); chip.setText(known); chip.setTextColor(MUTED_TXT); chip.setTextSize(13);
+                chip.setPadding(dp(14),dp(6),dp(14),dp(6));
+                GradientDrawable chipBg = new GradientDrawable(); chipBg.setCornerRadius(dp(14)); chipBg.setColor(Color.rgb(24,36,52));
+                chip.setBackground(chipBg);
+                LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                chipLp.rightMargin = dp(8);
+                chipsRow.addView(chip, chipLp);
+                chip.setOnClickListener(v -> input.setText(known));
+            }
+        }
+
+        if (showSettingsHint){
+            TextView hint = new TextView(this); hint.setText(getString(R.string.hint_disable_in_settings)); hint.setTextColor(MUTED_TXT); hint.setTextSize(12);
+            LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            hintLp.topMargin = dp(14);
+            box.addView(hint, hintLp);
+        }
+
+        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_opponent_deck_title))
+            .setView(box)
+            .setCancelable(true)
+            .setNegativeButton(getString(R.string.btn_skip), null)
+            .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
+                String name = input.getText().toString().trim();
+                if (!name.isEmpty()){
+                    m.opponentDeck = name;
+                    if (!store.knownOpponentDecks.contains(name)) store.knownOpponentDecks.add(name);
+                    store.save(); view.invalidate();
+                }
+            })
+            .show();
     }
 
     int reward(int streak) { return streak<=1?10:streak==2?13:streak==3?16:streak==4?19:22; }
@@ -2880,6 +2966,32 @@ public class MainActivity extends Activity {
             c.restore();
         }
 
+        // Helper condiviso tra disegno e gestione del tocco: calcola dove finisce il centro dell'icona
+        // "modifica" di fianco all'etichetta "Punti" (nelle card Gioca e Statistiche), cosi' la zona di
+        // tocco corrisponde sempre esattamente a dove l'icona viene davvero disegnata, qualunque sia la
+        // larghezza dell'etichetta (che varia in base alla lingua).
+        float pointsEditIconCenterX(float c1L, float c1R){
+            p.setTextSize(12);
+            String label = getString(R.string.label_current_points);
+            float labelW = p.measureText(label);
+            float iconSize=15, gap=6;
+            float groupLeft = (c1L+c1R)/2 - (labelW+gap+iconSize)/2;
+            return groupLeft + labelW + gap + iconSize/2;
+        }
+
+        // Interruttore ON/OFF disegnato a mano (pillola + pallino), stile standard.
+        void drawToggleSwitch(Canvas c, float cx, float cy, boolean on){
+            float trackW=44, trackH=24;
+            float l=cx-trackW/2, t=cy-trackH/2, r=cx+trackW/2, b=cy+trackH/2;
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(on?blue:Color.rgb(50,58,70));
+            c.drawRoundRect(l,t,r,b,trackH/2,trackH/2,p);
+            float knobR=trackH/2-3;
+            float knobCx = on? r-trackH/2 : l+trackH/2;
+            p.setColor(Color.WHITE);
+            c.drawCircle(knobCx,cy,knobR,p);
+        }
+
         // Icona "indietro" (chevron sottile, stile standard), disegnata a mano.
         void drawChevronBack(Canvas c, float cx, float cy, float size, int color){
             p.setColor(color); p.setStyle(Paint.Style.STROKE);
@@ -3205,13 +3317,20 @@ public class MainActivity extends Activity {
             txt(c, langIdx>=0?LANGUAGE_LABELS[langIdx]:"English", 34, centeredBaseline(347,18), 18, white, Paint.Align.LEFT);
             drawEditIcon(c, w-40, 347, 18, white);
 
-            box(c,18,390,w-18,438,Color.rgb(30,16,16));
-            strokeBox(c,18,390,w-18,438,red());
-            txt(c,getString(R.string.settings_delete_all_data),w/2,centeredBaseline(414,15),15,red(),Paint.Align.CENTER);
+            // Traccia deck avversario: interruttore ON/OFF, tocco su tutta la riga la commuta subito (nessun
+            // dialog intermedio, e' una preferenza binaria semplice).
+            box(c,18,390,w-18,470,card);
+            txt(c,getString(R.string.settings_track_opponent_deck),34,412,12,muted,Paint.Align.LEFT);
+            txt(c,getString(R.string.settings_track_opponent_deck_desc),34,centeredBaseline(437,13),13,white,Paint.Align.LEFT);
+            drawToggleSwitch(c, w-52, 430, store.trackOpponentDeck);
 
-            txt(c,APP_VERSION,w/2,462,11,muted,Paint.Align.CENTER);
+            box(c,18,484,w-18,532,Color.rgb(30,16,16));
+            strokeBox(c,18,484,w-18,532,red());
+            txt(c,getString(R.string.settings_delete_all_data),w/2,centeredBaseline(508,15),15,red(),Paint.Align.CENTER);
 
-            lastContentBottom = 482;
+            txt(c,APP_VERSION,w/2,556,11,muted,Paint.Align.CENTER);
+
+            lastContentBottom = 576;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
         }
@@ -3252,7 +3371,18 @@ public class MainActivity extends Activity {
             // centrati orizzontalmente, come in tutte le altre card. =====
             float c1L=18, c1R=w/2-6, c2L=w/2+6, c2R=w-18;
             box(c,c1L,58,c1R,138,card);
-            txt(c,getString(R.string.label_current_points),(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
+            // Etichetta "Punti" + icona modifica di fianco (non piu' perfettamente centrata da sola: il
+            // gruppo etichetta+icona e' centrato insieme, cosi' l'insieme resta visivamente equilibrato).
+            // L'icona era prima nella card Partite (visibile solo nel tab Lista) — spostata qui perche' e'
+            // il punto piu' naturale dove qualcuno si aspetterebbe di premerla, ed e' cosi' identica alla
+            // card gemella in Statistiche.
+            p.setTextSize(12);
+            String pointsLabelPlay = getString(R.string.label_current_points);
+            float pointsLabelWPlay = p.measureText(pointsLabelPlay);
+            float editIconSize=15, editIconGap=6;
+            float pointsGroupLeftPlay = (c1L+c1R)/2 - (pointsLabelWPlay+editIconGap+editIconSize)/2;
+            txt(c,pointsLabelPlay, pointsGroupLeftPlay+pointsLabelWPlay/2, 80, 12, muted, Paint.Align.CENTER);
+            drawEditIcon(c, pointsEditIconCenterX(c1L,c1R), 76, editIconSize, muted);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
             txt(c,getString(R.string.label_total_matches),(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER); // riga 1: SEMPRE qui, sia con 2 che con 3 righe — stessa posizione della card gemella getString(R.string.label_current_points)
@@ -3348,16 +3478,12 @@ public class MainActivity extends Activity {
             // demarcazione, confondendosi visivamente col resto della card. Angoli arrotondati solo in alto,
             // dato che tocca il bordo superiore della card stessa.
             boxTopRounded(c,18,listCardTop,w-18,listCardTop+42,18,Color.rgb(21,34,56));
-            // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header, l'icona
-            // "modifica" (per aggiungere una correzione manuale) allineata a destra e visibile solo nel tab
-            // Lista — colore neutro (non blu, per non sembrare un terzo tab che appare/scompare).
+            // Niente piu' scritta "PARTITE": i 2 tab (grafico/lista) sono centrati nell'header. L'icona
+            // "modifica" non vive piu' qui: spostata di fianco all'etichetta "Punti" (nelle card Gioca e
+            // Statistiche) — e' il punto piu' naturale dove qualcuno si aspetterebbe di premerla.
             float tabIconY = listCardTop+21; // vero centro della fascia (42 di altezza): prima era +26, 5 unita' piu' in basso del centro reale
             drawMiniChartTabIcon(c, w/2-23, tabIconY, 28, partiteTab==0?blue:muted);
             drawListTabIcon(c, w/2+23, tabIconY, 28, partiteTab==1?blue:muted);
-            // Allineato al margine destro reale della card (w-18, la stessa convenzione usata da ogni altra
-            // card dell'app), non piu' un offset indovinato a mano che ogni volta finiva storto quando la
-            // dimensione dell'icona cambiava.
-            if(partiteTab==1) drawEditIcon(c, w/2+90, tabIconY, 19, muted); // sempre attiva, correzioni permesse anche a Stagione bloccata
 
             if(partiteTab==0){
                 // Pillole di selezione intervallo, sopra il grafico (1 giorno/3 giorni/tutto — una Stagione
@@ -3575,7 +3701,9 @@ public class MainActivity extends Activity {
                             } else {
                                 txt(c, deckDisplayShort(m.deck), 46,ry+26,15,white,Paint.Align.LEFT);
                             }
-                            txt(c, getString(R.string.label_match_number_time,matchNumber[k],formatTimeOnly(m.timestamp)), 46,ry+48,12,muted,Paint.Align.LEFT);
+                            String matchLine = getString(R.string.label_match_number_time,matchNumber[k],formatTimeOnly(m.timestamp));
+                            if (m.opponentDeck!=null && !m.opponentDeck.isEmpty()) matchLine += " • "+getString(R.string.label_vs)+" "+m.opponentDeck;
+                            txt(c, matchLine, 46,ry+48,12,muted,Paint.Align.LEFT);
                             txt(c, m.win?"W":"L", w-46, ry+26, 15, m.win?green:red, Paint.Align.RIGHT);
                             int gain = m.after-m.before;
                             int gcol = gain>0?green:(gain<0?red:muted);
@@ -3772,7 +3900,13 @@ public class MainActivity extends Activity {
             // Ogni riga ridotta a 80 di altezza (era 100, sproporzionata per una sola riga di contenuto sotto
             // il titolo): stesso schema label(top+22)/contenuto centrato usato nel tab Gioca.
             box(c,c1L,58,c1R,138,card);
-            txt(c,getString(R.string.label_current_points),(c1L+c1R)/2,80,12,muted,Paint.Align.CENTER);
+            p.setTextSize(12);
+            String pointsLabelStats = getString(R.string.label_current_points);
+            float pointsLabelWStats = p.measureText(pointsLabelStats);
+            float editIconSizeStats=15, editIconGapStats=6;
+            float pointsGroupLeftStats = (c1L+c1R)/2 - (pointsLabelWStats+editIconGapStats+editIconSizeStats)/2;
+            txt(c,pointsLabelStats, pointsGroupLeftStats+pointsLabelWStats/2, 80, 12, muted, Paint.Align.CENTER);
+            drawEditIcon(c, pointsEditIconCenterX(c1L,c1R), 76, editIconSizeStats, muted);
             txt(c,""+s.points,(c1L+c1R)/2,centeredBaseline(108,22),22,white,Paint.Align.CENTER);
             box(c,c2L,58,c2R,138,card);
             txt(c,getString(R.string.label_variation_header),(c2L+c2R)/2,80,12,muted,Paint.Align.CENTER);
@@ -3807,7 +3941,43 @@ public class MainActivity extends Activity {
             txt(c,getString(R.string.label_most_played_deck),(c2L+c2R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
 
-            lastContentBottom = 420+20;
+            float sectionBottom = 420;
+
+            // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni)
+            // E almeno un matchup ha un numero sufficiente di partite per essere significativo (min 3) —
+            // altrimenti la sezione non appare affatto, per non mostrare percentuali fuorvianti su 1-2
+            // partite. Ordinati per numero di partite (i piu' giocati prima). =====
+            if (store.trackOpponentDeck) {
+                java.util.LinkedHashMap<String,int[]> matchupWL = new java.util.LinkedHashMap<>();
+                for (Match m: all) {
+                    if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
+                    int[] wlArr = matchupWL.computeIfAbsent(m.opponentDeck, k -> new int[2]);
+                    if (m.win) wlArr[0]++; else wlArr[1]++;
+                }
+                ArrayList<String> qualifying = new ArrayList<>();
+                for (java.util.Map.Entry<String,int[]> en: matchupWL.entrySet()) if (en.getValue()[0]+en.getValue()[1] >= 3) qualifying.add(en.getKey());
+                if (!qualifying.isEmpty()) {
+                    qualifying.sort((a,b) -> (matchupWL.get(b)[0]+matchupWL.get(b)[1]) - (matchupWL.get(a)[0]+matchupWL.get(a)[1]));
+                    float sectionTop = sectionBottom+20;
+                    txt(c,getString(R.string.label_matchups), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
+                    float rowH=48, rowTop=sectionTop+26;
+                    box(c, 18, rowTop, w-18, rowTop+rowH*qualifying.size(), card);
+                    for (int i=0;i<qualifying.size();i++){
+                        String opp = qualifying.get(i);
+                        int[] wlArr = matchupWL.get(opp);
+                        float rowWr = 100f*wlArr[0]/(wlArr[0]+wlArr[1]);
+                        float ry = rowTop + i*rowH;
+                        if (i>0) { p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(18,ry,w-18,ry,p); }
+                        txt(c, opp, 32, ry+rowH/2+5, 14, white, Paint.Align.LEFT);
+                        txtRowRight(c, w-18, ry+rowH/2+5, 13,
+                            new String[]{wlArr[0]+"W  ", wlArr[1]+"L  ", String.format(Locale.US,"%.0f%%",rowWr)},
+                            new int[]{green, red, wrColor(rowWr,wlArr[0]+wlArr[1])});
+                    }
+                    sectionBottom = rowTop + rowH*qualifying.size();
+                }
+            }
+
+            lastContentBottom = sectionBottom+20;
         }
 
         void drawChart(Canvas c,float l,float t,float rr,float b,List<Match> ms,long unusedTimestamp,List<Integer> dayBoundaries){
@@ -4034,7 +4204,8 @@ public class MainActivity extends Activity {
                 if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
                 if(contentY>=158&&contentY<=282){ showCardStylePreferenceDialog(); return true; }
                 if(contentY>=296&&contentY<=376){ showLanguageDialog(); return true; }
-                if(contentY>=390&&contentY<=438){ resetAllData(); return true; }
+                if(contentY>=390&&contentY<=470){ store.trackOpponentDeck = !store.trackOpponentDeck; store.save(); invalidate(); return true; }
+                if(contentY>=484&&contentY<=532){ resetAllData(); return true; }
                 return true;
             }
 
@@ -4068,12 +4239,16 @@ public class MainActivity extends Activity {
                 }
                 if(!locked && contentY>=152&&contentY<=244){ chooseCurrentDeck(); return true; }
                 if(!locked && contentY>=264&&contentY<=328){ if(x<w/2) win(); else loss(); return true; }
+                {
+                    float c1L=18, c1R=w/2-6;
+                    float editIconCx = pointsEditIconCenterX(c1L,c1R);
+                    if(contentY>=58 && contentY<=100 && x>=editIconCx-22 && x<=editIconCx+22){ addManualCorrection(); return true; } // icona modifica di fianco a "Punti"
+                }
                 if(contentY>=342&&contentY<=384){
                     // Zone di tocco allargate (erano 22-32 unita' di larghezza, sotto lo standard consigliato
                     // di ~44dp per un tocco affidabile — spiega perche' a volte serviva ritoccare piu' volte).
                     if(x>=w/2-43 && x<w/2-3){ partiteTab=0; invalidate(); return true; } // icona grafico
                     if(x>=w/2+3 && x<w/2+43){ partiteTab=1; invalidate(); return true; } // icona lista
-                    if(partiteTab==1 && x>=w/2+70 && x<w/2+110){ addManualCorrection(); return true; } // icona modifica (solo tab Lista) — resta attiva anche a Stagione bloccata
                 }
                 if(partiteTab==0 && contentY>=rangePillsTop && contentY<=rangePillsBottom){
                     for(int ri=0; ri<rangePillBounds.size(); ri++){
@@ -4120,6 +4295,12 @@ public class MainActivity extends Activity {
                     float x1=(float)pz[0], y1=(float)pz[1], x2=(float)pz[2], y2=(float)pz[3];
                     if(x>=x1&&x<=x2&&contentY>=y1&&contentY<=y2){ handlePreviewTap((Deck)pz[4]); return true; }
                 }
+            } else if(detailTab==2){
+                // Prima la schermata Statistiche non aveva nessuna gestione del tocco (pura visualizzazione):
+                // ora serve per l'icona "modifica" di fianco a "Punti", identica a quella nel tab Gioca.
+                float c1L=18, c1R=w/2-6;
+                float editIconCx = pointsEditIconCenterX(c1L,c1R);
+                if(contentY>=58 && contentY<=100 && x>=editIconCx-22 && x<=editIconCx+22){ addManualCorrection(); return true; }
             }
             return true;
         }
@@ -4127,14 +4308,17 @@ public class MainActivity extends Activity {
 
     static class Match {
         boolean win,unknown;int before,after,streak;long timestamp;String deck;
+        // Deck dell'avversario (facoltativo, solo se l'utente ha attivato il tracciamento nelle
+        // Impostazioni e ha scelto di comunque compilarlo per questa specifica partita — sempre saltabile).
+        String opponentDeck;
         // Solo per le correzioni (unknown=true): quante vittorie/sconfitte rappresenta il periodo non
         // tracciato — contano SOLO per le statistiche aggregate (W/L/win rate di Stagione), non per lo
         // streak (non sappiamo l'ordine esatto) e non per le statistiche di un deck specifico.
         int correctionWins=0, correctionLosses=0;
         Match(boolean w,int b,int a,int st,String deck){win=w;before=b;after=a;streak=st;timestamp=System.currentTimeMillis();this.deck=deck;}
         static Match correction(int b,int a,String deck){Match m=new Match(a>=b,b,a,0,deck);m.unknown=true;return m;}
-        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);o.put("ts",timestamp);o.put("dk",deck!=null?deck:"Unknown");o.put("cw",correctionWins);o.put("cl",correctionLosses);return o;}
-        static Match from(JSONObject o)throws Exception{Match m=new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0),o.optString("dk","Unknown"));m.unknown=o.optBoolean("u",false);m.timestamp=o.optLong("ts",0);m.correctionWins=o.optInt("cw",0);m.correctionLosses=o.optInt("cl",0);return m;}
+        JSONObject json()throws Exception{JSONObject o=new JSONObject();o.put("w",win);o.put("u",unknown);o.put("b",before);o.put("a",after);o.put("s",streak);o.put("ts",timestamp);o.put("dk",deck!=null?deck:"Unknown");o.put("cw",correctionWins);o.put("cl",correctionLosses);if(opponentDeck!=null)o.put("odk",opponentDeck);return o;}
+        static Match from(JSONObject o)throws Exception{Match m=new Match(o.getBoolean("w"),o.getInt("b"),o.getInt("a"),o.optInt("s",0),o.optString("dk","Unknown"));m.unknown=o.optBoolean("u",false);m.timestamp=o.optLong("ts",0);m.correctionWins=o.optInt("cw",0);m.correctionLosses=o.optInt("cl",0);m.opponentDeck=o.optString("odk",null);return m;}
     }
     static class Deck {
         String name; ArrayList<String> images=new ArrayList<>(); Deck(String n){name=n;}
@@ -4218,16 +4402,27 @@ public class MainActivity extends Activity {
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"crescent"|...)
         String preferredCardFinish="glossy"; // finitura preferita per le anteprime dei nuovi deck ("glossy"|"matte")
+        boolean trackOpponentDeck=false; // preferenza silenziosa: di default spenta per ogni nuovo utente,
+                                          // nessuna domanda nel wizard (vedi discussione: farla nel wizard
+                                          // avrebbe aggiunto attrito prima ancora che l'utente sapesse se
+                                          // l'app gli piace). Si accende dalle Impostazioni, o dal popup
+                                          // "Lo sapevi?" dopo la primissima partita mai registrata.
+        boolean firstMatchTipShown=false; // una tantum: il popup "Lo sapevi?" non deve ripresentarsi mai piu'
+        ArrayList<String> knownOpponentDecks=new ArrayList<>(); // cresce organicamente: ogni nome digitato
+                                                                  // dall'utente per il deck avversario, per
+                                                                  // suggerimenti rapidi (chip) le volte dopo.
         String language="en"; // lingua dell'app: "en" (default) | "it" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);JSONArray koa=new JSONArray();for(String k:knownOpponentDecks)koa.put(k);o.put("knownOpponentDecks",koa);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putBoolean("trackOpponentDeck",trackOpponentDeck).putBoolean("firstMatchTipShown",firstMatchTipShown).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
             preferredCardFinish = pref.getString("preferredCardFinish","glossy");
+            trackOpponentDeck = pref.getBoolean("trackOpponentDeck", false);
+            firstMatchTipShown = pref.getBoolean("firstMatchTipShown", false);
             language = pref.getString("language","en");
-            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
+            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));JSONArray koa=o.optJSONArray("knownOpponentDecks");if(koa!=null)for(int i=0;i<koa.length();i++)knownOpponentDecks.add(koa.getString(i));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
