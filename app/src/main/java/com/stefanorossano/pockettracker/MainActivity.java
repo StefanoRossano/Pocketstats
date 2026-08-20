@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.8";
+    static final String APP_VERSION = "v0.3.12";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -106,12 +106,8 @@ public class MainActivity extends Activity {
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             dialog.dismiss();
-            // Diagnostica temporanea: mostra esattamente cosa vede il codice in questo momento, per capire
-            // se il problema e' nel riconoscere il tocco sulla riga, nel confronto, o in recreate() stesso.
-            Toast.makeText(this,"Selezionato: "+selectedLang[0]+" — attuale salvato: "+store.language,Toast.LENGTH_LONG).show();
             if (!selectedLang[0].equals(store.language)) {
                 store.language = selectedLang[0]; store.save();
-                Toast.makeText(this,"Salvato, sto ricreando l'app...",Toast.LENGTH_SHORT).show();
                 recreate();
             } else {
                 Toast.makeText(this,getString(R.string.msg_no_language_change),Toast.LENGTH_SHORT).show();
@@ -162,10 +158,6 @@ public class MainActivity extends Activity {
             screen = b.getInt("screen", SCREEN_SEASON_LIST);
             if (screen==SCREEN_SEASON_DETAIL && store.seasons.isEmpty()) screen = SCREEN_SEASON_LIST;
         }
-        // Diagnostica temporanea: conferma se il Locale della nuova Activity (dopo recreate()) e' davvero
-        // cambiato, anche se lo "screen" ripristinato dallo stato salvato ti riporta esattamente dove eri
-        // (Impostazioni) — nascondendo visivamente che l'Activity si sia comunque ricreata.
-        Toast.makeText(this,"Locale attuale: "+getResources().getConfiguration().locale+" — store.language: "+store.language,Toast.LENGTH_LONG).show();
     }
 
     @Override protected void onSaveInstanceState(Bundle outState) {
@@ -2543,6 +2535,12 @@ public class MainActivity extends Activity {
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             if (screen == SCREEN_SETTINGS) { settingsScreen(c,w,h); c.restore(); return; }
+            // Rete di sicurezza: se per qualsiasi motivo si finisce qui senza Stagioni valide (es. stato
+            // salvato che punta a una Stagione poi cancellata), si torna alla lista invece di crashare su
+            // un get() fuori range.
+            if (store.seasons.isEmpty() || store.current < 0 || store.current >= store.seasons.size()) {
+                screen = SCREEN_SEASON_LIST; seasonList(c,w,h); c.restore(); return;
+            }
             Season s = store.seasons.get(store.current);
             // SCREEN_SEASON_DETAIL: header e barra tab in basso restano fissi, il contenuto in mezzo scorre.
             detailHeader(c,s,w);
@@ -2581,6 +2579,11 @@ public class MainActivity extends Activity {
             float y=178;
 
             int lastIdx = store.seasons.size()-1; // l'unica giocabile: solo l'ultima creata
+            // Guard indispensabile: al PRIMO avvio assoluto (nessuna Stagione ancora creata) lastIdx vale
+            // -1, e store.seasons.get(-1) faceva crashare l'app appena la View si disegnava sotto il dialog
+            // di onboarding. Con la lista vuota non c'e' nulla da disegnare qui: il wizard di creazione
+            // della prima Stagione e' gia' aperto sopra, e appena la crea questo blocco torna valido.
+            if(lastIdx >= 0){
             Season current = store.seasons.get(lastIdx);
             txt(c,getString(R.string.label_current_season),24,y+8,12,muted,Paint.Align.LEFT);
             y+=16;
@@ -2625,6 +2628,7 @@ public class MainActivity extends Activity {
                     y+=78;
                 }
             }
+            } // chiude il guard "if(lastIdx >= 0)": con nessuna Stagione non si disegna nulla qui
             lastContentBottom = y+20;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
