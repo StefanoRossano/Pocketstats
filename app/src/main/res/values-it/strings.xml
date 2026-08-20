@@ -25,6 +25,9 @@
     <string name="label_matchups">Matchup</string>
     <string name="label_vs">vs</string>
     <string name="label_opponent_deck">Deck avversario</string>
+    <string name="label_your_deck">Il tuo deck</string>
+    <string name="label_worst_matchup_callout">Matchup più difficile: %1$s — %2$d%% di vittorie (%3$d partite)</string>
+    <string name="label_played_against_n_times">Giocato %1$d volte</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
     <string name="action_add_lista">Aggiungi Lista</string>
