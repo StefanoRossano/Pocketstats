@@ -131,7 +131,7 @@
     <string name="btn_lets_start">Let\'s start!</string>
     <string name="welcome_hero_title">Pocket Tracker</string>
     <string name="welcome_hero_tagline">Track your matches. Own your streaks.</string>
-    <string name="hint_tap_anywhere_start">Tap anywhere to start</string>
+    <string name="btn_get_started">Get Started</string>
     <string name="btn_close">Close</string>
     <string name="btn_delete">Delete</string>
     <string name="err_select_or_new_deck">Select an existing deck or type the name of a new one.</string>
