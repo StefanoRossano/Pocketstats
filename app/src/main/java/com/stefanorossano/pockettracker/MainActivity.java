@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.30";
+    static final String APP_VERSION = "v0.3.31";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -372,20 +372,13 @@ public class MainActivity extends Activity {
             strokePaint.setColor(Color.argb(170,255,250,235)); // crema/bianco, semi-trasparente
             strokePaint.setStrokeWidth(dp(1.5f));
             float cr = 8f*cardW/64f; // stesso raggio d'angolo usato dentro drawPresetPreviewCard
-            // Riflesso lucido diagonale: senza questo, l'oro (un semplice colore piatto) sembra un giallo-
-            // bruno opaco invece che un vero metallo dorato. Una banda diagonale chiara, semi-trasparente,
-            // che sfuma ai lati, basta a suggerire una superficie lucida/riflettente.
-            Paint glossPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            LinearGradient gloss = new LinearGradient(-cardW*0.6f, -cardH*0.6f, cardW*0.6f, cardH*0.6f,
-                new int[]{Color.argb(0,255,255,255), Color.argb(120,255,255,255), Color.argb(0,255,255,255)},
-                new float[]{0.32f, 0.50f, 0.68f}, Shader.TileMode.CLAMP);
-            glossPaint.setShader(gloss);
+            // Il riflesso lucido ora e' dentro drawPresetPreviewCard stessa (si applica a ogni card
+            // dell'app, non solo qui): niente piu' bisogno di ridisegnarlo separatamente in questo punto.
             for (int i=0;i<3;i++){
                 c.save();
                 c.translate(w/2f+offX[i], h/2f);
                 c.rotate(rot[i]);
                 drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro");
-                c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, glossPaint);
                 c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, strokePaint);
                 c.restore();
             }
@@ -395,24 +388,30 @@ public class MainActivity extends Activity {
     // Grande grafico di sfondo, a piena larghezza, dietro al ventaglio di card e al resto del contenuto —
     // molto tenue (alpha basso) per non competere visivamente con quello che c'e' sopra, ma visibile a
     // sufficienza da dare l'idea di "taglio" attraverso lo schermo.
+    // Grafico di sfondo condiviso: una linea di andamento sottile e tenue che attraversa tutto lo schermo,
+    // usata come sfondo discreto sia nello screen iniziale (con sopra il ventaglio di card) sia in TUTTE le
+    // altre schermate dell'app (qui invece SENZA nessuna card sopra, solo la linea).
+    void drawBackgroundChartLine(Canvas c, float w, float h){
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(dp(3));
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeJoin(Paint.Join.ROUND);
+        p.setColor(Color.argb(38,90,98,112)); // grigioscuro chiaro, molto tenue
+        float[][] pts = {{0f,0.62f},{0.18f,0.45f},{0.34f,0.55f},{0.50f,0.30f},{0.66f,0.42f},{0.82f,0.18f},{1.0f,0.10f}};
+        Path chart = new Path();
+        for (int i=0;i<pts.length;i++){
+            float px=pts[i][0]*w, py=pts[i][1]*h;
+            if (i==0) chart.moveTo(px,py); else chart.lineTo(px,py);
+        }
+        c.drawPath(chart, p);
+    }
+
     class BackgroundChartView extends View {
         BackgroundChartView(Context c){ super(c); }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
-            float w=getWidth(), h=getHeight();
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(dp(3));
-            p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeJoin(Paint.Join.ROUND);
-            p.setColor(Color.argb(38,90,98,112)); // grigioscuro chiaro, molto tenue
-            float[][] pts = {{0f,0.62f},{0.18f,0.45f},{0.34f,0.55f},{0.50f,0.30f},{0.66f,0.42f},{0.82f,0.18f},{1.0f,0.10f}};
-            Path chart = new Path();
-            for (int i=0;i<pts.length;i++){
-                float px=pts[i][0]*w, py=pts[i][1]*h;
-                if (i==0) chart.moveTo(px,py); else chart.lineTo(px,py);
-            }
-            c.drawPath(chart, p);
+            drawBackgroundChartLine(c, getWidth(), getHeight());
         }
     }
 
@@ -2190,6 +2189,16 @@ public class MainActivity extends Activity {
             case "zigzag": drawPreviewZigzag(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
+        // Riflesso lucido diagonale, su OGNI card (reali in-game, selettori, onboarding): senza questo un
+        // colore piatto non si legge come una superficie lucida. Sfumatura piu' morbida di un primo
+        // tentativo (5 fermate invece di 3, piu' distanziate): quella aveva un bordo troppo netto/visibile.
+        Paint glossPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float gw=r-l, gh=b-t;
+        LinearGradient gloss = new LinearGradient(l-gw*0.1f, t-gh*0.1f, l+gw*1.1f, t+gh*1.1f,
+            new int[]{Color.argb(0,255,255,255), Color.argb(35,255,255,255), Color.argb(80,255,255,255), Color.argb(35,255,255,255), Color.argb(0,255,255,255)},
+            new float[]{0.18f, 0.36f, 0.50f, 0.64f, 0.82f}, Shader.TileMode.CLAMP);
+        glossPaint.setShader(gloss);
+        c.drawRect(l,t,r,b,glossPaint);
         c.restore();
     }
 
@@ -2239,13 +2248,22 @@ public class MainActivity extends Activity {
         if (rainbow) { pp.setShader(rainbowShader(l,t,r,b)); }
         else { pp.setColor(shades[2]); }
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
-        float w=r-l, h=b-t, cx=(l+r)/2, cy=(t+b)/2;
+        float w=r-l, h=b-t, cy=(t+b)/2;
         float radius = Math.min(w,h)*0.30f;
-        pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[0]);
-        c.drawCircle(cx, cy, radius, pp);
+        // Il disco (e il morso) sono spostati verso destra rispetto al centro esatto della card: la falce
+        // visibile (disco meno morso) e' la parte SINISTRA del disco, quindi senza questo spostamento
+        // risultava decentrata a sinistra. Spostando entrambi verso destra, la falce visibile finisce
+        // centrata nella card.
+        float discCx = (l+r)/2 + radius*0.28f;
+        // Bianco PIENO (non semi-trasparente) anche in modalita' arcobaleno: con l'alpha usato prima, lo
+        // sfondo arcobaleno trasparva attraverso l'intero disco (non solo nel morso), creando un cerchio
+        // "fantasma" visibile oltre alla vera sagoma a falce. Pieno, il disco nasconde completamente lo
+        // sfondo dov'e' disco, e solo il morso (ridisegnato con lo stesso shader) rivela l'arcobaleno.
+        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        c.drawCircle(discCx, cy, radius, pp);
         // Il morso: ridisegna lo sfondo (stesso shader/colore) dentro il secondo cerchio, rivelandolo con
         // precisione — cosi' la sagoma risultante e' una vera falce, non un semplice cerchio scurito.
-        float biteX = cx + radius*0.55f, biteY = cy - radius*0.20f, biteR = radius;
+        float biteX = discCx + radius*0.55f, biteY = cy - radius*0.20f, biteR = radius;
         if (rainbow) { pp.setShader(rainbowShader(l,t,r,b)); c.drawCircle(biteX, biteY, biteR, pp); pp.setShader(null); }
         else { pp.setColor(shades[2]); c.drawCircle(biteX, biteY, biteR, pp); }
     }
@@ -2820,6 +2838,7 @@ public class MainActivity extends Activity {
             c.translate(getPaddingLeft()/density, getPaddingTop()/density);
             float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
+            drawBackgroundChartLine(c, w, h);
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             if (screen == SCREEN_SETTINGS) { settingsScreen(c,w,h); c.restore(); return; }
             // Rete di sicurezza: se per qualsiasi motivo si finisce qui senza Stagioni valide (es. stato
