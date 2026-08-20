@@ -26,6 +26,7 @@
     <string name="label_vs">vs</string>
     <string name="label_opponent_deck">Deck avversario</string>
     <string name="label_your_deck">Il tuo deck</string>
+    <string name="action_rename_opponent_deck">Rinomina deck avversario</string>
     <string name="label_worst_matchup_callout">Matchup più difficile: %1$s — %2$d%% di vittorie (%3$d partite)</string>
     <string name="label_played_against_n_times">Giocato %1$d volte</string>
 
