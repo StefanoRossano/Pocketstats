@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.35";
+    static final String APP_VERSION = "v0.3.38";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -381,7 +381,7 @@ public class MainActivity extends Activity {
                 c.save();
                 c.translate(w/2f+offX[i], h/2f);
                 c.rotate(rot[i]);
-                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro", true);
+                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro", false); // matte, non piu' glossy
                 c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, strokePaint);
                 c.restore();
             }
@@ -442,7 +442,7 @@ public class MainActivity extends Activity {
         }
         void startGlowAnimation(){
             android.animation.ValueAnimator anim = android.animation.ValueAnimator.ofFloat(0f, 1f);
-            anim.setDuration(600);
+            anim.setDuration(750);
             anim.addUpdateListener(a -> { glowProgress = (float)a.getAnimatedValue(); invalidate(); });
             anim.start();
         }
@@ -505,7 +505,10 @@ public class MainActivity extends Activity {
         }
         dialog.show();
 
-        outer.postDelayed(bgChart::startGlowAnimation, 300);
+        // Sequenza temporizzata, leggermente piu' rilassata di un primo tentativo (300ms/600ms/1200ms):
+        // per un'app di score-tracking aperta piu' volte al giorno un'attesa lunga stancherebbe, ma visto
+        // che ora e' puramente automatica (nessun tocco richiesto) un margine in piu' regge bene.
+        outer.postDelayed(bgChart::startGlowAnimation, 400);
         outer.postDelayed(() -> {
             android.animation.ObjectAnimator fade = android.animation.ObjectAnimator.ofFloat(outer, "alpha", 1f, 0f);
             fade.setDuration(300);
@@ -523,7 +526,7 @@ public class MainActivity extends Activity {
                 }
             });
             fade.start();
-        }, 1200);
+        }, 1500);
     }
 
     // Primo step del wizard (solo primissimo avvio): titolo + sottotitolo + pulsante, prima vivevano nello
@@ -3070,7 +3073,6 @@ public class MainActivity extends Activity {
             c.translate(getPaddingLeft()/density, getPaddingTop()/density);
             float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
-            drawBackgroundChartLine(c, w, h);
             if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
             if (screen == SCREEN_SETTINGS) { settingsScreen(c,w,h); c.restore(); return; }
             // Rete di sicurezza: se per qualsiasi motivo si finisce qui senza Stagioni valide (es. stato
