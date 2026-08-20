@@ -27,6 +27,10 @@
     <string name="label_opponent_deck">Deck avversario</string>
     <string name="label_your_deck">Il tuo deck</string>
     <string name="action_rename_opponent_deck">Rinomina deck avversario</string>
+    <string name="action_delete_opponent_deck">Elimina deck avversario</string>
+    <string name="confirm_delete_opponent_deck_msg">Eliminare definitivamente questo deck avversario?</string>
+    <string name="confirm_delete_opponent_deck_used_singular">Questo deck avversario è usato in %1$d partita (questa Stagione). Eliminandolo verrà rimosso da quella partita.</string>
+    <string name="confirm_delete_opponent_deck_used_plural">Questo deck avversario è usato in %1$d partite (questa Stagione). Eliminandolo verrà rimosso da quelle partite.</string>
     <string name="label_worst_matchup_callout">Matchup più difficile: %1$s — %2$d%% di vittorie (%3$d partite)</string>
     <string name="label_played_against_n_times">Giocato %1$d volte</string>
 
