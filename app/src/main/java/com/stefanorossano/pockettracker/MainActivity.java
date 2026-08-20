@@ -22,7 +22,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.12";
+    static final String APP_VERSION = "v0.3.18";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -406,7 +406,7 @@ public class MainActivity extends Activity {
     void confirmTrainerName(String name){
         if (name.isEmpty()) {
             store.trainerName = ""; store.onboardingDone = true; store.save();
-            showWelcomeGuide();
+            showOnboardingCardStyleDialog();
             return;
         }
         new AlertDialog.Builder(this).setTitle(getString(R.string.btn_confirm))
@@ -414,20 +414,183 @@ public class MainActivity extends Activity {
             .setCancelable(false)
             .setPositiveButton(getString(R.string.btn_yes), (d,w) -> {
                 store.trainerName = name; store.onboardingDone = true; store.save();
-                showWelcomeGuide();
+                showOnboardingCardStyleDialog();
             })
             .setNegativeButton(getString(R.string.btn_no), (d,w) -> askTrainerName())
             .show();
     }
 
+    // Nuovo step del wizard, tra la conferma del nome e la guida di benvenuto: primissima impressione
+    // dell'app, deve sembrare curata. Le anteprime usano il colore ARCOBALENO (non il grigio della stessa
+    // scelta rifatta poi nelle Impostazioni) apposta per un effetto piu' "premium" al primissimo avvio. Non
+    // annullabile (come il resto dell'onboarding): sempre possibile cambiare stile dopo, dalle Impostazioni.
+    void showOnboardingCardStyleDialog(){
+        String[] selectedStyle = { store.preferredCardStyle };
+
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_onboarding_style_title)); title.setTextColor(Color.WHITE); title.setTextSize(19); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(18); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18); titleLp.bottomMargin=dp(4);
+        root.addView(title, titleLp);
+
+        TextView subtitle = new TextView(this); subtitle.setText(getString(R.string.dialog_onboarding_style_subtitle)); subtitle.setTextColor(MUTED_TXT); subtitle.setTextSize(13);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.leftMargin=dp(18); subLp.rightMargin=dp(18); subLp.bottomMargin=dp(4);
+        root.addView(subtitle, subLp);
+
+        // Ciclo colore per l'anteprima (non per lo stile selezionato, che resta indipendente): stessi chevron
+        // cerchiati gia' usati per navigare tra le Liste (stesso Bitmap, stesso sfondo circolare).
+        String[] colorCycle = {"arcobaleno","verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro"};
+        int[] colorLabelRes = {R.string.color_rainbow,R.string.color_green,R.string.color_red,R.string.color_blue,R.string.color_yellow,R.string.color_purple,R.string.color_brown,R.string.color_dark_gray,R.string.color_gold,R.string.color_light_gray};
+        int[] colorIdx = {0};
+
+        LinearLayout colorRow = new LinearLayout(this); colorRow.setOrientation(LinearLayout.HORIZONTAL); colorRow.setGravity(Gravity.CENTER_VERTICAL);
+        int arrowIconPx = dp(14);
+        ImageView prevColorBtn = new ImageView(this);
+        prevColorBtn.setImageBitmap(makeChevronIcon(Color.WHITE, arrowIconPx, false));
+        prevColorBtn.setScaleType(ImageView.ScaleType.CENTER);
+        GradientDrawable prevColorBg = new GradientDrawable(); prevColorBg.setShape(GradientDrawable.OVAL); prevColorBg.setColor(Color.rgb(24,36,52));
+        prevColorBtn.setBackground(prevColorBg);
+        LinearLayout.LayoutParams prevColorLp = new LinearLayout.LayoutParams(dp(30), dp(30));
+        colorRow.addView(prevColorBtn, prevColorLp);
+
+        TextView colorLabel = new TextView(this); colorLabel.setText(getString(colorLabelRes[0])); colorLabel.setTextColor(Color.WHITE); colorLabel.setTextSize(13); colorLabel.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams colorLabelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        colorRow.addView(colorLabel, colorLabelLp);
+
+        ImageView nextColorBtn = new ImageView(this);
+        nextColorBtn.setImageBitmap(makeChevronIcon(Color.WHITE, arrowIconPx, true));
+        nextColorBtn.setScaleType(ImageView.ScaleType.CENTER);
+        GradientDrawable nextColorBg = new GradientDrawable(); nextColorBg.setShape(GradientDrawable.OVAL); nextColorBg.setColor(Color.rgb(24,36,52));
+        nextColorBtn.setBackground(nextColorBg);
+        LinearLayout.LayoutParams nextColorLp = new LinearLayout.LayoutParams(dp(30), dp(30));
+        colorRow.addView(nextColorBtn, nextColorLp);
+
+        LinearLayout.LayoutParams colorRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        colorRowLp.leftMargin=dp(18); colorRowLp.rightMargin=dp(18); colorRowLp.topMargin=dp(6);
+        root.addView(colorRow, colorRowLp);
+
+        String[] styleKeys = {"spine","gem","mountains","waves","sun","orbit"};
+        PreviewSwatchView[] swatches = new PreviewSwatchView[6];
+        LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout gridRow = null;
+        for (int i=0;i<6;i++){
+            if (i%3==0){
+                gridRow = new LinearLayout(this); gridRow.setOrientation(LinearLayout.HORIZONTAL); gridRow.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams gridRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                gridRowLp.topMargin = i==0?dp(10):dp(12);
+                grid.addView(gridRow, gridRowLp);
+            }
+            PreviewSwatchView sw = new PreviewSwatchView(this, styleKeys[i], colorCycle[colorIdx[0]]);
+            sw.selected = styleKeys[i].equals(selectedStyle[0]);
+            swatches[i]=sw;
+            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(dp(84), dp(105));
+            swLp.leftMargin=dp(8); swLp.rightMargin=dp(8);
+            gridRow.addView(sw, swLp);
+            final String sk = styleKeys[i];
+            sw.setOnClickListener(v -> { selectedStyle[0]=sk; for(PreviewSwatchView s: swatches) s.selected=s.style.equals(sk); for(PreviewSwatchView s: swatches) s.invalidate(); });
+        }
+        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        gridLp.bottomMargin=dp(18);
+        root.addView(grid, gridLp);
+
+        // I chevron cambiano solo il COLORE mostrato in anteprima su tutte le 6 card contemporaneamente:
+        // lo stile selezionato (selectedStyle[0]/sw.selected) resta invariato, e' del tutto indipendente.
+        Runnable applyColor = () -> {
+            String ck = colorCycle[colorIdx[0]];
+            colorLabel.setText(getString(colorLabelRes[colorIdx[0]]));
+            for (PreviewSwatchView s: swatches) { s.colorKey = ck; s.invalidate(); }
+        };
+        prevColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]-1+colorCycle.length)%colorCycle.length; applyColor.run(); });
+        nextColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]+1)%colorCycle.length; applyColor.run(); });
+
+        TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_continue)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(15); confirmBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        confirmBtn.setGravity(Gravity.CENTER); confirmBtn.setPadding(0,dp(6),0,dp(6));
+        LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        confirmLp.leftMargin=dp(18); confirmLp.rightMargin=dp(18); confirmLp.bottomMargin=dp(14);
+        root.addView(confirmBtn, confirmLp);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(false);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        confirmBtn.setOnClickListener(v -> {
+            store.preferredCardStyle = selectedStyle[0];
+            store.save();
+            dialog.dismiss();
+            showWelcomeGuide();
+        });
+    }
+
+    // Guida di benvenuto ridisegnata: righe distinte (accento colorato + titolo in grassetto + descrizione
+    // breve) invece di un unico paragrafo lungo — molto piu' scorrevole su schermo piccolo di un "muro di
+    // testo".
     void showWelcomeGuide(){
         String title = store.trainerName.isEmpty() ? getString(R.string.dialog_welcome_title) : getString(R.string.dialog_welcome_title_named,store.trainerName);
-        String guide = getString(R.string.dialog_welcome_guide, getString(R.string.action_add_correction));
-        new AlertDialog.Builder(this).setTitle(title)
-            .setMessage(guide)
-            .setCancelable(false)
-            .setPositiveButton(getString(R.string.btn_lets_start), (d,w) -> { if (store.seasons.isEmpty()) wizardStep1(true, null); })
-            .show();
+
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView titleView = new TextView(this); titleView.setText(title); titleView.setTextColor(Color.WHITE); titleView.setTextSize(19); titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(18); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18); titleLp.bottomMargin=dp(8);
+        root.addView(titleView, titleLp);
+
+        String[][] rows = {
+            {getString(R.string.guide_row1_title), getString(R.string.guide_row1_desc)},
+            {getString(R.string.guide_row2_title), getString(R.string.guide_row2_desc)},
+            {getString(R.string.guide_row3_title), getString(R.string.guide_row3_desc)},
+            {getString(R.string.guide_row4_title), getString(R.string.guide_row4_desc, getString(R.string.action_add_correction))},
+        };
+        for (String[] row : rows) {
+            LinearLayout rowLayout = new LinearLayout(this); rowLayout.setOrientation(LinearLayout.HORIZONTAL);
+            View accent = new View(this);
+            GradientDrawable accentBg = new GradientDrawable(); accentBg.setColor(blueColor()); accentBg.setCornerRadius(dp(2));
+            accent.setBackground(accentBg);
+            LinearLayout.LayoutParams accentLp = new LinearLayout.LayoutParams(dp(4), LinearLayout.LayoutParams.MATCH_PARENT);
+            accentLp.rightMargin=dp(12); accentLp.topMargin=dp(2); accentLp.bottomMargin=dp(2);
+            rowLayout.addView(accent, accentLp);
+
+            LinearLayout textCol = new LinearLayout(this); textCol.setOrientation(LinearLayout.VERTICAL);
+            TextView rowTitle = new TextView(this); rowTitle.setText(row[0]); rowTitle.setTextColor(Color.WHITE); rowTitle.setTextSize(15); rowTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            TextView rowDesc = new TextView(this); rowDesc.setText(row[1]); rowDesc.setTextColor(MUTED_TXT); rowDesc.setTextSize(13);
+            LinearLayout.LayoutParams rowDescLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rowDescLp.topMargin=dp(2);
+            textCol.addView(rowTitle);
+            textCol.addView(rowDesc, rowDescLp);
+            rowLayout.addView(textCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rowLp.leftMargin=dp(18); rowLp.rightMargin=dp(18); rowLp.topMargin=dp(12);
+            root.addView(rowLayout, rowLp);
+        }
+
+        TextView footerLine = new TextView(this); footerLine.setText(getString(R.string.dialog_welcome_footer)); footerLine.setTextColor(MUTED_TXT); footerLine.setTextSize(13); footerLine.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        footerLp.topMargin=dp(18); footerLp.leftMargin=dp(18); footerLp.rightMargin=dp(18);
+        root.addView(footerLine, footerLp);
+
+        TextView startBtn = new TextView(this); startBtn.setText(getString(R.string.btn_lets_start)); startBtn.setTextColor(blueColor()); startBtn.setTextSize(15); startBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        startBtn.setGravity(Gravity.CENTER); startBtn.setPadding(0,dp(6),0,dp(6));
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        startLp.topMargin=dp(14); startLp.bottomMargin=dp(14); startLp.leftMargin=dp(18); startLp.rightMargin=dp(18);
+        root.addView(startBtn, startLp);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(false);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        startBtn.setOnClickListener(v -> { dialog.dismiss(); if (store.seasons.isEmpty()) wizardStep1(true, null); });
     }
 
     void wizardStep1(boolean first, String prefillName){
@@ -918,6 +1081,14 @@ public class MainActivity extends Activity {
                 cardView.setOnClickListener(v -> { selected[0]=d; rebuildList[0].run(); });
                 kebabHotspot.setOnClickListener(v -> showDeckRowMenu(s, d, kebabHotspot, refreshFromSource[0]));
             }
+            // Altezza della lista adattiva: 0 se non ci sono deck (nessuno spazio vuoto sprecato), altrimenti
+            // proporzionale al numero di deck effettivamente mostrati (dopo un eventuale filtro di ricerca),
+            // con un tetto massimo uguale all'altezza fissa di prima (400dp) — oltre quel numero di deck si
+            // scorre, come faceva gia'.
+            int rowHeightPx = dp(95)+dp(10);
+            int wantedHeight = filtered.size()*rowHeightPx;
+            scrollLp.height = Math.min(wantedHeight, dp(400));
+            scroll.setLayoutParams(scrollLp);
         };
         rebuildList[0].run();
 
@@ -1602,7 +1773,7 @@ public class MainActivity extends Activity {
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.bottomMargin=dp(4);
         root.addView(title, titleLp);
 
-        String[] styleKeys = {"spine","gem","mountains","waves","sun","bolt"};
+        String[] styleKeys = {"spine","gem","mountains","waves","sun","orbit"};
         PreviewSwatchView[] swatches = new PreviewSwatchView[6];
         LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout gridRow = null;
@@ -1666,7 +1837,7 @@ public class MainActivity extends Activity {
         LinearLayout tabs = new LinearLayout(this); tabs.setOrientation(LinearLayout.VERTICAL);
         tabs.setPadding(dp(14),dp(14),dp(14),dp(10));
         TextView[] tabViews = new TextView[6];
-        String[] styleKeys = {"spine","gem","mountains","waves","sun","bolt"};
+        String[] styleKeys = {"spine","gem","mountains","waves","sun","orbit"};
         String[] styleLabels = {getString(R.string.style_1),getString(R.string.style_2),getString(R.string.style_3),getString(R.string.style_4),getString(R.string.style_5),getString(R.string.style_6)};
         Runnable[] refreshTabs = new Runnable[1];
         LinearLayout tabRow = null;
@@ -1907,7 +2078,7 @@ public class MainActivity extends Activity {
             case "mountains": drawPreviewMountains(c, pp, l,t,r,b, shades, rainbow); break;
             case "waves": drawPreviewWaves(c, pp, l,t,r,b, shades, rainbow); break;
             case "sun": drawPreviewSun(c, pp, l,t,r,b, shades, rainbow); break;
-            case "bolt": drawPreviewBolt(c, pp, l,t,r,b, shades, rainbow); break;
+            case "orbit": drawPreviewOrbit(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
         c.restore();
@@ -1956,25 +2127,28 @@ public class MainActivity extends Activity {
         else { pp.setColor(shades[2]); }
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
         float w=r-l, h=b-t;
-        // Montagna grande, dietro, a destra (disegnata prima, cosi' resta sullo sfondo)
-        float[][] bigPts = {{0.30f,1.0f},{0.42f,0.35f},{0.50f,0.45f},{0.58f,0.20f},{0.66f,0.42f},{0.74f,0.28f},{0.82f,0.48f},{1.0f,1.0f}};
+        // Montagna grande, dietro, a destra (disegnata prima, cosi' resta sullo sfondo) — profilo morbido a
+        // curve (cubicTo), non piu' a segmenti retti: cresta arrotondata con un piccolo rigonfiamento vicino
+        // alla cima, non spigoli netti a zigzag (che sembravano denti, non montagne).
         Path big = new Path();
-        for (int i=0;i<bigPts.length;i++){
-            float px=l+bigPts[i][0]*w, py=t+bigPts[i][1]*h;
-            if (i==0) big.moveTo(px,py); else big.lineTo(px,py);
-        }
+        big.moveTo(l+w*0.25f, b);
+        big.cubicTo(l+w*0.35f,t+h*0.55f, l+w*0.45f,t+h*0.30f, l+w*0.60f,t+h*0.16f);
+        big.cubicTo(l+w*0.63f,t+h*0.13f, l+w*0.66f,t+h*0.13f, l+w*0.68f,t+h*0.17f);
+        big.cubicTo(l+w*0.75f,t+h*0.35f, l+w*0.88f,t+h*0.65f, r, b);
         big.close();
         pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[1]);
         c.drawPath(big, pp);
-        // Montagna piccola, in primo piano, a sinistra (disegnata dopo, cosi' sovrasta la grande)
-        float[][] smallPts = {{0.0f,1.0f},{0.10f,0.62f},{0.16f,0.70f},{0.22f,0.50f},{0.30f,0.68f},{0.38f,0.58f},{0.46f,1.0f}};
+        // Montagna piccola, in primo piano, a sinistra (disegnata dopo, cosi' sovrasta la grande) — stessa
+        // morbidezza: una spalla arrotondata prima della cima, poi una cima anch'essa arrotondata (non a
+        // punta), come nello schizzo di riferimento.
         Path small = new Path();
-        for (int i=0;i<smallPts.length;i++){
-            float px=l+smallPts[i][0]*w, py=t+smallPts[i][1]*h;
-            if (i==0) small.moveTo(px,py); else small.lineTo(px,py);
-        }
+        small.moveTo(l, b);
+        small.cubicTo(l+w*0.05f,t+h*0.85f, l+w*0.10f,t+h*0.78f, l+w*0.16f,t+h*0.72f);
+        small.cubicTo(l+w*0.20f,t+h*0.68f, l+w*0.22f,t+h*0.60f, l+w*0.26f,t+h*0.50f);
+        small.cubicTo(l+w*0.30f,t+h*0.44f, l+w*0.34f,t+h*0.44f, l+w*0.38f,t+h*0.52f);
+        small.cubicTo(l+w*0.42f,t+h*0.62f, l+w*0.46f,t+h*0.80f, l+w*0.50f, b);
         small.close();
-        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[0]);
         c.drawPath(small, pp);
     }
 
@@ -2013,7 +2187,7 @@ public class MainActivity extends Activity {
         c.drawRect(l,t,r,b,pp); pp.setShader(null);
         float cx=(l+r)/2, w=r-l, h=b-t;
         float horizonY = t+h*0.62f, sunR = w*0.26f;
-        pp.setColor(rainbow ? Color.WHITE : shades[0]);
+        pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[0]);
         c.drawCircle(cx, horizonY, sunR, pp);
         // "Terreno" sotto l'orizzonte: copre davvero la meta' inferiore del sole e dello sfondo, non solo
         // una riga sopra — questo e' quello che prima mancava per un vero effetto alba/tramonto.
@@ -2025,22 +2199,24 @@ public class MainActivity extends Activity {
 
     // Stile 6 "Bolt": un fulmine stilizzato, silhouette a zigzag — energico e minimal, ben diverso da
     // tutti gli altri stili (nessuna curva, nessun angolo retto, nessun cerchio).
-    void drawPreviewBolt(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
+    // Stile 6 "Orbit" (proposta al posto di "Bolt", che non convinceva): un anello con un piccolo satellite
+    // lungo la sua circonferenza — silhouette pulita, si legge bene anche in scala di grigi (nel selettore
+    // stili), ben diversa da tutte le altre (nessun'altra ha una forma "cava").
+    void drawPreviewOrbit(Canvas c, Paint pp, float l, float t, float r, float b, int[] shades, boolean rainbow){
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) { pp.setShader(new SweepGradient((l+r)/2,(t+b)/2, RAINBOW_HUES, null)); c.drawRect(l,t,r,b,pp); pp.setShader(null); }
         else { pp.setColor(shades[2]); c.drawRect(l,t,r,b,pp); }
-        float w=r-l, h=b-t;
-        float[][] pts = {{0.62f,0.02f},{0.26f,0.54f},{0.46f,0.54f},{0.34f,0.98f},{0.74f,0.42f},{0.54f,0.42f},{0.70f,0.02f}};
-        Path bolt = new Path();
-        for (int i=0;i<pts.length;i++){
-            float px=l+pts[i][0]*w, py=t+pts[i][1]*h;
-            if (i==0) bolt.moveTo(px,py); else bolt.lineTo(px,py);
-        }
-        bolt.close();
-        pp.setColor(rainbow ? Color.WHITE : shades[0]);
-        c.drawPath(bolt, pp);
-        pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.argb(100,255,255,255)); pp.setStrokeWidth(Math.max(1f, 1f*(r-l)/64f));
-        c.drawPath(bolt, pp);
+        float cx=(l+r)/2, cy=(t+b)/2, side=Math.min(r-l,b-t);
+        float ringR = side*0.30f, strokeW = side*0.11f;
+        pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(strokeW); pp.setStrokeCap(Paint.Cap.ROUND);
+        pp.setColor(rainbow ? Color.argb(150,255,255,255) : shades[0]);
+        c.drawCircle(cx, cy, ringR, pp);
+        // Piccolo satellite lungo l'anello, in alto a destra: da' un senso di movimento/orbita.
+        float satAngle = (float)Math.toRadians(-50);
+        float satX = cx + ringR*(float)Math.cos(satAngle), satY = cy + ringR*(float)Math.sin(satAngle);
+        pp.setStyle(Paint.Style.FILL);
+        pp.setColor(rainbow ? Color.WHITE : shades[1]);
+        c.drawCircle(satX, satY, side*0.09f, pp);
     }
 
     // Visualizzatore in stile galleria: header in alto (chiudi/titolo/aggiungi), frecce di navigazione come
@@ -2743,8 +2919,11 @@ public class MainActivity extends Activity {
             Deck curDeckObjForMenu = noDeck ? null : findDeck(s, s.currentDeck);
             if(noDeck){
                 box(c,18,152,w-18,244,Color.rgb(10,18,30));
-                txt(c,getString(R.string.label_no_deck_selected),34,178,17,muted,Paint.Align.LEFT);
-                txt(c,getString(R.string.hint_tap_select_deck),34,198,12,muted,Paint.Align.LEFT);
+                float thumbW=64, thumbH=80, thumbX=28, thumbY=152+6;
+                drawDeckPreview(c, null, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH); // null -> anteprima arcobaleno di default
+                float textX = thumbX+thumbW+14;
+                txt(c,getString(R.string.label_no_deck_selected),textX,178,17,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.hint_tap_select_deck),textX,198,12,muted,Paint.Align.LEFT);
                 currentDeckKebabX=-1000; currentDeckKebabY=-1000; // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
             } else {
                 int[] curWl = deckWL(s, s.currentDeck);
@@ -3598,7 +3777,7 @@ public class MainActivity extends Activity {
         // Anteprima preimpostata (stile+colore, disegnata direttamente sul canvas — nessuna immagine
         // personalizzata: quella possibilita' e' stata rimossa, causava troppi problemi). Default per ogni
         // nuovo deck: stile "spine", colore "grigiochiaro".
-        String previewStyle="spine";   // "spine" | "gem" | "mountains" | "waves" | "sun" | "bolt"
+        String previewStyle="spine";   // "spine" | "gem" | "mountains" | "waves" | "sun" | "orbit"
         String previewColor="grigiochiaro";
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
