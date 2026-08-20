@@ -28,6 +28,7 @@
     <string name="label_vs">vs</string>
     <string name="label_opponent_deck">Opponent\'s deck</string>
     <string name="label_your_deck">Your deck</string>
+    <string name="action_rename_opponent_deck">Rename opponent\'s deck</string>
     <string name="label_worst_matchup_callout">Toughest matchup: %1$s — %2$d%% win rate (%3$d games)</string>
     <string name="label_played_against_n_times">Played %1$d times</string>
 
