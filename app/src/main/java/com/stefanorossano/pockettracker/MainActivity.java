@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.4.0";
+    static final String APP_VERSION = "v0.4.3";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1221,6 +1221,14 @@ public class MainActivity extends Activity {
     // "Nuovo Deck", Annulla/Conferma; cambia solo il titolo, la selezione di partenza e cosa fare col deck
     // scelto (parametrizzato con onConfirm).
     void showDeckSelectorDialog(Season s, String headerText, Deck initialSelection, java.util.function.Consumer<Deck> onConfirm) {
+        showDeckSelectorDialog(s, headerText, initialSelection, null, onConfirm);
+    }
+
+    // matchForOpponentEdit (facoltativo): quando non nullo, inietta sotto il titolo anche una sezione per
+    // modificare/impostare il deck AVVERSARIO di quella specifica partita — stesso dialog, un solo
+    // salvataggio complessivo. Cosi' un errore di battitura sul deck avversario (o la scelta iniziale di
+    // saltarlo) si puo' sempre correggere a posteriori, nello stesso posto in cui si corregge il proprio.
+    void showDeckSelectorDialog(Season s, String headerText, Deck initialSelection, Match matchForOpponentEdit, java.util.function.Consumer<Deck> onConfirm) {
         Deck[] selected = { initialSelection };
         ArrayList<Deck> allDecks = view.sortedDecks(s);
         ArrayList<Deck> filtered = new ArrayList<>(allDecks);
@@ -1239,6 +1247,48 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
+
+        // Sezione deck avversario (solo se richiesta): stesso identico meccanismo del popup dedicato
+        // (campo testo + chip di suggerimento), ma qui vive dentro questo stesso dialog invece che in uno
+        // separato — un solo salvataggio complessivo alla conferma.
+        EditText opponentInput = null;
+        if (matchForOpponentEdit != null) {
+            TextView oppLabel = new TextView(this); oppLabel.setText(getString(R.string.label_opponent_deck)); oppLabel.setTextColor(MUTED_TXT); oppLabel.setTextSize(12);
+            LinearLayout.LayoutParams oppLabelLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            oppLabelLp.topMargin=dp(14); oppLabelLp.leftMargin=dp(18); oppLabelLp.rightMargin=dp(18);
+            root.addView(oppLabel, oppLabelLp);
+
+            opponentInput = new EditText(this);
+            opponentInput.setHint(getString(R.string.hint_opponent_deck));
+            opponentInput.setTextColor(Color.WHITE); opponentInput.setHintTextColor(MUTED_TXT);
+            if (matchForOpponentEdit.opponentDeck!=null) opponentInput.setText(matchForOpponentEdit.opponentDeck);
+            LinearLayout.LayoutParams oppInputLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            oppInputLp.leftMargin=dp(18); oppInputLp.rightMargin=dp(18); oppInputLp.topMargin=dp(4);
+            root.addView(opponentInput, oppInputLp);
+
+            java.util.LinkedHashSet<String> oppSuggestions = new java.util.LinkedHashSet<>(store.knownOpponentDecks);
+            for (Deck d: s.decks) oppSuggestions.add(d.name);
+            if (!oppSuggestions.isEmpty()){
+                final EditText oppInputFinal = opponentInput;
+                LinearLayout oppChipsRow = new LinearLayout(this); oppChipsRow.setOrientation(LinearLayout.HORIZONTAL);
+                HorizontalScrollView oppHscroll = new HorizontalScrollView(this);
+                oppHscroll.addView(oppChipsRow);
+                LinearLayout.LayoutParams oppHscrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                oppHscrollLp.topMargin = dp(8); oppHscrollLp.leftMargin=dp(18); oppHscrollLp.rightMargin=dp(18);
+                root.addView(oppHscroll, oppHscrollLp);
+                for (String known : oppSuggestions){
+                    TextView chip = new TextView(this); chip.setText(known); chip.setTextColor(MUTED_TXT); chip.setTextSize(13);
+                    chip.setPadding(dp(14),dp(6),dp(14),dp(6));
+                    GradientDrawable chipBg = new GradientDrawable(); chipBg.setCornerRadius(dp(14)); chipBg.setColor(Color.rgb(24,36,52));
+                    chip.setBackground(chipBg);
+                    LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    chipLp.rightMargin = dp(8);
+                    oppChipsRow.addView(chip, chipLp);
+                    chip.setOnClickListener(v -> oppInputFinal.setText(known));
+                }
+            }
+        }
+        final EditText opponentInputFinal = opponentInput;
 
         // Barra di ricerca (lente che si espande in un campo di testo con "X" per azzerare) — resta in alto.
         LinearLayout searchBar = new LinearLayout(this); searchBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -1410,13 +1460,25 @@ public class MainActivity extends Activity {
             // getString(R.string.btn_confirm)) e chiude anche questo dialog, invece di lasciarlo aperto con la nuova card
             // evidenziata in attesa di un'ulteriore conferma.
             onConfirm.accept(newDeck);
+            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputFinal);
             dialog.dismiss();
         }));
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selected[0]!=null) onConfirm.accept(selected[0]);
+            saveOpponentDeckEdit(matchForOpponentEdit, opponentInputFinal);
             dialog.dismiss();
         });
+    }
+
+    // Salva (o cancella, se lasciato vuoto) il deck avversario per la partita in modifica, se questo dialog
+    // e' stato aperto in modalita' "modifica anche l'avversario" (matchForOpponentEdit non nullo).
+    void saveOpponentDeckEdit(Match matchForOpponentEdit, EditText opponentInputFinal){
+        if (matchForOpponentEdit==null) return;
+        String name = opponentInputFinal.getText().toString().trim();
+        matchForOpponentEdit.opponentDeck = name.isEmpty() ? null : name;
+        if (!name.isEmpty() && !store.knownOpponentDecks.contains(name)) store.knownOpponentDecks.add(name);
+        store.save(); view.invalidate();
     }
 
     void chooseCurrentDeck() {
@@ -1431,7 +1493,7 @@ public class MainActivity extends Activity {
     void changeMatchDeck(Match m) {
         Season s = store.seasons.get(store.current);
         int num = matchNumberOf(s, m);
-        showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_for_match,num), findDeck(s, m.deck), chosen -> {
+        showDeckSelectorDialog(s, getString(R.string.dialog_select_deck_for_match,num), findDeck(s, m.deck), m, chosen -> {
             m.deck = chosen.name; store.save(); view.invalidate();
         });
     }
@@ -1529,21 +1591,17 @@ public class MainActivity extends Activity {
         s.matches.add(m);
         store.save(); view.invalidate();
         showMotivationalMessage(win, win?s.streak:s.lossStreak);
-        // Dopo la primissima partita MAI registrata (in qualsiasi Stagione): propone il tracciamento del
-        // deck avversario. Una tantum — non si ripresenta mai piu' dopo questa singola occasione.
-        if (!store.firstMatchTipShown && totalMatchesEverPlayed()==1) {
+        // Dopo la partita MAI mostrato-prima: propone il tracciamento del deck avversario. Una tantum — non
+        // si ripresenta mai piu' dopo questa singola occasione. IMPORTANTE: niente piu' controllo "solo se e'
+        // la primissima partita in assoluto" — chi aveva gia' uno storico di partite prima di questo
+        // aggiornamento non avrebbe mai visto il popup (il conteggio totale sarebbe sempre stato >1). Ora
+        // scatta semplicemente alla prossima partita loggata da chiunque non l'abbia ancora visto, nuovo
+        // utente o gia' esistente che sia.
+        if (!store.firstMatchTipShown) {
             showOpponentDeckTip(m);
         } else if (store.trackOpponentDeck) {
             showOpponentDeckPicker(m, false);
         }
-    }
-
-    // Conta le partite VERE (non le correzioni) su TUTTE le Stagioni: serve solo per riconoscere "questa e'
-    // la primissima partita in assoluto mai registrata nell'app", indipendentemente da quale Stagione.
-    int totalMatchesEverPlayed(){
-        int total=0;
-        for (Season s: store.seasons) for (Match m: s.matches) if (!m.unknown) total++;
-        return total;
     }
 
     // Popup "Lo sapevi?", mostrato una tantum dopo la primissima partita mai registrata: spiega che si puo'
@@ -1576,14 +1634,21 @@ public class MainActivity extends Activity {
         if (m.opponentDeck!=null) input.setText(m.opponentDeck);
         box.addView(input);
 
-        if (!store.knownOpponentDecks.isEmpty()){
+        // Suggerimenti: sia i nomi avversari gia' visti in passato, sia i nomi dei TUOI deck (su tutte le
+        // Stagioni) — se lo giochi tu, e' plausibile incontrarlo prima o poi anche come avversario. Un
+        // LinkedHashSet toglie i duplicati mantenendo l'ordine di inserimento (prima gli avversari gia'
+        // visti, piu' rilevanti perche' gia' incontrati, poi i tuoi nomi).
+        java.util.LinkedHashSet<String> suggestions = new java.util.LinkedHashSet<>(store.knownOpponentDecks);
+        for (Season sn: store.seasons) for (Deck d: sn.decks) suggestions.add(d.name);
+
+        if (!suggestions.isEmpty()){
             LinearLayout chipsRow = new LinearLayout(this); chipsRow.setOrientation(LinearLayout.HORIZONTAL);
             HorizontalScrollView hscroll = new HorizontalScrollView(this);
             hscroll.addView(chipsRow);
             LinearLayout.LayoutParams hscrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             hscrollLp.topMargin = dp(10);
             box.addView(hscroll, hscrollLp);
-            for (String known : store.knownOpponentDecks){
+            for (String known : suggestions){
                 TextView chip = new TextView(this); chip.setText(known); chip.setTextColor(MUTED_TXT); chip.setTextSize(13);
                 chip.setPadding(dp(14),dp(6),dp(14),dp(6));
                 GradientDrawable chipBg = new GradientDrawable(); chipBg.setCornerRadius(dp(14)); chipBg.setColor(Color.rgb(24,36,52));
@@ -1938,6 +2003,10 @@ public class MainActivity extends Activity {
         Deck pendingDeck = new Deck("");
         pendingDeck.previewStyle = store.preferredCardStyle; // parte dallo stile preferito, non sempre "spine"
         pendingDeck.previewFinish = store.preferredCardFinish; // idem per la finitura, non sempre "glossy"
+        // true solo se l'utente ha esplicitamente confermato una scelta in "Scegli anteprima" per QUESTO
+        // deck: da quel momento in poi la digitazione del nome non sovrascrive piu' la sua scelta manuale
+        // con un'eventuale corrispondenza nella memoria di aspetto (rispetta l'intento esplicito).
+        boolean[] styleManuallyChosen = {false};
 
         DeckPreviewThumbView thumb = new DeckPreviewThumbView(this, pendingDeck);
         FrameLayout.LayoutParams thumbLp = new FrameLayout.LayoutParams(dp(64), dp(80));
@@ -1945,12 +2014,29 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams thumbBoxLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         thumbBoxLp.gravity = Gravity.CENTER_HORIZONTAL; thumbBoxLp.bottomMargin = dp(14);
         box.addView(thumbFrame, thumbBoxLp);
-        thumb.setOnClickListener(v -> showPreviewPicker(pendingDeck, thumb::invalidate));
+        thumb.setOnClickListener(v -> showPreviewPicker(pendingDeck, () -> { styleManuallyChosen[0]=true; thumb.invalidate(); }));
 
         // Tolta l'etichetta getString(R.string.hint_deck_name) sopra il campo: il titolo del dialog e' gia' "Nuovo Deck" e il campo
         // ha comunque il placeholder getString(R.string.hint_deck_name) — prima la scritta compariva 3 volte, troppa ripetizione.
         EditText e=field(getString(R.string.hint_deck_name)); box.addView(e);
         applyMaxLength(box, e, 20);
+        // Memoria di aspetto: se il nome digitato corrisponde a un deck gia' usato in passato (in
+        // qualunque Stagione) e l'utente non ha nel frattempo scelto manualmente uno stile per QUESTO
+        // deck, l'anteprima si aggiorna da sola con l'aspetto ricordato — cosi' non serve ridisegnare da
+        // zero un deck che hai gia' definito prima.
+        e.addTextChangedListener(new android.text.TextWatcher(){
+            @Override public void beforeTextChanged(CharSequence cs,int a,int b,int c){}
+            @Override public void onTextChanged(CharSequence cs,int a,int b,int c){}
+            @Override public void afterTextChanged(android.text.Editable ed){
+                if (styleManuallyChosen[0]) return;
+                String typed = ed.toString().trim();
+                String[] remembered = store.deckAppearanceMemory.get(typed);
+                if (remembered!=null){
+                    pendingDeck.previewStyle=remembered[0]; pendingDeck.previewColor=remembered[1]; pendingDeck.previewFinish=remembered[2];
+                    thumb.invalidate();
+                }
+            }
+        });
         Button img=new Button(this); img.setText(getString(R.string.action_add_lista_optional)); styleSecondaryButton(img);
         // Margine e larghezza piena come negli altri dialog (prima il pulsante era attaccato al campo sopra,
         // senza respiro, e piu' stretto del contenuto — risultava piu' "povero" rispetto al dialog Nuova Sessione.
@@ -1964,8 +2050,12 @@ public class MainActivity extends Activity {
             String n=e.getText().toString().trim();
             if (n.isEmpty() || deckNameTaken(s, n)) return false;
             Deck deck=new Deck(n);
-            // Trasferisce sul Deck vero l'anteprima scelta sul Deck "in sospeso".
-            deck.previewStyle = pendingDeck.previewStyle; deck.previewColor = pendingDeck.previewColor;
+            // Trasferisce sul Deck vero l'anteprima scelta sul Deck "in sospeso" (finitura inclusa: prima
+            // mancava, un deck nuovo perdeva sempre la finitura scelta e tornava a "glossy" di default).
+            deck.previewStyle = pendingDeck.previewStyle; deck.previewColor = pendingDeck.previewColor; deck.previewFinish = pendingDeck.previewFinish;
+            // Aggiorna la memoria di aspetto per questo nome, cosi' la prossima volta (anche in un'altra
+            // Stagione) l'aspetto si ricorda da solo.
+            store.deckAppearanceMemory.put(n, new String[]{deck.previewStyle, deck.previewColor, deck.previewFinish});
             if(pendingImage!=null){
                 Uri imgUri = pendingImage; pendingImage=null;
                 deck.images.add(imgUri.toString());
@@ -2331,6 +2421,10 @@ public class MainActivity extends Activity {
         confirmBtn.setOnClickListener(v -> {
             if (selectedColor[0]!=null){
                 d.previewStyle = activeStyle[0]; d.previewColor = selectedColor[0]; d.previewFinish = selectedFinish[0];
+                // Aggiorna la memoria di aspetto solo se il deck ha gia' un nome vero (il Deck "in sospeso"
+                // di addDeck() e' ancora senza nome a questo punto — quel caso aggiorna la memoria da solo,
+                // con il nome definitivo, al momento del salvataggio del nuovo deck).
+                if (!d.name.isEmpty()) store.deckAppearanceMemory.put(d.name, new String[]{d.previewStyle, d.previewColor, d.previewFinish});
                 store.save(); if (view!=null) view.invalidate();
                 if (onChanged!=null) onChanged.run();
             }
@@ -2979,6 +3073,26 @@ public class MainActivity extends Activity {
             return groupLeft + labelW + gap + iconSize/2;
         }
 
+        // Semplice a-capo manuale (greedy word-wrap): usato quando un testo potrebbe sborare oltre la
+        // larghezza disponibile (es. accanto a un interruttore) — restituisce le righe gia' spezzate.
+        String[] wrapTextLines(String text, float maxWidth, float textSize){
+            p.setTextSize(textSize);
+            String[] words = text.split(" ");
+            ArrayList<String> lines = new ArrayList<>();
+            StringBuilder cur = new StringBuilder();
+            for (String word: words){
+                String tentative = cur.length()==0 ? word : cur+" "+word;
+                if (p.measureText(tentative) > maxWidth && cur.length()>0){
+                    lines.add(cur.toString());
+                    cur = new StringBuilder(word);
+                } else {
+                    cur = new StringBuilder(tentative);
+                }
+            }
+            if (cur.length()>0) lines.add(cur.toString());
+            return lines.toArray(new String[0]);
+        }
+
         // Interruttore ON/OFF disegnato a mano (pillola + pallino), stile standard.
         void drawToggleSwitch(Canvas c, float cx, float cy, boolean on){
             float trackW=44, trackH=24;
@@ -3318,19 +3432,25 @@ public class MainActivity extends Activity {
             drawEditIcon(c, w-40, 347, 18, white);
 
             // Traccia deck avversario: interruttore ON/OFF, tocco su tutta la riga la commuta subito (nessun
-            // dialog intermedio, e' una preferenza binaria semplice).
-            box(c,18,390,w-18,470,card);
+            // dialog intermedio, e' una preferenza binaria semplice). Descrizione con a-capo manuale: prima
+            // sborava oltre l'interruttore su una singola riga troppo lunga.
+            box(c,18,390,w-18,486,card);
             txt(c,getString(R.string.settings_track_opponent_deck),34,412,12,muted,Paint.Align.LEFT);
-            txt(c,getString(R.string.settings_track_opponent_deck_desc),34,centeredBaseline(437,13),13,white,Paint.Align.LEFT);
-            drawToggleSwitch(c, w-52, 430, store.trackOpponentDeck);
+            float toggleCx = w-52, toggleHalfTrack=22;
+            float descMaxWidth = (toggleCx-toggleHalfTrack-10) - 34;
+            String[] descLines = wrapTextLines(getString(R.string.settings_track_opponent_deck_desc), descMaxWidth, 13);
+            for (int li=0; li<descLines.length; li++){
+                txt(c, descLines[li], 34, centeredBaseline(432+li*17,13), 13, white, Paint.Align.LEFT);
+            }
+            drawToggleSwitch(c, toggleCx, 438, store.trackOpponentDeck);
 
-            box(c,18,484,w-18,532,Color.rgb(30,16,16));
-            strokeBox(c,18,484,w-18,532,red());
-            txt(c,getString(R.string.settings_delete_all_data),w/2,centeredBaseline(508,15),15,red(),Paint.Align.CENTER);
+            box(c,18,500,w-18,548,Color.rgb(30,16,16));
+            strokeBox(c,18,500,w-18,548,red());
+            txt(c,getString(R.string.settings_delete_all_data),w/2,centeredBaseline(524,15),15,red(),Paint.Align.CENTER);
 
-            txt(c,APP_VERSION,w/2,556,11,muted,Paint.Align.CENTER);
+            txt(c,APP_VERSION,w/2,572,11,muted,Paint.Align.CENTER);
 
-            lastContentBottom = 576;
+            lastContentBottom = 592;
             c.restore();
             finishScroll(); drawScrollbar(c,w);
         }
@@ -4204,8 +4324,8 @@ public class MainActivity extends Activity {
                 if(contentY>=64&&contentY<=144){ editTrainerNameDialog(); return true; }
                 if(contentY>=158&&contentY<=282){ showCardStylePreferenceDialog(); return true; }
                 if(contentY>=296&&contentY<=376){ showLanguageDialog(); return true; }
-                if(contentY>=390&&contentY<=470){ store.trackOpponentDeck = !store.trackOpponentDeck; store.save(); invalidate(); return true; }
-                if(contentY>=484&&contentY<=532){ resetAllData(); return true; }
+                if(contentY>=390&&contentY<=486){ store.trackOpponentDeck = !store.trackOpponentDeck; store.save(); invalidate(); return true; }
+                if(contentY>=500&&contentY<=548){ resetAllData(); return true; }
                 return true;
             }
 
@@ -4411,9 +4531,15 @@ public class MainActivity extends Activity {
         ArrayList<String> knownOpponentDecks=new ArrayList<>(); // cresce organicamente: ogni nome digitato
                                                                   // dall'utente per il deck avversario, per
                                                                   // suggerimenti rapidi (chip) le volte dopo.
+        // Memoria di aspetto per i TUOI deck: nome -> {stile,colore,finitura}, persistente tra Stagioni.
+        // Un deck e' due cose diverse: la sua IDENTITA' (nome+aspetto, che ha senso non sparisca mai) e le
+        // sue STATISTICHE (che giustamente si azzerano a ogni Stagione, un meta diverso). Season.decks
+        // resta intoccato (solo statistiche, per Stagione) — questa mappa serve solo a NON dover ridisegnare
+        // l'aspetto da zero quando ricrei un deck con un nome gia' usato in passato.
+        java.util.LinkedHashMap<String,String[]> deckAppearanceMemory=new java.util.LinkedHashMap<>();
         String language="en"; // lingua dell'app: "en" (default) | "it" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);JSONArray koa=new JSONArray();for(String k:knownOpponentDecks)koa.put(k);o.put("knownOpponentDecks",koa);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putBoolean("trackOpponentDeck",trackOpponentDeck).putBoolean("firstMatchTipShown",firstMatchTipShown).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);JSONArray koa=new JSONArray();for(String k:knownOpponentDecks)koa.put(k);o.put("knownOpponentDecks",koa);JSONObject dam=new JSONObject();for(java.util.Map.Entry<String,String[]> en:deckAppearanceMemory.entrySet()){JSONArray triple=new JSONArray();triple.put(en.getValue()[0]);triple.put(en.getValue()[1]);triple.put(en.getValue()[2]);dam.put(en.getKey(),triple);}o.put("deckAppearanceMemory",dam);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putBoolean("trackOpponentDeck",trackOpponentDeck).putBoolean("firstMatchTipShown",firstMatchTipShown).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
@@ -4422,7 +4548,7 @@ public class MainActivity extends Activity {
             trackOpponentDeck = pref.getBoolean("trackOpponentDeck", false);
             firstMatchTipShown = pref.getBoolean("firstMatchTipShown", false);
             language = pref.getString("language","en");
-            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));JSONArray koa=o.optJSONArray("knownOpponentDecks");if(koa!=null)for(int i=0;i<koa.length();i++)knownOpponentDecks.add(koa.getString(i));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
+            try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));JSONArray koa=o.optJSONArray("knownOpponentDecks");if(koa!=null)for(int i=0;i<koa.length();i++)knownOpponentDecks.add(koa.getString(i));JSONObject dam=o.optJSONObject("deckAppearanceMemory");if(dam!=null){java.util.Iterator<String> keys=dam.keys();while(keys.hasNext()){String k=keys.next();JSONArray triple=dam.getJSONArray(k);deckAppearanceMemory.put(k,new String[]{triple.getString(0),triple.getString(1),triple.getString(2)});}}boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
         void save_if(boolean changed){ if(changed) save(); }
         // Migrazione: pulisce i timestamp "fallback" rimasti da PRIMA della correzione (partite caricate
