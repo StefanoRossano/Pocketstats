@@ -154,6 +154,8 @@
     <string name="dialog_onboarding_style_title">Qual è il tuo stile?</string>
     <string name="dialog_onboarding_style_title_named">Qual è il tuo stile, %1$s?</string>
     <string name="btn_continue">Continua</string>
+    <string name="finish_glossy">Lucido</string>
+    <string name="finish_matte">Opaco</string>
     <string name="guide_row1_title">Stagioni</string>
     <string name="guide_row1_desc">Crea una Stagione per iniziare a tracciare i tuoi punteggi.</string>
     <string name="guide_row2_title">Deck e partite</string>
