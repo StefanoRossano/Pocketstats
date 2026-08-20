@@ -26,6 +26,7 @@
     <string name="hint_disable_in_settings">You can turn this off anytime in Settings.</string>
     <string name="label_matchups">Matchups</string>
     <string name="label_vs">vs</string>
+    <string name="label_opponent_deck">Opponent\'s deck</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
     <string name="action_add_lista">Add List</string>
