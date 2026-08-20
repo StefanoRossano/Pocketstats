@@ -12,6 +12,18 @@
     <string name="settings_preferred_style">STILE PREFERITO CARD</string>
     <string name="settings_language">LINGUA</string>
     <string name="settings_delete_all_data">Cancella tutti i dati</string>
+    <string name="settings_track_opponent_deck">Traccia il deck avversario</string>
+    <string name="settings_track_opponent_deck_desc">Scopri i tuoi win rate per matchup nella tab Statistiche.</string>
+    <string name="dialog_opponent_tip_title">Lo sapevi?</string>
+    <string name="dialog_opponent_tip_body">Puoi anche tracciare il deck dell\'avversario, per scoprire contro chi vinci di più (e contro chi soffri).</string>
+    <string name="btn_no_thanks">No, grazie</string>
+    <string name="btn_yes_enable">Sì, attivalo</string>
+    <string name="dialog_opponent_deck_title">Contro che deck hai giocato?</string>
+    <string name="hint_opponent_deck">Nome del deck avversario</string>
+    <string name="btn_skip">Salta</string>
+    <string name="hint_disable_in_settings">Puoi disattivarlo in qualsiasi momento dalle Impostazioni.</string>
+    <string name="label_matchups">Matchup</string>
+    <string name="label_vs">vs</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
     <string name="action_add_lista">Aggiungi Lista</string>
