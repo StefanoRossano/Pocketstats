@@ -129,6 +129,9 @@
     <string name="btn_next">Next</string>
     <string name="btn_back">Back</string>
     <string name="btn_lets_start">Let\'s start!</string>
+    <string name="welcome_hero_title">Pocket Tracker</string>
+    <string name="welcome_hero_tagline">Track your matches. Own your streaks.</string>
+    <string name="hint_tap_anywhere_start">Tap anywhere to start</string>
     <string name="btn_close">Close</string>
     <string name="btn_delete">Delete</string>
     <string name="err_select_or_new_deck">Select an existing deck or type the name of a new one.</string>
@@ -150,8 +153,8 @@
     <string name="confirm_undo_match_msg">You recorded %1$s. It\'ll be permanently deleted. If that was a mistake, just record %1$s again.</string>
     <string name="dialog_welcome_title">Welcome to Pocket Tracker!</string>
     <string name="dialog_welcome_title_named">Welcome to Pocket Tracker, %1$s!</string>
-    <string name="dialog_onboarding_style_title">Make it yours</string>
-    <string name="dialog_onboarding_style_subtitle">Choose your preferred card style — you can always change it later in Settings.</string>
+    <string name="dialog_onboarding_style_title">What\'s your style?</string>
+    <string name="dialog_onboarding_style_title_named">What\'s your style, %1$s?</string>
     <string name="btn_continue">Continue</string>
     <string name="guide_row1_title">Seasons</string>
     <string name="guide_row1_desc">Create a Season to start tracking your scores.</string>
