@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.4.8";
+    static final String APP_VERSION = "v0.4.9";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -4231,12 +4231,12 @@ public class MainActivity extends Activity {
                         if (expanded) {
                             java.util.LinkedHashMap<String,int[]> breakdown = myDeckBreakdownVsOpponent(s, opp);
                             for (java.util.Map.Entry<String,int[]> en: breakdown.entrySet()){
-                                int[] wl = en.getValue();
-                                int total = wl[0]+wl[1];
-                                float wr = total>0 ? 100f*wl[0]/total : 0;
+                                int[] subWl = en.getValue();
+                                int subTotal = subWl[0]+subWl[1];
+                                float subWr = subTotal>0 ? 100f*subWl[0]/subTotal : 0;
                                 txt(c, en.getKey(), 48, ry+subRowH/2+4, 12, muted, Paint.Align.LEFT);
                                 txtRowRight(c, w-32, ry+subRowH/2+4, 11,
-                                    new String[]{wl[0]+"W  ", wl[1]+"L  ", String.format(Locale.US,"%.0f%%",wr)},
+                                    new String[]{subWl[0]+"W  ", subWl[1]+"L  ", String.format(Locale.US,"%.0f%%",subWr)},
                                     new int[]{green, red, muted});
                                 ry += subRowH;
                             }
