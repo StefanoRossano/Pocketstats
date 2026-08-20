@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.24";
+    static final String APP_VERSION = "v0.3.25";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -2151,7 +2151,7 @@ public class MainActivity extends Activity {
         float spineW = (r-l)*0.26f;
         pp.setStyle(Paint.Style.FILL);
         if (rainbow) {
-            pp.setShader(new SweepGradient((l+r)/2, (t+b)/2, RAINBOW_HUES, null));
+            pp.setShader(rainbowShader(l,t,r,b));
             c.drawRect(l,t,r,b,pp);
             pp.setShader(null);
             pp.setColor(Color.argb(110,10,14,20)); // dorso: overlay scuro sulla fascia sinistra
