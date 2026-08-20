@@ -156,6 +156,8 @@
     <string name="dialog_onboarding_style_title">What\'s your style?</string>
     <string name="dialog_onboarding_style_title_named">What\'s your style, %1$s?</string>
     <string name="btn_continue">Continue</string>
+    <string name="finish_glossy">Glossy</string>
+    <string name="finish_matte">Matte</string>
     <string name="guide_row1_title">Seasons</string>
     <string name="guide_row1_desc">Create a Season to start tracking your scores.</string>
     <string name="guide_row2_title">Decks and matches</string>
