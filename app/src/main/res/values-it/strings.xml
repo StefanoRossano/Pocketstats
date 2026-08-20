@@ -129,7 +129,7 @@
     <string name="btn_lets_start">Iniziamo!</string>
     <string name="welcome_hero_title">Pocket Tracker</string>
     <string name="welcome_hero_tagline">Traccia le tue partite. Conquista le tue serie di vittorie.</string>
-    <string name="hint_tap_anywhere_start">Tocca ovunque per iniziare</string>
+    <string name="btn_get_started">Iniziamo</string>
     <string name="btn_close">Chiudi</string>
     <string name="btn_delete">Elimina</string>
     <string name="err_select_or_new_deck">Seleziona un deck esistente o scrivi il nome di uno nuovo.</string>
