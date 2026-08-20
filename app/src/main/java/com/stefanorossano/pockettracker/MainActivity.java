@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.32";
+    static final String APP_VERSION = "v0.3.34";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -378,7 +378,7 @@ public class MainActivity extends Activity {
                 c.save();
                 c.translate(w/2f+offX[i], h/2f);
                 c.rotate(rot[i]);
-                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro");
+                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro", true);
                 c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, strokePaint);
                 c.restore();
             }
@@ -596,6 +596,39 @@ public class MainActivity extends Activity {
         prevColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]-1+colorCycle.length)%colorCycle.length; applyColor.run(); });
         nextColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]+1)%colorCycle.length; applyColor.run(); });
 
+        // Selettore Matte/Glossy, sotto le card: vale per QUALSIASI stile scelto, non e' legato a uno
+        // stile specifico.
+        String[] selectedFinish = { "matte".equals(store.preferredCardFinish) ? "matte" : "glossy" };
+        LinearLayout finishRow = new LinearLayout(this); finishRow.setOrientation(LinearLayout.HORIZONTAL); finishRow.setGravity(Gravity.CENTER);
+        String[] finishOptions = {"glossy","matte"};
+        String[] finishLabels = {getString(R.string.finish_glossy), getString(R.string.finish_matte)};
+        TextView[] finishPills = new TextView[2];
+        for (int i=0;i<2;i++){
+            TextView pill = new TextView(this); pill.setText(finishLabels[i]); pill.setTextSize(13); pill.setGravity(Gravity.CENTER);
+            pill.setPadding(dp(20),dp(8),dp(20),dp(8));
+            LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            plp.leftMargin = i==0?0:dp(10);
+            finishRow.addView(pill, plp);
+            finishPills[i]=pill;
+        }
+        LinearLayout.LayoutParams finishRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        finishRowLp.bottomMargin = dp(14);
+        root.addView(finishRow, finishRowLp);
+        Runnable[] refreshFinish = new Runnable[1];
+        refreshFinish[0] = () -> {
+            for (int i=0;i<2;i++){
+                boolean active = finishOptions[i].equals(selectedFinish[0]);
+                finishPills[i].setTextColor(active?Color.WHITE:MUTED_TXT);
+                GradientDrawable pbg = new GradientDrawable(); pbg.setCornerRadius(dp(16));
+                pbg.setColor(active?blueColor():Color.rgb(24,36,52));
+                finishPills[i].setBackground(pbg);
+            }
+            boolean glossy = !"matte".equals(selectedFinish[0]);
+            for (PreviewSwatchView s: swatches) { s.glossy = glossy; s.invalidate(); }
+        };
+        refreshFinish[0].run();
+        for (int i=0;i<2;i++){ final String fo=finishOptions[i]; finishPills[i].setOnClickListener(v -> { selectedFinish[0]=fo; refreshFinish[0].run(); }); }
+
         TextView confirmBtn = new TextView(this); confirmBtn.setText(getString(R.string.btn_continue)); confirmBtn.setTextColor(blueColor()); confirmBtn.setTextSize(15); confirmBtn.setTypeface(Typeface.DEFAULT_BOLD);
         confirmBtn.setGravity(Gravity.CENTER); confirmBtn.setPadding(0,dp(6),0,dp(6));
         LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -611,6 +644,7 @@ public class MainActivity extends Activity {
 
         confirmBtn.setOnClickListener(v -> {
             store.preferredCardStyle = selectedStyle[0];
+            store.preferredCardFinish = selectedFinish[0];
             store.save();
             dialog.dismiss();
             showWelcomeGuide();
@@ -1720,6 +1754,7 @@ public class MainActivity extends Activity {
         // nell'anteprima finche' il salvataggio non lo trasferisce sul Deck vero.
         Deck pendingDeck = new Deck("");
         pendingDeck.previewStyle = store.preferredCardStyle; // parte dallo stile preferito, non sempre "spine"
+        pendingDeck.previewFinish = store.preferredCardFinish; // idem per la finitura, non sempre "glossy"
 
         DeckPreviewThumbView thumb = new DeckPreviewThumbView(this, pendingDeck);
         FrameLayout.LayoutParams thumbLp = new FrameLayout.LayoutParams(dp(64), dp(80));
@@ -1831,12 +1866,12 @@ public class MainActivity extends Activity {
     // Cella della griglia nel dialog getString(R.string.action_choose_preview): disegna una card preimpostata (stile+colore
     // correnti) e, se selezionata, il bordo arancione — stesso arancione usato per la card Stagione attuale.
     class PreviewSwatchView extends View {
-        String style; String colorKey; boolean selected=false;
+        String style; String colorKey; boolean selected=false; boolean glossy=true;
         PreviewSwatchView(Context c, String style, String colorKey){ super(c); this.style=style; this.colorKey=colorKey; }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
             float pad = dp(4);
-            drawPresetPreviewCard(c, pad, pad, getWidth()-pad, getHeight()-pad, style, colorKey);
+            drawPresetPreviewCard(c, pad, pad, getWidth()-pad, getHeight()-pad, style, colorKey, glossy);
             if (selected) {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3));
@@ -1860,6 +1895,7 @@ public class MainActivity extends Activity {
     // punto di partenza per l'anteprima di ogni nuovo deck creato.
     void showCardStylePreferenceDialog(){
         String[] selectedStyle = { store.preferredCardStyle };
+        String[] selectedFinish = { "matte".equals(store.preferredCardFinish) ? "matte" : "glossy" };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
@@ -1894,6 +1930,38 @@ public class MainActivity extends Activity {
         rowLp.topMargin=dp(10); rowLp.bottomMargin=dp(14);
         root.addView(grid, rowLp);
 
+        // Selettore Matte/Glossy, sotto le card: vale per QUALSIASI stile scelto, non e' legato a uno
+        // stile specifico.
+        LinearLayout finishRow = new LinearLayout(this); finishRow.setOrientation(LinearLayout.HORIZONTAL); finishRow.setGravity(Gravity.CENTER);
+        String[] finishOptions = {"glossy","matte"};
+        String[] finishLabels = {getString(R.string.finish_glossy), getString(R.string.finish_matte)};
+        TextView[] finishPills = new TextView[2];
+        for (int i=0;i<2;i++){
+            TextView pill = new TextView(this); pill.setText(finishLabels[i]); pill.setTextSize(13); pill.setGravity(Gravity.CENTER);
+            pill.setPadding(dp(20),dp(8),dp(20),dp(8));
+            LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            plp.leftMargin = i==0?0:dp(10);
+            finishRow.addView(pill, plp);
+            finishPills[i]=pill;
+        }
+        LinearLayout.LayoutParams finishRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        finishRowLp.bottomMargin = dp(14);
+        root.addView(finishRow, finishRowLp);
+        Runnable[] refreshFinish = new Runnable[1];
+        refreshFinish[0] = () -> {
+            for (int i=0;i<2;i++){
+                boolean active = finishOptions[i].equals(selectedFinish[0]);
+                finishPills[i].setTextColor(active?Color.WHITE:MUTED_TXT);
+                GradientDrawable pbg = new GradientDrawable(); pbg.setCornerRadius(dp(16));
+                pbg.setColor(active?blueColor():Color.rgb(24,36,52));
+                finishPills[i].setBackground(pbg);
+            }
+            boolean glossy = !"matte".equals(selectedFinish[0]);
+            for (PreviewSwatchView s: swatches) { s.glossy = glossy; s.invalidate(); }
+        };
+        refreshFinish[0].run();
+        for (int i=0;i<2;i++){ final String fo=finishOptions[i]; finishPills[i].setOnClickListener(v -> { selectedFinish[0]=fo; refreshFinish[0].run(); }); }
+
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
         TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
@@ -1912,6 +1980,7 @@ public class MainActivity extends Activity {
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             store.preferredCardStyle = selectedStyle[0];
+            store.preferredCardFinish = selectedFinish[0];
             store.save(); view.invalidate();
             dialog.dismiss();
         });
@@ -1929,9 +1998,11 @@ public class MainActivity extends Activity {
         // selezionata all'apertura. Si ricade sullo stesso default usato altrove ("spine"/"grigiochiaro").
         String[] styleKeysCheck = {"spine","gem","crescent","waves","sun","zigzag"};
         String initialStyle = java.util.Arrays.asList(styleKeysCheck).contains(d.previewStyle) ? d.previewStyle : "spine";
-        String initialColor = PREVIEW_COLORS.containsKey(d.previewColor) ? d.previewColor : "grigiochiaro";
+        String initialColor = ("arcobaleno".equals(d.previewColor) || PREVIEW_COLORS.containsKey(d.previewColor)) ? d.previewColor : "grigiochiaro";
+        String initialFinish = "matte".equals(d.previewFinish) ? "matte" : "glossy";
         String[] activeStyle = { initialStyle };
         String[] selectedColor = { initialColor };
+        String[] selectedFinish = { initialFinish };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
@@ -1988,6 +2059,38 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(410));
         root.addView(scroll, scrollLp);
 
+        // Selettore Matte/Glossy, sotto le card: vale per QUALSIASI stile scelto (non e' legato a uno
+        // stile specifico), quindi sta qui fuori dalla griglia, non dentro ogni singola card.
+        LinearLayout finishRow = new LinearLayout(this); finishRow.setOrientation(LinearLayout.HORIZONTAL); finishRow.setGravity(Gravity.CENTER);
+        String[] finishOptions = {"glossy","matte"};
+        String[] finishLabels = {getString(R.string.finish_glossy), getString(R.string.finish_matte)};
+        TextView[] finishPills = new TextView[2];
+        for (int i=0;i<2;i++){
+            TextView pill = new TextView(this); pill.setText(finishLabels[i]); pill.setTextSize(13); pill.setGravity(Gravity.CENTER);
+            pill.setPadding(dp(20),dp(8),dp(20),dp(8));
+            LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            plp.leftMargin = i==0?0:dp(10);
+            finishRow.addView(pill, plp);
+            finishPills[i]=pill;
+        }
+        LinearLayout.LayoutParams finishRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        finishRowLp.topMargin = dp(12);
+        root.addView(finishRow, finishRowLp);
+        Runnable[] refreshFinish = new Runnable[1];
+        refreshFinish[0] = () -> {
+            for (int i=0;i<2;i++){
+                boolean active = finishOptions[i].equals(selectedFinish[0]);
+                finishPills[i].setTextColor(active?Color.WHITE:MUTED_TXT);
+                GradientDrawable pbg = new GradientDrawable(); pbg.setCornerRadius(dp(16));
+                pbg.setColor(active?blueColor():Color.rgb(24,36,52));
+                finishPills[i].setBackground(pbg);
+            }
+            boolean glossy = !"matte".equals(selectedFinish[0]);
+            for (PreviewSwatchView s: swatches) { s.glossy = glossy; s.invalidate(); }
+        };
+        refreshFinish[0].run();
+        for (int i=0;i<2;i++){ final String fo=finishOptions[i]; finishPills[i].setOnClickListener(v -> { selectedFinish[0]=fo; refreshFinish[0].run(); }); }
+
         refreshTabs[0] = () -> {
             for (int i=0;i<6;i++){
                 boolean active = styleKeys[i].equals(activeStyle[0]);
@@ -2039,7 +2142,7 @@ public class MainActivity extends Activity {
         cancelBtn.setOnClickListener(v -> dialog.dismiss());
         confirmBtn.setOnClickListener(v -> {
             if (selectedColor[0]!=null){
-                d.previewStyle = activeStyle[0]; d.previewColor = selectedColor[0];
+                d.previewStyle = activeStyle[0]; d.previewColor = selectedColor[0]; d.previewFinish = selectedFinish[0];
                 store.save(); if (view!=null) view.invalidate();
                 if (onChanged!=null) onChanged.run();
             }
@@ -2194,14 +2297,14 @@ public class MainActivity extends Activity {
     // una card preimpostata disegnata sul canvas — l'anteprima da immagine personalizzata e' stata rimossa
     // (causava troppi problemi), restano solo le Liste (screenshot) come funzione separata.
     void drawDeckPreview(Canvas c, Deck d, float l, float t, float r, float b){
-        if (d==null) { drawPresetPreviewCard(c, l,t,r,b, "spine", "arcobaleno"); return; }
-        drawPresetPreviewCard(c, l,t,r,b, d.previewStyle==null?"spine":d.previewStyle, d.previewColor==null?"grigiochiaro":d.previewColor);
+        if (d==null) { drawPresetPreviewCard(c, l,t,r,b, "spine", "arcobaleno", true); return; }
+        drawPresetPreviewCard(c, l,t,r,b, d.previewStyle==null?"spine":d.previewStyle, d.previewColor==null?"grigiochiaro":d.previewColor, !"matte".equals(d.previewFinish));
     }
 
     // Disegna UNA card preimpostata (stile + colore) nel rettangolo dato. cornerRadius scalato in proporzione
     // alla dimensione della card, cosi' funziona sia per l'anteprima piccola (64x80) sia per le card grandi
     // del dialog di selezione.
-    void drawPresetPreviewCard(Canvas c, float l, float t, float r, float b, String style, String colorKey){
+    void drawPresetPreviewCard(Canvas c, float l, float t, float r, float b, String style, String colorKey, boolean glossy){
         float cr = 8f*(r-l)/64f;
         Path clip = new Path(); clip.addRoundRect(new RectF(l,t,r,b), cr,cr, Path.Direction.CW);
         c.save(); c.clipPath(clip);
@@ -2217,6 +2320,7 @@ public class MainActivity extends Activity {
             case "zigzag": drawPreviewZigzag(c, pp, l,t,r,b, shades, rainbow); break;
             default: drawPreviewSpine(c, pp, l,t,r,b, shades, rainbow); break;
         }
+        if (glossy) {
         // Riflesso lucido diagonale, su OGNI card (reali in-game, selettori, onboarding): senza questo un
         // colore piatto non si legge come una superficie lucida. Sfumatura piu' morbida di un primo
         // tentativo (5 fermate invece di 3, piu' distanziate): quella aveva un bordo troppo netto/visibile.
@@ -2227,6 +2331,7 @@ public class MainActivity extends Activity {
             new float[]{0.18f, 0.36f, 0.50f, 0.64f, 0.82f}, Shader.TileMode.CLAMP);
         glossPaint.setShader(gloss);
         c.drawRect(l,t,r,b,glossPaint);
+        }
         c.restore();
     }
 
@@ -2990,7 +3095,7 @@ public class MainActivity extends Activity {
             // 282, non piu' 158-308): tolto il tip "Tocca per cambiare" sotto, restava spazio vuoto inutile.
             box(c,18,158,w-18,282,card);
             txt(c,getString(R.string.settings_preferred_style),w/2,180,12,muted,Paint.Align.CENTER);
-            drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro");
+            drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro", !"matte".equals(store.preferredCardFinish));
 
             // Lingua: stessa impostazione grafica di getString(R.string.label_trainer_name) sopra (etichetta + valore + matita).
             box(c,18,296,w-18,376,card);
@@ -3937,10 +4042,12 @@ public class MainActivity extends Activity {
         // nuovo deck: stile "spine", colore "grigiochiaro".
         String previewStyle="spine";   // "spine" | "gem" | "crescent" | "waves" | "sun" | "zigzag"
         String previewColor="grigiochiaro";
+        String previewFinish="glossy"; // "glossy" | "matte" — deck vecchi (mai salvato questo campo) restano
+                                        // "glossy" di default, cosi' il loro aspetto non cambia da solo.
         JSONObject json()throws Exception{
             JSONObject o=new JSONObject(); o.put("n",name);
             JSONArray imgs=new JSONArray(); for(String i:images) imgs.put(i); o.put("imgs",imgs);
-            o.put("pstyle",previewStyle); o.put("pcolor",previewColor);
+            o.put("pstyle",previewStyle); o.put("pcolor",previewColor); o.put("pfinish",previewFinish);
             return o;
         }
         static Deck from(JSONObject o){
@@ -3950,6 +4057,7 @@ public class MainActivity extends Activity {
             else { String legacy=o.optString("i",null); if(legacy!=null) d.images.add(legacy); } // dati salvati dalla vecchia versione (un solo screenshot)
             d.previewStyle = o.optString("pstyle","spine");
             d.previewColor = o.optString("pcolor","grigiochiaro");
+            d.previewFinish = o.optString("pfinish","glossy");
             return d;
         }
     }
@@ -4008,13 +4116,15 @@ public class MainActivity extends Activity {
         SharedPreferences pref;ArrayList<Season> seasons=new ArrayList<>();int current=0;
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"crescent"|...)
+        String preferredCardFinish="glossy"; // finitura preferita per le anteprime dei nuovi deck ("glossy"|"matte")
         String language="en"; // lingua dell'app: "en" (default) | "it" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
+            preferredCardFinish = pref.getString("preferredCardFinish","glossy");
             language = pref.getString("language","en");
             try{String z=pref.getString("data",null);if(z==null)return;JSONObject o=new JSONObject(z);current=o.optInt("current");JSONArray a=o.optJSONArray("seasons");if(a!=null)for(int i=0;i<a.length();i++)seasons.add(Season.from(a.getJSONObject(i)));boolean changed=clearFallbackTimestamps();if(repairMislabeledCorrections())changed=true;save_if(changed);}catch(Exception e){Log.e(TAG,"Errore nel caricamento dati, si riparte da zero",e);}
         }
