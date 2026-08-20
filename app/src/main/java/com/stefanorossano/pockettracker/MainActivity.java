@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.5.1";
+    static final String APP_VERSION = "v0.5.2";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1877,6 +1877,123 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    // Dialog di filtro Matchup: 2 colonne (i tuoi deck / avversari), ognuna con pillole a scelta multipla +
+    // "Tutti"/"Nessuno" rapidi. "Continua" richiede almeno 1 selezionato per lato (0 non avrebbe senso: la
+    // lista sparirebbe del tutto) — altrimenti mostra un avviso e resta aperto.
+    void showMatchupFilterDialog(Season s, Runnable onApplied){
+        ArrayList<String> myDeckNames = new ArrayList<>();
+        for (Deck d: s.decks) myDeckNames.add(d.name);
+        java.util.LinkedHashMap<String,int[]> oppStats = view.opponentDeckStats(s);
+        ArrayList<String> oppNames = new ArrayList<>(oppStats.keySet());
+
+        java.util.HashSet<String> myTemp = view.matchupMyDeckFilter!=null ? new java.util.HashSet<>(view.matchupMyDeckFilter) : new java.util.HashSet<>(myDeckNames);
+        java.util.HashSet<String> oppTemp = view.matchupOppDeckFilter!=null ? new java.util.HashSet<>(view.matchupOppDeckFilter) : new java.util.HashSet<>(oppNames);
+
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
+        root.setBackground(rootBg);
+
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_matchup_filter_title)); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
+        root.addView(title, titleLp);
+
+        LinearLayout columns = new LinearLayout(this); columns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams columnsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        columnsLp.topMargin=dp(12); columnsLp.leftMargin=dp(14); columnsLp.rightMargin=dp(14);
+        root.addView(columns, columnsLp);
+
+        LinearLayout leftCol = buildMatchupFilterColumn(getString(R.string.label_your_deck), myDeckNames, myTemp);
+        LinearLayout rightCol = buildMatchupFilterColumn(getString(R.string.label_opponent_deck), oppNames, oppTemp);
+        LinearLayout.LayoutParams colLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        colLp.leftMargin=dp(4); colLp.rightMargin=dp(4);
+        columns.addView(leftCol, colLp);
+        columns.addView(rightCol, colLp);
+
+        LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(10),dp(14),dp(14));
+        TextView cancelBtn = new TextView(this); cancelBtn.setText(getString(R.string.btn_cancel)); cancelBtn.setTextColor(MUTED_TXT); cancelBtn.setTextSize(14);
+        cancelBtn.setPadding(dp(10),dp(6),dp(10),dp(6));
+        TextView continueBtn = new TextView(this); continueBtn.setText(getString(R.string.btn_continue)); continueBtn.setTextColor(blueColor()); continueBtn.setTextSize(14);
+        continueBtn.setPadding(dp(10),dp(6),0,dp(6));
+        footer.addView(cancelBtn); footer.addView(continueBtn);
+        root.addView(footer);
+
+        Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(root);
+        if (dialog.getWindow()!=null) dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dialog.show();
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        continueBtn.setOnClickListener(v -> {
+            if (myTemp.isEmpty() || oppTemp.isEmpty()) {
+                Toast.makeText(this, getString(R.string.msg_select_at_least_one), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            view.matchupMyDeckFilter = myTemp;
+            view.matchupOppDeckFilter = oppTemp;
+            dialog.dismiss();
+            onApplied.run();
+        });
+    }
+
+    // Una colonna del filtro: etichetta, "Tutti"/"Nessuno" rapidi, lista scrollabile di pillole a scelta
+    // multipla (tocco per attivare/disattivare, aggiornano il colore subito). tempSet viene mutato
+    // direttamente dai listener — il chiamante lo legge al momento di "Continua".
+    LinearLayout buildMatchupFilterColumn(String headerLabel, ArrayList<String> names, java.util.HashSet<String> tempSet){
+        LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL);
+
+        TextView header = new TextView(this); header.setText(headerLabel); header.setTextColor(MUTED_TXT); header.setTextSize(12); header.setTypeface(Typeface.DEFAULT_BOLD);
+        col.addView(header);
+
+        LinearLayout quickRow = new LinearLayout(this); quickRow.setOrientation(LinearLayout.HORIZONTAL);
+        TextView allBtn = new TextView(this); allBtn.setText(getString(R.string.btn_select_all)); allBtn.setTextColor(blueColor()); allBtn.setTextSize(12);
+        TextView noneBtn = new TextView(this); noneBtn.setText(getString(R.string.btn_select_none)); noneBtn.setTextColor(blueColor()); noneBtn.setTextSize(12);
+        noneBtn.setPadding(dp(14),0,0,0);
+        quickRow.addView(allBtn); quickRow.addView(noneBtn);
+        LinearLayout.LayoutParams quickRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        quickRowLp.topMargin=dp(4); quickRowLp.bottomMargin=dp(8);
+        col.addView(quickRow, quickRowLp);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout pillList = new LinearLayout(this); pillList.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(pillList);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(180));
+        col.addView(scroll, scrollLp);
+
+        TextView[] pills = new TextView[names.size()];
+        Runnable[] refreshPills = new Runnable[1];
+        refreshPills[0] = () -> {
+            for (int i=0;i<names.size();i++){
+                boolean sel = tempSet.contains(names.get(i));
+                GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(dp(14));
+                bg.setColor(sel?blueColor():Color.rgb(24,36,52));
+                pills[i].setBackground(bg);
+                pills[i].setTextColor(sel?Color.WHITE:MUTED_TXT);
+            }
+        };
+        for (int i=0;i<names.size();i++){
+            String name = names.get(i);
+            TextView pill = new TextView(this); pill.setText(name); pill.setTextSize(13);
+            pill.setPadding(dp(14),dp(8),dp(14),dp(8));
+            LinearLayout.LayoutParams pillLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            pillLp.bottomMargin=dp(6);
+            pillList.addView(pill, pillLp);
+            pills[i]=pill;
+            pill.setOnClickListener(v -> {
+                if (tempSet.contains(name)) tempSet.remove(name); else tempSet.add(name);
+                refreshPills[0].run();
+            });
+        }
+        refreshPills[0].run();
+
+        allBtn.setOnClickListener(v -> { tempSet.clear(); tempSet.addAll(names); refreshPills[0].run(); });
+        noneBtn.setOnClickListener(v -> { tempSet.clear(); refreshPills[0].run(); });
+
+        return col;
+    }
+
     int reward(int streak) { return streak<=1?10:streak==2?13:streak==3?16:streak==4?19:22; }
 
     // Ricalcola punti/streak della Stagione a partire dall'ULTIMA partita rimasta (o dal baseline se non ce
@@ -3160,9 +3277,13 @@ public class MainActivity extends Activity {
         // "deck mio A contro deck avversario B", non solo "io (con qualsiasi deck) contro B". Una matrice
         // completa A-per-B sarebbe illeggibile su schermo piccolo con potenzialmente 20x20 combinazioni,
         // quindi drill-down (espandi una riga alla volta) invece di mostrare tutto insieme.
-        String expandedMatchupKey = null;
-        ArrayList<Hit> matchupHits = new ArrayList<>();
-        ArrayList<String> matchupOrder = new ArrayList<>(); // stesso ordine dei matchupHits: hit.index -> nome
+        // Filtro Matchup: null = "tutti" (default, nessuna personalizzazione ancora fatta) — ricalcolato al
+        // volo su tutti i deck della Stagione corrente ogni volta che serve, cosi' non c'e' bisogno di
+        // reimpostarlo quando si cambia Stagione. Un set esplicito (dopo che l'utente ha usato il filtro)
+        // resta valido anche se contiene nomi non piu' presenti: semplicemente non trovano corrispondenza.
+        java.util.HashSet<String> matchupMyDeckFilter = null;
+        java.util.HashSet<String> matchupOppDeckFilter = null;
+        ArrayList<Hit> matchupFilterBtnHit = new ArrayList<>(); // singola zona di tocco (icona filtro)
         // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
         // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
@@ -4120,17 +4241,35 @@ public class MainActivity extends Activity {
             return stats;
         }
 
-        // Per un dato deck avversario (nome canonico), suddivide le partite per QUALE tuo deck hai usato —
-        // il vero drill-down del matchup: "con Blastoise vs Altaria vado 4-1, con Charizard 1-3".
-        java.util.LinkedHashMap<String,int[]> myDeckBreakdownVsOpponent(Season s, String opponentCanonical){
-            java.util.LinkedHashMap<String,int[]> byMyDeck = new java.util.LinkedHashMap<>();
-            String key = opponentCanonical.toLowerCase(Locale.US);
+        // Una singola coppia matchup: il tuo deck, il deck avversario, e il relativo record.
+        class MatchupPair {
+            String myDeck, oppDeck; int wins, losses;
+            MatchupPair(String m, String o, int w, int l){ myDeck=m; oppDeck=o; wins=w; losses=l; }
+            int total(){ return wins+losses; }
+            float winRate(){ return total()>0 ? 100f*wins/total() : 0; }
+        }
+
+        // Ogni coppia (tuo deck × deck avversario) con almeno 1 partita in questa Stagione — il vero
+        // matchup granulare, non piu' l'aggregato "tu (con qualsiasi deck) contro l'avversario".
+        ArrayList<MatchupPair> allMatchupPairs(Season s){
+            java.util.LinkedHashMap<String,MatchupPair> map = new java.util.LinkedHashMap<>();
+            java.util.HashMap<String,String> canonicalOpp = new java.util.HashMap<>();
+            java.util.HashMap<String,Long> lastSeen = new java.util.HashMap<>();
             for (Match m: s.matches){
-                if (m.unknown || m.opponentDeck==null || !m.opponentDeck.toLowerCase(Locale.US).equals(key)) continue;
-                int[] wl = byMyDeck.computeIfAbsent(m.deck==null?getString(R.string.label_unknown_deck):m.deck, k -> new int[2]);
-                if (m.win) wl[0]++; else wl[1]++;
+                if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
+                String key = m.opponentDeck.toLowerCase(Locale.US);
+                Long prevSeen = lastSeen.get(key);
+                if (prevSeen==null || m.timestamp>=prevSeen){ canonicalOpp.put(key, m.opponentDeck); lastSeen.put(key, m.timestamp); }
             }
-            return byMyDeck;
+            for (Match m: s.matches){
+                if (m.unknown || m.opponentDeck==null || m.opponentDeck.isEmpty()) continue;
+                String oppCanon = canonicalOpp.get(m.opponentDeck.toLowerCase(Locale.US));
+                String myDeck = m.deck==null ? getString(R.string.label_unknown_deck) : m.deck;
+                String pairKey = myDeck+"||"+oppCanon.toLowerCase(Locale.US);
+                MatchupPair pair = map.computeIfAbsent(pairKey, k -> new MatchupPair(myDeck, oppCanon, 0, 0));
+                if (m.win) pair.wins++; else pair.losses++;
+            }
+            return new ArrayList<>(map.values());
         }
 
         // Longest win streak *davvero attribuibile* a un deck: attraversa la cronologia in ordine e mantiene
@@ -4307,74 +4446,56 @@ public class MainActivity extends Activity {
             float sectionBottom = 420;
 
             // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni).
-            // Nessuna soglia minima di partite: anche un solo confronto contro un deck interessa (richiesta
-            // esplicita, si preferisce vedere il dato presto piuttosto che nasconderlo finche' non e'
-            // "statisticamente solido"). Raggruppamento case-insensitive (opponentDeckStats). Ordinati per
-            // win rate crescente (il matchup peggiore in cima): e' l'insight piu' azionabile ("contro chi
-            // soffro di piu'"), non "contro chi ho giocato di piu'" (quello e' gia' visibile nella card
-            // sopra). Un richiamo esplicito al matchup peggiore in assoluto, sopra la lista, da' il valore a
-            // colpo d'occhio
-            // senza dover leggere l'intera tabella. =====
+            // Ogni coppia (tuo deck × deck avversario) con almeno 1 partita — mai piu' l'aggregato "tu con
+            // qualsiasi deck contro l'avversario", che non comunicava chiaramente chi fosse chi. Ogni card
+            // mostra ENTRAMBI i lati esplicitamente (etichette "IL TUO DECK"/"AVVERSARIO"), ordinate per win
+            // rate decrescente (il migliore in cima). Un'icona filtro apre un dialog a doppia colonna per
+            // restringere quali tuoi deck e quali avversari includere, cosi' la lista non esplode con troppe
+            // combinazioni. =====
             if (store.trackOpponentDeck) {
-                java.util.LinkedHashMap<String,int[]> matchupStats = opponentDeckStats(s);
-                ArrayList<String> qualifying = new ArrayList<>();
-                // Nessuna soglia minima di partite: anche un solo confronto contro un deck interessa
-                // all'utente, non solo i matchup "statisticamente solidi".
-                for (java.util.Map.Entry<String,int[]> en: matchupStats.entrySet()) qualifying.add(en.getKey());
-                if (!qualifying.isEmpty()) {
-                    qualifying.sort((a,b) -> {
-                        int[] sa=matchupStats.get(a), sb=matchupStats.get(b);
-                        float wra = 100f*sa[1]/sa[0], wrb = 100f*sb[1]/sb[0];
-                        return Float.compare(wra, wrb); // crescente: il peggiore (win rate piu' basso) prima
-                    });
-                    float sectionTop = sectionBottom+20;
-                    // Richiamo al matchup peggiore in assoluto.
-                    String worstOpp = qualifying.get(0);
-                    int[] worstSt = matchupStats.get(worstOpp);
-                    int worstWr = Math.round(100f*worstSt[1]/worstSt[0]);
-                    txt(c, getString(R.string.label_worst_matchup_callout, worstOpp, worstWr, worstSt[0]), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
+                ArrayList<MatchupPair> allPairs = allMatchupPairs(s);
+                ArrayList<MatchupPair> filteredPairs = new ArrayList<>();
+                for (MatchupPair mp: allPairs){
+                    boolean myOk = matchupMyDeckFilter==null || matchupMyDeckFilter.contains(mp.myDeck);
+                    boolean oppOk = matchupOppDeckFilter==null || matchupOppDeckFilter.contains(mp.oppDeck);
+                    if (myOk && oppOk) filteredPairs.add(mp);
+                }
+                if (!allPairs.isEmpty()) {
+                    filteredPairs.sort((a,b) -> Float.compare(b.winRate(), a.winRate())); // decrescente: il migliore prima
 
-                    // Drill-down: tocco su una riga la espande per mostrare come vanno i TUOI singoli deck
-                    // contro quell'avversario ("con Blastoise 4-1, con Charizard 1-3") — una vera matrice
-                    // completa deck-per-deck sarebbe illeggibile su schermo piccolo con potenzialmente 20x20
-                    // combinazioni, quindi un drill-down (una riga espansa alla volta) invece.
-                    float rowH=48, subRowH=32, rowTop=sectionTop+30;
-                    matchupHits.clear(); matchupOrder.clear(); matchupOrder.addAll(qualifying);
-                    float totalH=0;
-                    for (String opp: qualifying){
-                        totalH += rowH;
-                        if (opp.equals(expandedMatchupKey)) totalH += myDeckBreakdownVsOpponent(s, opp).size()*subRowH + 8;
-                    }
-                    box(c, 18, rowTop, w-18, rowTop+totalH, card);
-                    float ry = rowTop;
-                    for (int i=0;i<qualifying.size();i++){
-                        String opp = qualifying.get(i);
-                        int[] st = matchupStats.get(opp);
-                        float rowWr = 100f*st[1]/st[0];
-                        if (i>0) { p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(18,ry,w-18,ry,p); }
-                        matchupHits.add(new Hit(ry, ry+rowH, i));
-                        boolean expanded = opp.equals(expandedMatchupKey);
-                        txt(c, (expanded?"▾ ":"▸ ")+opp, 32, ry+rowH/2+5, 14, white, Paint.Align.LEFT);
-                        txtRowRight(c, w-32, ry+rowH/2+5, 13,
-                            new String[]{st[1]+"W  ", st[2]+"L  ", String.format(Locale.US,"%.0f%%",rowWr)},
-                            new int[]{green, red, wrColor(rowWr,st[0])});
-                        ry += rowH;
-                        if (expanded) {
-                            java.util.LinkedHashMap<String,int[]> breakdown = myDeckBreakdownVsOpponent(s, opp);
-                            for (java.util.Map.Entry<String,int[]> en: breakdown.entrySet()){
-                                int[] subWl = en.getValue();
-                                int subTotal = subWl[0]+subWl[1];
-                                float subWr = subTotal>0 ? 100f*subWl[0]/subTotal : 0;
-                                txt(c, en.getKey(), 48, ry+subRowH/2+4, 12, muted, Paint.Align.LEFT);
-                                txtRowRight(c, w-32, ry+subRowH/2+4, 11,
-                                    new String[]{subWl[0]+"W  ", subWl[1]+"L  ", String.format(Locale.US,"%.0f%%",subWr)},
-                                    new int[]{green, red, muted});
-                                ry += subRowH;
-                            }
-                            ry += 8;
+                    float sectionTop = sectionBottom+20;
+                    txt(c, getString(R.string.label_matchups), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
+                    // Icona filtro, allineata a destra sulla stessa riga del titolo.
+                    float filterIconY = sectionTop+9;
+                    txt(c, "⚙", w-18, filterIconY+9, 16, muted, Paint.Align.RIGHT);
+                    matchupFilterBtnHit.clear(); matchupFilterBtnHit.add(new Hit(filterIconY-6, filterIconY+18, 0));
+
+                    if (!filteredPairs.isEmpty()) {
+                        // Richiamo: il matchup PEGGIORE (la lista sotto mostra gia' il migliore in cima, il
+                        // callout completa il quadro con l'altro estremo).
+                        MatchupPair worst = filteredPairs.get(filteredPairs.size()-1);
+                        txt(c, getString(R.string.label_worst_matchup_callout, worst.myDeck+" vs "+worst.oppDeck, Math.round(worst.winRate()), worst.total()), 18, sectionTop+34, 13, muted, Paint.Align.LEFT);
+
+                        float cardH=92, cardGap=10, listTop=sectionTop+50;
+                        for (int i=0;i<filteredPairs.size();i++){
+                            MatchupPair mp = filteredPairs.get(i);
+                            float cardTop = listTop + i*(cardH+cardGap);
+                            box(c, 18, cardTop, w-18, cardTop+cardH, card);
+                            txt(c, getString(R.string.label_your_deck), 32, cardTop+18, 10, muted, Paint.Align.LEFT);
+                            txt(c, getString(R.string.label_opponent_deck), w-32, cardTop+18, 10, muted, Paint.Align.RIGHT);
+                            txt(c, mp.myDeck, 32, cardTop+40, 15, white, Paint.Align.LEFT);
+                            txt(c, mp.oppDeck, w-32, cardTop+40, 15, white, Paint.Align.RIGHT);
+                            float pairWr = mp.winRate();
+                            txt(c, mp.wins+"W · "+mp.losses+"L", w/2, cardTop+64, 12, muted, Paint.Align.CENTER);
+                            txt(c, Math.round(pairWr)+"%", w/2, cardTop+86, 18, wrColor(pairWr,mp.total()), Paint.Align.CENTER);
                         }
+                        sectionBottom = listTop + filteredPairs.size()*(cardH+cardGap) - cardGap;
+                    } else {
+                        // Il filtro ha escluso tutto: lo si segnala invece di mostrare una sezione vuota e
+                        // silenziosa (che sembrerebbe un bug, non una scelta del filtro).
+                        txt(c, getString(R.string.label_no_matchups_filtered), 18, sectionTop+38, 13, muted, Paint.Align.LEFT);
+                        sectionBottom = sectionTop+50;
                     }
-                    sectionBottom = ry;
                 }
             }
 
@@ -4702,12 +4823,10 @@ public class MainActivity extends Activity {
                 float c1L=18, c1R=w/2-6;
                 float editIconCx = pointsEditIconCenterX(c1L,c1R);
                 if(contentY>=58 && contentY<=100 && x>=editIconCx-22 && x<=editIconCx+22){ addManualCorrection(); return true; }
-                // Drill-down Matchup: tocco su una riga la espande/richiude (una sola alla volta).
-                for (Hit hit: matchupHits){
-                    if (contentY>=hit.top && contentY<=hit.bottom){
-                        String tapped = matchupOrder.get(hit.index);
-                        expandedMatchupKey = tapped.equals(expandedMatchupKey) ? null : tapped;
-                        invalidate();
+                // Icona filtro Matchup: apre il dialog a doppia colonna (i tuoi deck / avversari).
+                for (Hit hit: matchupFilterBtnHit){
+                    if (contentY>=hit.top && contentY<=hit.bottom && x>=w-46){
+                        showMatchupFilterDialog(s, this::invalidate);
                         return true;
                     }
                 }
