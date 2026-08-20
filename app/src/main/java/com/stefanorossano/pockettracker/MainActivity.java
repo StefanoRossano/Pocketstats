@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.4.4";
+    static final String APP_VERSION = "v0.4.8";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1461,6 +1461,41 @@ public class MainActivity extends Activity {
 
     // Salva (o cancella, se lasciato vuoto) il deck avversario per la partita in modifica, se questo dialog
     // e' stato aperto in modalita' "modifica anche l'avversario" (matchForOpponentEdit non nullo).
+    // Rinomina un deck avversario OVUNQUE compaia: su tutte le partite di tutte le Stagioni (l'identita' del
+    // nome e' globale, come i suggerimenti stessi), non solo nella Stagione corrente — cosi' un errore di
+    // battitura fatto una volta ("Altaris" invece di "Altaria") si corregge una volta sola, per sempre,
+    // invece di doverselo tenere a vita.
+    void renameOpponentDeck(String oldName, String newName){
+        if (newName==null) return;
+        newName = newName.trim();
+        if (newName.isEmpty() || newName.equalsIgnoreCase(oldName)) return;
+        String oldKey = oldName.toLowerCase(Locale.US);
+        for (Season sn: store.seasons) for (Match m: sn.matches)
+            if (m.opponentDeck!=null && m.opponentDeck.toLowerCase(Locale.US).equals(oldKey)) m.opponentDeck = newName;
+        String finalNewName = newName;
+        store.knownOpponentDecks.removeIf(k -> k.equalsIgnoreCase(oldName));
+        if (!store.knownOpponentDecks.contains(finalNewName)) store.knownOpponentDecks.add(finalNewName);
+        store.save(); view.invalidate();
+    }
+
+    // Dialog di rinomina: nome attuale precompilato, la conferma applica renameOpponentDeck() e ricostruisce
+    // subito la lista (onRenamed) cosi' il cambiamento e' visibile immediatamente, senza dover riaprire nulla.
+    void promptRenameOpponentDeck(String currentName, Runnable onRenamed){
+        LinearLayout box = formBox();
+        EditText input = new EditText(this);
+        input.setText(currentName); input.setTextColor(Color.WHITE);
+        input.setSelection(currentName.length());
+        box.addView(input);
+        new AlertDialog.Builder(this).setTitle(getString(R.string.action_rename_opponent_deck))
+            .setView(box)
+            .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
+                renameOpponentDeck(currentName, input.getText().toString());
+                if (onRenamed!=null) onRenamed.run();
+            })
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show();
+    }
+
     void saveOpponentDeckEdit(Match matchForOpponentEdit, EditText opponentInputFinal){
         if (matchForOpponentEdit==null || opponentInputFinal==null) return;
         String name = opponentInputFinal.getText().toString().trim();
@@ -1625,7 +1660,7 @@ public class MainActivity extends Activity {
         if (initialValue!=null) searchInput.setText(initialValue);
         parent.addView(searchInput);
 
-        java.util.LinkedHashMap<String,int[]> stats = opponentDeckStats(s);
+        java.util.LinkedHashMap<String,int[]> stats = view.opponentDeckStats(s);
         // Suggerimenti: nomi avversari gia' visti (su questa Stagione) + i nomi dei TUOI deck (su tutte le
         // Stagioni) — se lo giochi tu, e' plausibile incontrarlo prima o poi anche come avversario.
         java.util.LinkedHashSet<String> suggestions = new java.util.LinkedHashSet<>(stats.keySet());
@@ -1648,8 +1683,15 @@ public class MainActivity extends Activity {
                 row.setPadding(dp(14),dp(10),dp(14),dp(10));
                 GradientDrawable rowBg = new GradientDrawable(); rowBg.setCornerRadius(dp(10)); rowBg.setColor(Color.rgb(20,30,46));
                 row.setBackground(rowBg);
+                LinearLayout nameRow = new LinearLayout(this); nameRow.setOrientation(LinearLayout.HORIZONTAL); nameRow.setGravity(Gravity.CENTER_VERTICAL);
                 TextView nameTv = new TextView(this); nameTv.setText(name); nameTv.setTextColor(Color.WHITE); nameTv.setTextSize(15); nameTv.setTypeface(Typeface.DEFAULT_BOLD);
-                row.addView(nameTv);
+                nameRow.addView(nameTv, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+                // Icona rinomina: un errore di battitura sul nome ("Altaris" invece di "Altaria") si poteva
+                // prima tenere a vita, senza nessun modo di correggerlo su tutte le partite gia' registrate.
+                TextView renameBtn = new TextView(this); renameBtn.setText("✎"); renameBtn.setTextColor(MUTED_TXT); renameBtn.setTextSize(16);
+                renameBtn.setPadding(dp(10),dp(2),dp(2),dp(2));
+                nameRow.addView(renameBtn);
+                row.addView(nameRow);
                 int[] st = stats.get(name);
                 TextView statsTv = new TextView(this); statsTv.setTextColor(MUTED_TXT); statsTv.setTextSize(12);
                 if (st!=null){
@@ -1665,6 +1707,7 @@ public class MainActivity extends Activity {
                 rowLp.bottomMargin = dp(8);
                 list.addView(row, rowLp);
                 row.setOnClickListener(v -> { searchInput.setText(name); searchInput.setSelection(name.length()); });
+                renameBtn.setOnClickListener(v -> promptRenameOpponentDeck(name, rebuild[0]));
             }
         };
         rebuild[0].run();
@@ -2981,6 +3024,14 @@ public class MainActivity extends Activity {
         ArrayList<Object[]> deckPreviewTapZones=new ArrayList<>();
         float currentDeckKebabX=-1000, currentDeckKebabY=-1000; // fuori schermo di default: nessun tap accidentale se non c'e' un deck selezionato
         ArrayList<Hit> matchHits=new ArrayList<>();
+        // Drill-down Matchup: quale riga (indice nella lista ordinata) e' attualmente espansa, per mostrare
+        // come si comporta CIASCUNO dei tuoi deck contro quello specifico avversario — un vero matchup e'
+        // "deck mio A contro deck avversario B", non solo "io (con qualsiasi deck) contro B". Una matrice
+        // completa A-per-B sarebbe illeggibile su schermo piccolo con potenzialmente 20x20 combinazioni,
+        // quindi drill-down (espandi una riga alla volta) invece di mostrare tutto insieme.
+        String expandedMatchupKey = null;
+        ArrayList<Hit> matchupHits = new ArrayList<>();
+        ArrayList<String> matchupOrder = new ArrayList<>(); // stesso ordine dei matchupHits: hit.index -> nome
         // Tutti i numeri usati in questa classe (posizioni, dimensioni testo, ecc.) sono pensati come "dp"
         // (unita' indipendenti dalla densita' dello schermo), NON pixel reali. 'density' converte l'uno
         // nell'altro: senza, su un telefono moderno (densita' ~3x) tutto apparirebbe rimpicciolito a 1/3.
@@ -3938,6 +3989,19 @@ public class MainActivity extends Activity {
             return stats;
         }
 
+        // Per un dato deck avversario (nome canonico), suddivide le partite per QUALE tuo deck hai usato —
+        // il vero drill-down del matchup: "con Blastoise vs Altaria vado 4-1, con Charizard 1-3".
+        java.util.LinkedHashMap<String,int[]> myDeckBreakdownVsOpponent(Season s, String opponentCanonical){
+            java.util.LinkedHashMap<String,int[]> byMyDeck = new java.util.LinkedHashMap<>();
+            String key = opponentCanonical.toLowerCase(Locale.US);
+            for (Match m: s.matches){
+                if (m.unknown || m.opponentDeck==null || !m.opponentDeck.toLowerCase(Locale.US).equals(key)) continue;
+                int[] wl = byMyDeck.computeIfAbsent(m.deck==null?getString(R.string.label_unknown_deck):m.deck, k -> new int[2]);
+                if (m.win) wl[0]++; else wl[1]++;
+            }
+            return byMyDeck;
+        }
+
         // Longest win streak *davvero attribuibile* a un deck: attraversa la cronologia in ordine e mantiene
         // una serie SOLO finche' le vittorie consecutive sono state giocate tutte con questo stesso deck.
         // Una sconfitta, una vittoria con un deck diverso, o una correzione manuale interrompono la serie.
@@ -4111,18 +4175,21 @@ public class MainActivity extends Activity {
 
             float sectionBottom = 420;
 
-            // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni)
-            // E almeno un matchup ha un numero sufficiente di partite per essere significativo (min 3) —
-            // altrimenti la sezione non appare affatto, per non mostrare percentuali fuorvianti su 1-2
-            // partite. Raggruppamento case-insensitive (opponentDeckStats). Ordinati per win rate crescente
-            // (il matchup peggiore in cima): e' l'insight piu' azionabile ("contro chi soffro di piu'"),
-            // non "contro chi ho giocato di piu'" (quello e' gia' visibile nella card sopra). Un richiamo
-            // esplicito al matchup peggiore in assoluto, sopra la lista, da' il valore a colpo d'occhio
+            // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni).
+            // Nessuna soglia minima di partite: anche un solo confronto contro un deck interessa (richiesta
+            // esplicita, si preferisce vedere il dato presto piuttosto che nasconderlo finche' non e'
+            // "statisticamente solido"). Raggruppamento case-insensitive (opponentDeckStats). Ordinati per
+            // win rate crescente (il matchup peggiore in cima): e' l'insight piu' azionabile ("contro chi
+            // soffro di piu'"), non "contro chi ho giocato di piu'" (quello e' gia' visibile nella card
+            // sopra). Un richiamo esplicito al matchup peggiore in assoluto, sopra la lista, da' il valore a
+            // colpo d'occhio
             // senza dover leggere l'intera tabella. =====
             if (store.trackOpponentDeck) {
                 java.util.LinkedHashMap<String,int[]> matchupStats = opponentDeckStats(s);
                 ArrayList<String> qualifying = new ArrayList<>();
-                for (java.util.Map.Entry<String,int[]> en: matchupStats.entrySet()) if (en.getValue()[0] >= 3) qualifying.add(en.getKey());
+                // Nessuna soglia minima di partite: anche un solo confronto contro un deck interessa
+                // all'utente, non solo i matchup "statisticamente solidi".
+                for (java.util.Map.Entry<String,int[]> en: matchupStats.entrySet()) qualifying.add(en.getKey());
                 if (!qualifying.isEmpty()) {
                     qualifying.sort((a,b) -> {
                         int[] sa=matchupStats.get(a), sb=matchupStats.get(b);
@@ -4135,20 +4202,48 @@ public class MainActivity extends Activity {
                     int[] worstSt = matchupStats.get(worstOpp);
                     int worstWr = Math.round(100f*worstSt[1]/worstSt[0]);
                     txt(c, getString(R.string.label_worst_matchup_callout, worstOpp, worstWr, worstSt[0]), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
-                    float rowH=48, rowTop=sectionTop+30;
-                    box(c, 18, rowTop, w-18, rowTop+rowH*qualifying.size(), card);
+
+                    // Drill-down: tocco su una riga la espande per mostrare come vanno i TUOI singoli deck
+                    // contro quell'avversario ("con Blastoise 4-1, con Charizard 1-3") — una vera matrice
+                    // completa deck-per-deck sarebbe illeggibile su schermo piccolo con potenzialmente 20x20
+                    // combinazioni, quindi un drill-down (una riga espansa alla volta) invece.
+                    float rowH=48, subRowH=32, rowTop=sectionTop+30;
+                    matchupHits.clear(); matchupOrder.clear(); matchupOrder.addAll(qualifying);
+                    float totalH=0;
+                    for (String opp: qualifying){
+                        totalH += rowH;
+                        if (opp.equals(expandedMatchupKey)) totalH += myDeckBreakdownVsOpponent(s, opp).size()*subRowH + 8;
+                    }
+                    box(c, 18, rowTop, w-18, rowTop+totalH, card);
+                    float ry = rowTop;
                     for (int i=0;i<qualifying.size();i++){
                         String opp = qualifying.get(i);
                         int[] st = matchupStats.get(opp);
                         float rowWr = 100f*st[1]/st[0];
-                        float ry = rowTop + i*rowH;
                         if (i>0) { p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE); c.drawLine(18,ry,w-18,ry,p); }
-                        txt(c, opp, 32, ry+rowH/2+5, 14, white, Paint.Align.LEFT);
-                        txtRowRight(c, w-18, ry+rowH/2+5, 13,
+                        matchupHits.add(new Hit(ry, ry+rowH, i));
+                        boolean expanded = opp.equals(expandedMatchupKey);
+                        txt(c, (expanded?"▾ ":"▸ ")+opp, 32, ry+rowH/2+5, 14, white, Paint.Align.LEFT);
+                        txtRowRight(c, w-32, ry+rowH/2+5, 13,
                             new String[]{st[1]+"W  ", st[2]+"L  ", String.format(Locale.US,"%.0f%%",rowWr)},
                             new int[]{green, red, wrColor(rowWr,st[0])});
+                        ry += rowH;
+                        if (expanded) {
+                            java.util.LinkedHashMap<String,int[]> breakdown = myDeckBreakdownVsOpponent(s, opp);
+                            for (java.util.Map.Entry<String,int[]> en: breakdown.entrySet()){
+                                int[] wl = en.getValue();
+                                int total = wl[0]+wl[1];
+                                float wr = total>0 ? 100f*wl[0]/total : 0;
+                                txt(c, en.getKey(), 48, ry+subRowH/2+4, 12, muted, Paint.Align.LEFT);
+                                txtRowRight(c, w-32, ry+subRowH/2+4, 11,
+                                    new String[]{wl[0]+"W  ", wl[1]+"L  ", String.format(Locale.US,"%.0f%%",wr)},
+                                    new int[]{green, red, muted});
+                                ry += subRowH;
+                            }
+                            ry += 8;
+                        }
                     }
-                    sectionBottom = rowTop + rowH*qualifying.size();
+                    sectionBottom = ry;
                 }
             }
 
@@ -4476,6 +4571,15 @@ public class MainActivity extends Activity {
                 float c1L=18, c1R=w/2-6;
                 float editIconCx = pointsEditIconCenterX(c1L,c1R);
                 if(contentY>=58 && contentY<=100 && x>=editIconCx-22 && x<=editIconCx+22){ addManualCorrection(); return true; }
+                // Drill-down Matchup: tocco su una riga la espande/richiude (una sola alla volta).
+                for (Hit hit: matchupHits){
+                    if (contentY>=hit.top && contentY<=hit.bottom){
+                        String tapped = matchupOrder.get(hit.index);
+                        expandedMatchupKey = tapped.equals(expandedMatchupKey) ? null : tapped;
+                        invalidate();
+                        return true;
+                    }
+                }
             }
             return true;
         }
