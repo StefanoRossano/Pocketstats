@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.25";
+    static final String APP_VERSION = "v0.3.30";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -367,20 +367,64 @@ public class MainActivity extends Activity {
             String[] styles = {"crescent","waves","sun"};
             float[] rot = {-10f, 0f, 10f};
             float[] offX = {-w*0.19f, 0f, w*0.19f};
+            Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setColor(Color.argb(170,255,250,235)); // crema/bianco, semi-trasparente
+            strokePaint.setStrokeWidth(dp(1.5f));
+            float cr = 8f*cardW/64f; // stesso raggio d'angolo usato dentro drawPresetPreviewCard
+            // Riflesso lucido diagonale: senza questo, l'oro (un semplice colore piatto) sembra un giallo-
+            // bruno opaco invece che un vero metallo dorato. Una banda diagonale chiara, semi-trasparente,
+            // che sfuma ai lati, basta a suggerire una superficie lucida/riflettente.
+            Paint glossPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            LinearGradient gloss = new LinearGradient(-cardW*0.6f, -cardH*0.6f, cardW*0.6f, cardH*0.6f,
+                new int[]{Color.argb(0,255,255,255), Color.argb(120,255,255,255), Color.argb(0,255,255,255)},
+                new float[]{0.32f, 0.50f, 0.68f}, Shader.TileMode.CLAMP);
+            glossPaint.setShader(gloss);
             for (int i=0;i<3;i++){
                 c.save();
                 c.translate(w/2f+offX[i], h/2f);
                 c.rotate(rot[i]);
-                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "oro");
+                drawPresetPreviewCard(c, -cardW/2, -cardH/2, cardW/2, cardH/2, styles[i], "grigioscuro");
+                c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, glossPaint);
+                c.drawRoundRect(-cardW/2, -cardH/2, cardW/2, cardH/2, cr, cr, strokePaint);
                 c.restore();
             }
         }
     }
 
+    // Grande grafico di sfondo, a piena larghezza, dietro al ventaglio di card e al resto del contenuto —
+    // molto tenue (alpha basso) per non competere visivamente con quello che c'e' sopra, ma visibile a
+    // sufficienza da dare l'idea di "taglio" attraverso lo schermo.
+    class BackgroundChartView extends View {
+        BackgroundChartView(Context c){ super(c); }
+        @Override protected void onDraw(Canvas c){
+            super.onDraw(c);
+            float w=getWidth(), h=getHeight();
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(dp(3));
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(Color.argb(38,90,98,112)); // grigioscuro chiaro, molto tenue
+            float[][] pts = {{0f,0.62f},{0.18f,0.45f},{0.34f,0.55f},{0.50f,0.30f},{0.66f,0.42f},{0.82f,0.18f},{1.0f,0.10f}};
+            Path chart = new Path();
+            for (int i=0;i<pts.length;i++){
+                float px=pts[i][0]*w, py=pts[i][1]*h;
+                if (i==0) chart.moveTo(px,py); else chart.lineTo(px,py);
+            }
+            c.drawPath(chart, p);
+        }
+    }
+
     void showWelcomeScreen(){
+        android.widget.FrameLayout outer = new android.widget.FrameLayout(this);
+        outer.setBackgroundColor(Color.rgb(7,11,18)); // stesso sfondo scuro di tutta l'app
+
+        BackgroundChartView bgChart = new BackgroundChartView(this);
+        outer.addView(bgChart, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setBackgroundColor(Color.rgb(7,11,18)); // stesso sfondo scuro di tutta l'app
 
         WelcomeHeroView hero = new WelcomeHeroView(this);
         LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(dp(260), dp(160));
@@ -400,10 +444,12 @@ public class MainActivity extends Activity {
         tapHintLp.topMargin = dp(40);
         root.addView(tapHint, tapHintLp);
 
+        outer.addView(root, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+
         Dialog dialog = new Dialog(this, R.style.PocketDialogTheme);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(false);
-        dialog.setContentView(root);
+        dialog.setContentView(outer);
         if (dialog.getWindow()!=null) {
             dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT);
             // Sfondo pieno, non il drawable arrotondato/inset di PocketDialogTheme: qui vogliamo una vera
@@ -416,7 +462,7 @@ public class MainActivity extends Activity {
         // dell'app, non solo alla primissima volta. Dopo il tocco, si prosegue col flusso giusto: onboarding
         // se non ancora fatto, il wizard Stagione se non ce n'e' nessuna (es. utente che le ha cancellate
         // tutte), altrimenti nulla di piu' — la schermata sotto e' gia' pronta (ripristinata in onCreate).
-        root.setOnClickListener(v -> {
+        outer.setOnClickListener(v -> {
             dialog.dismiss();
             if (!store.onboardingDone) { askTrainerName(); }
             else if (store.seasons.isEmpty()) { wizardStep1(true, null); }
@@ -2089,7 +2135,7 @@ public class MainActivity extends Activity {
         PREVIEW_COLORS.put("viola",       new int[]{Color.rgb(0xA8,0x83,0xE0), Color.rgb(0x7B,0x4F,0xC9), Color.rgb(0x4E,0x32,0x86)});
         PREVIEW_COLORS.put("marrone",     new int[]{Color.rgb(0xB9,0x83,0x5A), Color.rgb(0x8A,0x5A,0x34), Color.rgb(0x5A,0x3A,0x20)});
         PREVIEW_COLORS.put("grigioscuro", new int[]{Color.rgb(0x5A,0x62,0x70), Color.rgb(0x3A,0x40,0x48), Color.rgb(0x20,0x24,0x2A)});
-        PREVIEW_COLORS.put("oro",         new int[]{Color.rgb(0xF2,0xD8,0x89), Color.rgb(0xD4,0xAF,0x37), Color.rgb(0x8C,0x6A,0x16)});
+        PREVIEW_COLORS.put("oro",         new int[]{Color.rgb(0xFF,0xF3,0xD1), Color.rgb(0xFF,0xC7,0x4D), Color.rgb(0xAA,0x77,0x1C)});
         PREVIEW_COLORS.put("grigiochiaro",new int[]{Color.rgb(0xC7,0xCD,0xD6), Color.rgb(0x9A,0xA3,0xAE), Color.rgb(0x6B,0x74,0x80)});
     }
     static final String[] PREVIEW_COLOR_ORDER = {"verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro","arcobaleno"};
