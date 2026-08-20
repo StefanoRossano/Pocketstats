@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.3.23";
+    static final String APP_VERSION = "v0.3.24";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -118,21 +118,6 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        // Legge ed eventualmente mostra il crash della sessione precedente, scritto da PocketApplication
-        // (che intercetta i crash nel punto piu' precoce possibile, prima di questa stessa Activity).
-        java.io.File crashFile = new java.io.File(getFilesDir(), "crash_log.txt");
-        if (crashFile.exists()) {
-            try {
-                java.util.Scanner sc = new java.util.Scanner(crashFile).useDelimiter("\\A");
-                String crashText = sc.hasNext() ? sc.next() : "(vuoto)";
-                sc.close();
-                crashFile.delete();
-                TextView tv = new TextView(this); tv.setText(crashText); tv.setTextColor(Color.WHITE); tv.setTextIsSelectable(true); tv.setPadding(dp(20),dp(20),dp(20),dp(20));
-                ScrollView scroll = new ScrollView(this); scroll.addView(tv);
-                new AlertDialog.Builder(this).setTitle("Crash precedente").setView(scroll)
-                    .setPositiveButton("OK", null).setCancelable(false).show();
-            } catch (Exception ignored) {}
-        }
         store = new Store(this);
         // La view serve sempre come sfondo, anche solo per ospitare i dialog di onboarding: creata subito,
         // indipendentemente da quale flusso segue (onboarding, wizard Stagione, o ripristino normale).
