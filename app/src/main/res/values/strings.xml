@@ -34,6 +34,11 @@
     <string name="confirm_delete_opponent_deck_used_singular">This opponent\'s deck is used in %1$d match (this Season). Deleting it will clear it from that match.</string>
     <string name="confirm_delete_opponent_deck_used_plural">This opponent\'s deck is used in %1$d matches (this Season). Deleting it will clear it from those matches.</string>
     <string name="label_worst_matchup_callout">Toughest matchup: %1$s — %2$d%% win rate (%3$d games)</string>
+    <string name="label_no_matchups_filtered">No matchup matches the current filter.</string>
+    <string name="dialog_matchup_filter_title">Filter matchups</string>
+    <string name="btn_select_all">All</string>
+    <string name="btn_select_none">None</string>
+    <string name="msg_select_at_least_one">Select at least 1 deck on each side</string>
     <string name="label_played_against_n_times">Played %1$d times</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
