@@ -46,7 +46,6 @@
     <string name="label_your_decks_subtitle">Your decks</string>
     <string name="label_opponent_decks_subtitle">Opponent\'s decks</string>
     <string name="btn_select_all">All</string>
-    <string name="btn_select_none">None</string>
     <string name="msg_select_at_least_one">Select at least one deck for both players</string>
     <string name="label_encountered_n_times">Faced %1$d times</string>
     <string name="label_matchup_tough">Tough matchup</string>
@@ -131,7 +130,6 @@
     <string name="dialog_preferred_style_title">Preferred card style</string>
     <string name="dialog_language_title">Language</string>
     <string name="hint_deck_name">Deck name</string>
-    <string name="hint_season_name">Season name</string>
     <string name="hint_new_deck_name">New deck name</string>
     <string name="dialog_create_season_title">Create Season</string>
     <string name="dialog_create_first_season_title">Create your first Season</string>
