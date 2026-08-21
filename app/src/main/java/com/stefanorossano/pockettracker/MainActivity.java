@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.6.0";
+    static final String APP_VERSION = "v0.6.3";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1888,26 +1888,37 @@ public class MainActivity extends Activity {
     void showMatchupFilterDialogForSide(Season s, boolean isMyDeckSide, Runnable onApplied){
         ArrayList<String> names;
         java.util.HashSet<String> current;
-        String dialogTitle;
+        String subtitle;
         if (isMyDeckSide) {
             names = new ArrayList<>(); for (Deck d: s.decks) names.add(d.name);
             current = view.matchupMyDeckFilter;
-            dialogTitle = getString(R.string.dialog_matchup_filter_title_mine);
+            subtitle = getString(R.string.label_your_decks_subtitle);
         } else {
             names = new ArrayList<>(view.opponentDeckStats(s).keySet());
             current = view.matchupOppDeckFilter;
-            dialogTitle = getString(R.string.dialog_matchup_filter_title_opp);
+            subtitle = getString(R.string.label_opponent_decks_subtitle);
         }
+        // Pillole ordinate alfabeticamente (A-Z), non piu' nell'ordine "di apparizione" (creazione deck /
+        // prima volta incontrato come avversario) — piu' facile trovare un nome specifico in una lista lunga.
+        names.sort(String.CASE_INSENSITIVE_ORDER);
         java.util.HashSet<String> temp = current!=null ? new java.util.HashSet<>(current) : new java.util.HashSet<>(names);
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText(dialogTitle); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        // Titolo sempre generico "Filtro" (non piu' "Filtra: i tuoi deck"/"Filtra: gli avversari" — poco
+        // professionale): il SOTTOTITOLO sotto dice di quale lato si tratta, con una dimensione leggibile
+        // (15sp, non piu' piccola di un'etichetta qualsiasi).
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_filter_title)); title.setTextColor(Color.WHITE); title.setTextSize(18); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(18); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
+
+        TextView subtitleView = new TextView(this); subtitleView.setText(subtitle); subtitleView.setTextColor(MUTED_TXT); subtitleView.setTextSize(15);
+        LinearLayout.LayoutParams subtitleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subtitleLp.topMargin=dp(2); subtitleLp.leftMargin=dp(18); subtitleLp.rightMargin=dp(18);
+        root.addView(subtitleView, subtitleLp);
 
         // "Tutti"/"Nessuno" rapidi, sopra un contenitore ben distinto (bordo+sfondo proprio) per le
         // pillole — prima galleggiavano senza nessuna struttura visiva attorno.
@@ -4332,21 +4343,24 @@ public class MainActivity extends Activity {
 
             float sectionBottom = 420;
 
-            // ===== Matchup: solo se l'utente ha attivato il tracciamento del deck avversario (Impostazioni).
-            // Ogni coppia (tuo deck × deck avversario) con almeno 1 partita, ordinate per win rate
-            // decrescente (il migliore in cima). Tutto dentro UN contenitore unico, con un header a 2
-            // colonne ("I TUOI DECK" / "AVVERSARI") che stabilisce una volta sola quale lato e' quale — le
-            // singole righe sotto non ripetono piu' l'etichetta. Un filtro per colonna (icona imbuto +
-            // indicatore "N/Tutti" visibile gia' da fuori, senza dover aprire il dialog). =====
-            if (store.trackOpponentDeck) {
+            // ===== Matchup: mostrata se esiste almeno 1 coppia con dati, INDIPENDENTEMENTE dall'impostazione
+            // "Traccia il deck avversario" — se l'hai disattivata ma hai gia' dello storico tracciato in
+            // passato, quello storico resta comunque visibile qui, non sparisce. Ogni coppia (tuo deck ×
+            // deck avversario) con almeno 1 partita, ordinate per win rate decrescente (il migliore in
+            // cima). Tutto dentro UN contenitore unico, con un header a 2 colonne ("I TUOI DECK" /
+            // "AVVERSARI") che stabilisce una volta sola quale lato e' quale — le singole righe sotto non
+            // ripetono piu' l'etichetta. Un filtro per colonna (icona imbuto + indicatore "N/Tutti" visibile
+            // gia' da fuori, senza dover aprire il dialog), centrato sia orizzontalmente sia verticalmente
+            // nella propria meta' colonna. =====
+            {
                 ArrayList<MatchupPair> allPairs = allMatchupPairs(s);
-                ArrayList<MatchupPair> filteredPairs = new ArrayList<>();
-                for (MatchupPair mp: allPairs){
-                    boolean myOk = matchupMyDeckFilter==null || matchupMyDeckFilter.contains(mp.myDeck);
-                    boolean oppOk = matchupOppDeckFilter==null || matchupOppDeckFilter.contains(mp.oppDeck);
-                    if (myOk && oppOk) filteredPairs.add(mp);
-                }
                 if (!allPairs.isEmpty()) {
+                    ArrayList<MatchupPair> filteredPairs = new ArrayList<>();
+                    for (MatchupPair mp: allPairs){
+                        boolean myOk = matchupMyDeckFilter==null || matchupMyDeckFilter.contains(mp.myDeck);
+                        boolean oppOk = matchupOppDeckFilter==null || matchupOppDeckFilter.contains(mp.oppDeck);
+                        if (myOk && oppOk) filteredPairs.add(mp);
+                    }
                     filteredPairs.sort((a,b) -> Float.compare(b.winRate(), a.winRate())); // decrescente: il migliore prima
 
                     // Conteggi per gli indicatori "N/Tutti" dei 2 filtri.
@@ -4361,12 +4375,17 @@ public class MainActivity extends Activity {
                     txt(c, getString(R.string.label_matchups), 18, sectionTop+14, 13, muted, Paint.Align.LEFT);
 
                     float headerH=64, boxTop = sectionTop+26, dividerY = boxTop+headerH, rowTop = dividerY;
+                    // Centro orizzontale di ciascuna meta' colonna (non il centro dell'intera card): la
+                    // card va da 18 a w-18, la colonna sinistra da 18 a w/2, la destra da w/2 a w-18.
+                    float colLeftCx = (18f + w/2f) / 2f;
+                    float colRightCx = (w/2f + (w-18f)) / 2f;
 
-                    // Zone di tocco per i 2 filtri: valide a prescindere che ci siano risultati o meno (deve
-                    // sempre essere possibile aggiustare il filtro, anche se quello attuale non da' risultati).
+                    // Zone di tocco: tutta l'altezza dell'header, per lato — generosa, ben oltre il minimo
+                    // di ~44dp consigliato per un tocco affidabile (prima l'icona/zona erano piu' piccole
+                    // del minimo). La meta' (sinistra/destra) la decide il tocco stesso (x rispetto a w/2).
                     matchupFilterBtnHit.clear();
-                    matchupFilterBtnHit.add(new Hit(boxTop+28, boxTop+50, 0)); // sinistra: i tuoi deck
-                    matchupFilterBtnHit.add(new Hit(boxTop+28, boxTop+50, 1)); // destra: avversari
+                    matchupFilterBtnHit.add(new Hit(boxTop, dividerY, 0)); // sinistra: i tuoi deck
+                    matchupFilterBtnHit.add(new Hit(boxTop, dividerY, 1)); // destra: avversari
 
                     float rowH=76;
                     float totalH = headerH + (filteredPairs.isEmpty() ? 40 : filteredPairs.size()*rowH);
@@ -4374,13 +4393,21 @@ public class MainActivity extends Activity {
                     p.setColor(Color.rgb(20,30,46)); p.setStrokeWidth(1); p.setStyle(Paint.Style.STROKE);
                     c.drawLine(18,dividerY,w-18,dividerY,p);
 
-                    // Header a 2 colonne (disegnato UNA volta sola, sopra il box appena tracciato).
-                    txt(c, getString(R.string.label_your_deck), 32, boxTop+18, 14, muted, Paint.Align.LEFT);
-                    txt(c, getString(R.string.label_opponent_deck), w-32, boxTop+18, 14, muted, Paint.Align.RIGHT);
-                    drawFilterIcon(c, 40, boxTop+38, 15, blue);
-                    txt(c, myCountLabel, 52, boxTop+43, 12, blue, Paint.Align.LEFT);
-                    drawFilterIcon(c, w-40-p.measureText(oppCountLabel)-6, boxTop+38, 15, blue);
-                    txt(c, oppCountLabel, w-40, boxTop+43, 12, blue, Paint.Align.LEFT);
+                    // Header a 2 colonne: etichetta + gruppo(icona+conteggio) centrati come un blocco unico,
+                    // sia orizzontalmente (sul centro della propria meta' colonna) sia verticalmente
+                    // (le 2 righe insieme centrate nell'altezza headerH).
+                    float iconSize=22, iconGap=6;
+                    p.setTextSize(13);
+                    float myTextW = p.measureText(myCountLabel), oppTextW = p.measureText(oppCountLabel);
+                    float myGroupLeft = colLeftCx - (iconSize+iconGap+myTextW)/2;
+                    float oppGroupLeft = colRightCx - (iconSize+iconGap+oppTextW)/2;
+                    float labelY = boxTop+24, filterRowY = boxTop+44;
+                    txt(c, getString(R.string.label_your_deck), colLeftCx, labelY, 14, muted, Paint.Align.CENTER);
+                    txt(c, getString(R.string.label_opponent_deck), colRightCx, labelY, 14, muted, Paint.Align.CENTER);
+                    drawFilterIcon(c, myGroupLeft+iconSize/2, filterRowY, iconSize, blue);
+                    txt(c, myCountLabel, myGroupLeft+iconSize+iconGap, filterRowY+4, 13, blue, Paint.Align.LEFT);
+                    drawFilterIcon(c, oppGroupLeft+iconSize/2, filterRowY, iconSize, blue);
+                    txt(c, oppCountLabel, oppGroupLeft+iconSize+iconGap, filterRowY+4, 13, blue, Paint.Align.LEFT);
 
                     if (!filteredPairs.isEmpty()) {
                         for (int i=0;i<filteredPairs.size();i++){
