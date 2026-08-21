@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.11";
+    static final String APP_VERSION = "v0.8.12";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1751,17 +1751,22 @@ public class MainActivity extends Activity {
         Match m = new Match(win, before, s.points, s.streak, s.currentDeck!=null ? s.currentDeck : "Unknown");
         s.matches.add(m);
         store.save(); view.invalidate();
-        showMotivationalMessage(win, win?s.streak:s.lossStreak);
         // Dopo la partita MAI mostrato-prima: propone il tracciamento del deck avversario. Una tantum — non
         // si ripresenta mai piu' dopo questa singola occasione. IMPORTANTE: niente piu' controllo "solo se e'
         // la primissima partita in assoluto" — chi aveva gia' uno storico di partite prima di questo
         // aggiornamento non avrebbe mai visto il popup (il conteggio totale sarebbe sempre stato >1). Ora
         // scatta semplicemente alla prossima partita loggata da chiunque non l'abbia ancora visto, nuovo
         // utente o gia' esistente che sia.
+        // Il messaggio motivazionale (Toast) e i dialog sul tracciamento avversario non devono mai apparire
+        // insieme (rumore visivo): se un dialog sta per comparire, il Toast e' rimandato a DOPO la sua
+        // chiusura (qualunque strada porti a chiuderlo — non solo il pulsante piu' ovvio).
+        Runnable showToast = () -> showMotivationalMessage(win, win?s.streak:s.lossStreak);
         if (!store.firstMatchTipShown) {
-            showOpponentDeckTip(m);
+            showOpponentDeckTip(m, showToast);
         } else if (store.trackOpponentDeck) {
-            showOpponentDeckPicker(m, false);
+            showOpponentDeckPicker(m, false, showToast);
+        } else {
+            showToast.run();
         }
     }
 
@@ -1769,7 +1774,7 @@ public class MainActivity extends Activity {
     // tracciare anche il deck avversario. Se accettato, la preferenza si accende E si mostra SUBITO il vero
     // popup di scelta deck per la partita appena giocata — una dimostrazione dal vivo, non solo a parole, e
     // recupera anche il dato di quella primissima partita invece di perderlo per sempre.
-    void showOpponentDeckTip(Match m){
+    void showOpponentDeckTip(Match m, Runnable onDone){
         new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_opponent_tip_title))
             .setMessage(getString(R.string.dialog_opponent_tip_body))
             .setCancelable(false)
@@ -1778,11 +1783,11 @@ public class MainActivity extends Activity {
                 // Anche rifiutando qui va detto dove ripescare la funzione, altrimenti il tip (che appare una
                 // sola volta in assoluto) sparisce per sempre senza lasciare traccia di dove riattivarlo.
                 // Riusa il dialog gia' esistente per "Non chiedermelo piu'": stesso identico messaggio.
-                showOpponentTrackingDisabledInfoDialog();
+                showOpponentTrackingDisabledInfoDialog(onDone);
             })
             .setPositiveButton(getString(R.string.btn_yes_enable), (d,w) -> {
                 store.trackOpponentDeck = true; store.firstMatchTipShown = true; store.save();
-                showOpponentDeckPicker(m, true);
+                showOpponentDeckPicker(m, true, onDone);
             })
             .show();
     }
@@ -1994,7 +1999,7 @@ public class MainActivity extends Activity {
         return selected;
     }
 
-    void showOpponentDeckPicker(Match m, boolean showSettingsHint){
+    void showOpponentDeckPicker(Match m, boolean showSettingsHint, Runnable onDone){
         Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
         String[] selected = buildOpponentDeckPickerSection(box, s, m.opponentDeck, m.deck);
@@ -2006,7 +2011,11 @@ public class MainActivity extends Activity {
             box.addView(hint, hintLp);
         }
 
-        new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_opponent_deck_title))
+        // "Non chiedermelo piu'" non chiude davvero la catena: apre un ALTRO dialog (quello informativo), a
+        // cui va delegato il compito di far partire onDone. chainContinues distingue questo caso da tutti
+        // gli altri (Salta/Conferma, o chiusura col tasto Indietro), dove la catena finisce davvero qui.
+        boolean[] chainContinues = {false};
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_opponent_deck_title))
             .setView(box)
             .setCancelable(true)
             .setNegativeButton(getString(R.string.btn_skip), null)
@@ -2014,8 +2023,9 @@ public class MainActivity extends Activity {
                 // Disattiva l'impostazione (non verra' piu' chiesto dopo ogni partita) e mostra un dialog
                 // informativo che ricorda dove riattivarla, riusando lo stesso messaggio gia' visto la prima
                 // volta che si e' attivata questa funzione (hint_disable_in_settings).
+                chainContinues[0] = true;
                 store.trackOpponentDeck = false; store.save();
-                showOpponentTrackingDisabledInfoDialog();
+                showOpponentTrackingDisabledInfoDialog(onDone);
             })
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
                 if (selected[0]!=null && !selected[0].trim().isEmpty()){
@@ -2024,16 +2034,23 @@ public class MainActivity extends Activity {
                     store.save(); view.invalidate();
                 }
             })
-            .show();
+            .create();
+        // onDismissListener (non i singoli pulsanti): copre TUTTE le vie di chiusura — Salta, Conferma, tasto
+        // Indietro, tocco fuori — non solo quella "piu' ovvia".
+        dialog.setOnDismissListener(dd -> { if (!chainContinues[0] && onDone!=null) onDone.run(); });
+        dialog.show();
     }
 
-    // Dialog informativo mostrato dopo aver scelto "Non chiedermelo più": conferma che il tracciamento e'
-    // stato disattivato e ricorda dove riattivarlo — un solo pulsante, nessuna azione ulteriore da fare.
-    void showOpponentTrackingDisabledInfoDialog(){
-        new AlertDialog.Builder(this).setTitle(getString(R.string.label_opponent_tracking_disabled_title))
+    // Dialog informativo mostrato dopo aver scelto "Non chiedermelo più" (o rifiutando il primo invito):
+    // conferma che il tracciamento e' stato disattivato e ricorda dove riattivarlo. onDone: qui la catena
+    // finisce sempre davvero, qualunque sia il motivo per cui compare.
+    void showOpponentTrackingDisabledInfoDialog(Runnable onDone){
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.label_opponent_tracking_disabled_title))
             .setMessage(getString(R.string.label_opponent_tracking_disabled_msg))
             .setPositiveButton(getString(R.string.btn_got_it), null)
-            .show();
+            .create();
+        dialog.setOnDismissListener(d -> { if (onDone!=null) onDone.run(); });
+        dialog.show();
     }
 
     // Dialog di filtro Matchup: 2 colonne (i tuoi deck / avversari), ognuna con pillole a scelta multipla +
