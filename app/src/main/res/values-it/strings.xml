@@ -21,8 +21,12 @@
     <string name="dialog_opponent_deck_title">Contro che deck hai giocato?</string>
     <string name="hint_opponent_deck">Nome del deck avversario</string>
     <string name="btn_skip">Salta</string>
+    <string name="btn_dont_ask_again">Non chiedermelo più</string>
+    <string name="btn_got_it">Capito</string>
+    <string name="label_opponent_tracking_disabled_title">Tracciamento disattivato</string>
+    <string name="label_opponent_tracking_disabled_msg">Non te lo chiederemo più. Puoi riattivarlo in qualsiasi momento dalle Impostazioni.</string>
     <string name="hint_disable_in_settings">Puoi disattivarlo in qualsiasi momento dalle Impostazioni.</string>
-    <string name="label_matchups">Matchup</string>
+    <string name="label_matchups">MATCHUP</string>
     <string name="label_vs">vs</string>
     <string name="label_opponent_deck">Deck avversario</string>
     <string name="label_your_deck">Il tuo deck</string>
@@ -31,7 +35,7 @@
     <string name="confirm_delete_opponent_deck_msg">Eliminare definitivamente questo deck avversario?</string>
     <string name="confirm_delete_opponent_deck_used_singular">Questo deck avversario è usato in %1$d partita (questa Stagione). Eliminandolo verrà rimosso da quella partita.</string>
     <string name="confirm_delete_opponent_deck_used_plural">Questo deck avversario è usato in %1$d partite (questa Stagione). Eliminandolo verrà rimosso da quelle partite.</string>
-    <string name="label_worst_matchup_callout">Matchup più difficile: %1$s — %2$d%% di vittorie (%3$d partite)</string>
+    <string name="label_worst_matchup_callout">Matchup più difficile: %1$s, %2$d%% di vittorie (%3$d partite)</string>
     <string name="label_no_matchups_filtered">Nessun matchup corrisponde al filtro attuale.</string>
     <string name="label_no_games_today">Nessuna partita giocata oggi.</string>
     <string name="label_no_games_3_days">Nessuna partita giocata negli ultimi 3 giorni.</string>
@@ -43,6 +47,9 @@
     <string name="btn_select_none">Nessuno</string>
     <string name="msg_select_at_least_one">Seleziona almeno un deck per entrambi i giocatori</string>
     <string name="label_encountered_n_times">Incontrato %1$d volte</string>
+    <string name="label_matchup_tough">Matchup difficile</string>
+    <string name="label_matchup_even">Matchup in equilibrio</string>
+    <string name="label_matchup_favorable">Matchup favorevole</string>
     <string name="dialog_edit_match_deck_title">Modifica deck partita n.%1$d</string>
     <string name="label_your_deck_step_subtitle">Il tuo deck (passaggio 1/2)</string>
     <string name="label_opponent_deck_step_subtitle">Il deck dell\'avversario (passaggio 2/2)</string>
@@ -161,7 +168,7 @@
     <string name="btn_next">Avanti</string>
     <string name="btn_back">Indietro</string>
     <string name="btn_lets_start">Iniziamo!</string>
-    <string name="welcome_hero_title">Pocket Tracker</string>
+    <string name="welcome_hero_title">Pocket Stats</string>
     <string name="welcome_hero_tagline">Traccia le tue partite. Conquista le tue serie di vittorie.</string>
     <string name="btn_get_started">Iniziamo</string>
     <string name="btn_close">Chiudi</string>
@@ -183,8 +190,8 @@
     <string name="label_outcome_win">una vittoria (W)</string>
     <string name="label_outcome_loss">una sconfitta (L)</string>
     <string name="confirm_undo_match_msg">Hai registrato %1$s: verrà eliminata definitivamente. Se hai sbagliato ad annullare, registra di nuovo %1$s.</string>
-    <string name="dialog_welcome_title">Benvenuto su Pocket Tracker!</string>
-    <string name="dialog_welcome_title_named">Benvenuto su Pocket Tracker, %1$s!</string>
+    <string name="dialog_welcome_title">Benvenuto su Pocket Stats!</string>
+    <string name="dialog_welcome_title_named">Benvenuto su Pocket Stats, %1$s!</string>
     <string name="dialog_onboarding_style_title">Qual è il tuo stile?</string>
     <string name="dialog_onboarding_style_title_named">Qual è il tuo stile, %1$s?</string>
     <string name="btn_continue">Continua</string>
