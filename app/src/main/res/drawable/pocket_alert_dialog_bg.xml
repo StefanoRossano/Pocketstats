@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sfondo per gli AlertDialog standard (correzione manuale, rinomina Stagione, nuovo deck, ecc.): stesso
+     colore navy (14,24,38) e stesso raggio d'angolo (14dp) usati nei dialog custom disegnati a mano, cosi'
+     tutti i dialog dell'app appaiono coerenti tra loro. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#0E1826"/>
+    <corners android:radius="14dp"/>
+</shape>
