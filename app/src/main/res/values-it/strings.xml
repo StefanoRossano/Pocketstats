@@ -33,7 +33,11 @@
     <string name="confirm_delete_opponent_deck_used_plural">Questo deck avversario è usato in %1$d partite (questa Stagione). Eliminandolo verrà rimosso da quelle partite.</string>
     <string name="label_worst_matchup_callout">Matchup più difficile: %1$s — %2$d%% di vittorie (%3$d partite)</string>
     <string name="label_no_matchups_filtered">Nessun matchup corrisponde al filtro attuale.</string>
-    <string name="dialog_matchup_filter_title">Filtra matchup</string>
+    <string name="label_no_games_today">Nessuna partita giocata oggi.</string>
+    <string name="label_no_games_3_days">Nessuna partita giocata negli ultimi 3 giorni.</string>
+    <string name="label_no_games_all">Nessuna partita giocata finora.</string>
+    <string name="dialog_matchup_filter_title_mine">Filtra: i tuoi deck</string>
+    <string name="dialog_matchup_filter_title_opp">Filtra: gli avversari</string>
     <string name="btn_select_all">Tutti</string>
     <string name="btn_select_none">Nessuno</string>
     <string name="msg_select_at_least_one">Seleziona almeno 1 deck per lato</string>
@@ -196,6 +200,7 @@
     <string name="label_range_3_days">3 giorni</string>
     <string name="label_range_all">Tutto</string>
     <string name="tab_play">Gioca</string>
+    <string name="tab_matches">Partite</string>
     <string name="tab_deck">Deck</string>
     <string name="tab_stats">Stats</string>
     <string name="dialog_select_deck_for_match">Seleziona un deck diverso (partita n.%1$d)</string>
