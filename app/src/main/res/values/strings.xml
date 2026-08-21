@@ -48,6 +48,8 @@
     <string name="btn_select_all">All</string>
     <string name="msg_select_at_least_one">Select at least one deck for both players</string>
     <string name="label_encountered_n_times">Faced %1$d times</string>
+    <string name="label_faced_with_deck">Faced %1$d times with %2$s (%3$d overall)</string>
+    <string name="label_mirror_match">Mirror match</string>
     <string name="label_matchup_tough">Tough matchup</string>
     <string name="label_matchup_even">Even matchup</string>
     <string name="label_matchup_favorable">Favorable matchup</string>
