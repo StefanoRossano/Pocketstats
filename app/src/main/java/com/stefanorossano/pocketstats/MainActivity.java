@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.12";
+    static final String APP_VERSION = "v0.8.13";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -182,6 +182,7 @@ public class MainActivity extends Activity {
         // Sempre visibile, niente piu' pulsante che si espande: la tastiera si apre semplicemente toccando
         // il campo (comportamento normale di ogni EditText), con l'icona "cerca" al posto di "Fatto".
         deckSearchInput = new EditText(this);
+        deckSearchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         deckSearchInput.setSingleLine(); deckSearchInput.setBackground(null);
         deckSearchInput.setTextColor(Color.WHITE); deckSearchInput.setHintTextColor(MUTED_TXT);
         deckSearchInput.setHint(getString(R.string.hint_search_deck)); deckSearchInput.setTextSize(14);
@@ -1004,7 +1005,7 @@ public class MainActivity extends Activity {
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
+        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null); searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0); searchInput.setVisibility(View.GONE);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
@@ -1396,7 +1397,7 @@ public class MainActivity extends Activity {
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
+        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null); searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
@@ -1532,6 +1533,7 @@ public class MainActivity extends Activity {
         LinearLayout box = formBox();
         EditText input = new EditText(this);
         input.setText(currentName); input.setTextColor(Color.WHITE);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         box.addView(input);
         applyMaxLength(box, input, 18);
         focusAndShowKeyboard(input, false);
@@ -1850,6 +1852,7 @@ public class MainActivity extends Activity {
         EditText input = new EditText(this);
         input.setHint(getString(R.string.hint_opponent_deck));
         input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED_TXT);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         box.addView(input);
         applyMaxLength(box, input, 18);
         focusAndShowKeyboard(input, true);
@@ -1887,7 +1890,7 @@ public class MainActivity extends Activity {
         ImageView searchIcon = new ImageView(this); searchIcon.setImageBitmap(makeSearchIcon(Color.WHITE, dp(16)));
         searchIcon.setPadding(dp(12),dp(8),dp(6),dp(8));
         searchBar.addView(searchIcon, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null);
+        EditText searchInput = new EditText(this); searchInput.setSingleLine(); searchInput.setBackground(null); searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         searchInput.setTextColor(Color.WHITE); searchInput.setHintTextColor(MUTED_TXT); searchInput.setHint(getString(R.string.hint_search_deck)); searchInput.setTextSize(14);
         searchInput.setPadding(0,0,0,0);
         searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
