@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.7.6";
+    static final String APP_VERSION = "v0.8.1";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -336,6 +336,7 @@ public class MainActivity extends Activity {
         nameField.setText(store.trainerName);
         box.addView(nameField);
         applyMaxLength(box, nameField, 15);
+        focusAndShowKeyboard(nameField, false);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton(getString(R.string.btn_save), null)
             .setNegativeButton(getString(R.string.btn_cancel), null)
@@ -587,6 +588,7 @@ public class MainActivity extends Activity {
         styleField(nameField);
         box.addView(nameField);
         applyMaxLength(box, nameField, 15);
+        focusAndShowKeyboard(nameField, false);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setCancelable(false)
             .setPositiveButton("OK", null)
@@ -639,7 +641,11 @@ public class MainActivity extends Activity {
         // cerchiati gia' usati per navigare tra le Liste (stesso Bitmap, stesso sfondo circolare).
         String[] colorCycle = {"arcobaleno","verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro"};
         int[] colorLabelRes = {R.string.color_rainbow,R.string.color_green,R.string.color_red,R.string.color_blue,R.string.color_yellow,R.string.color_purple,R.string.color_brown,R.string.color_dark_gray,R.string.color_gold,R.string.color_light_gray};
-        int[] colorIdx = {0};
+        // Wizard = PRIMA volta in assoluto che si sceglie lo stile: non c'e' ancora nessuna preferenza da
+        // ripescare, e partire da "arcobaleno" (indice 0) come vetrina iniziale non e' l'ideale. Si parte dal
+        // verde. La sequenza dei colori resta identica, cambia solo il punto di partenza.
+        int startColorIdx = java.util.Arrays.asList(colorCycle).indexOf("verde");
+        int[] colorIdx = { startColorIdx>=0 ? startColorIdx : 0 };
 
         LinearLayout colorRow = new LinearLayout(this); colorRow.setOrientation(LinearLayout.HORIZONTAL); colorRow.setGravity(Gravity.CENTER_VERTICAL);
         int arrowIconPx = dp(14);
@@ -750,6 +756,7 @@ public class MainActivity extends Activity {
         confirmBtn.setOnClickListener(v -> {
             store.preferredCardStyle = selectedStyle[0];
             store.preferredCardFinish = selectedFinish[0];
+            store.preferredCardColor = colorCycle[colorIdx[0]]; // prima il colore scelto qui veniva semplicemente buttato via
             store.save();
             dialog.dismiss();
             showWelcomeGuide();
@@ -777,14 +784,23 @@ public class MainActivity extends Activity {
             {getString(R.string.guide_row3_title), getString(R.string.guide_row3_desc)},
             {getString(R.string.guide_row4_title), getString(R.string.guide_row4_desc, getString(R.string.action_add_correction))},
         };
-        for (String[] row : rows) {
+        // Un'icona per riga, accanto alla barra azzurra: Stagione / Deck / Statistiche / Modifica.
+        String[] rowIcons = {"season","deck","stats","edit"};
+        for (int ri=0; ri<rows.length; ri++) {
+            String[] row = rows[ri];
             LinearLayout rowLayout = new LinearLayout(this); rowLayout.setOrientation(LinearLayout.HORIZONTAL);
+            rowLayout.setGravity(Gravity.CENTER_VERTICAL);
             View accent = new View(this);
             GradientDrawable accentBg = new GradientDrawable(); accentBg.setColor(blueColor()); accentBg.setCornerRadius(dp(2));
             accent.setBackground(accentBg);
             LinearLayout.LayoutParams accentLp = new LinearLayout.LayoutParams(dp(4), LinearLayout.LayoutParams.MATCH_PARENT);
             accentLp.rightMargin=dp(12); accentLp.topMargin=dp(2); accentLp.bottomMargin=dp(2);
             rowLayout.addView(accent, accentLp);
+
+            GuideIconView icon = new GuideIconView(this, rowIcons[ri], blueColor());
+            LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(30), dp(30));
+            iconLp.rightMargin = dp(12);
+            rowLayout.addView(icon, iconLp);
 
             LinearLayout textCol = new LinearLayout(this); textCol.setOrientation(LinearLayout.VERTICAL);
             TextView rowTitle = new TextView(this); rowTitle.setText(row[0]); rowTitle.setTextColor(Color.WHITE); rowTitle.setTextSize(15); rowTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1119,6 +1135,7 @@ public class MainActivity extends Activity {
                 // appena scelto in "Qual e' il tuo stile?".
                 Deck created = new Deck(newName);
                 created.previewStyle = store.preferredCardStyle;
+                created.previewColor = store.preferredCardColor;
                 created.previewFinish = store.preferredCardFinish;
                 String[] remembered = store.deckAppearanceMemory.get(newName);
                 if (remembered!=null){ created.previewStyle=remembered[0]; created.previewColor=remembered[1]; created.previewFinish=remembered[2]; }
@@ -1145,6 +1162,7 @@ public class MainActivity extends Activity {
         EditText e = field(oldName); e.setText(oldName);
         box.addView(e);
         applyMaxLength(box, e, 18);
+        focusAndShowKeyboard(e, false);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle(getString(R.string.dialog_rename_deck_title)).setView(box)
             .setPositiveButton(getString(R.string.btn_save), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
@@ -1470,9 +1488,9 @@ public class MainActivity extends Activity {
         LinearLayout box = formBox();
         EditText input = new EditText(this);
         input.setText(currentName); input.setTextColor(Color.WHITE);
-        input.setSelection(currentName.length());
         box.addView(input);
         applyMaxLength(box, input, 18);
+        focusAndShowKeyboard(input, false);
         new AlertDialog.Builder(this).setTitle(getString(R.string.action_rename_opponent_deck))
             .setView(box)
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
@@ -1773,6 +1791,7 @@ public class MainActivity extends Activity {
         input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED_TXT);
         box.addView(input);
         applyMaxLength(box, input, 18);
+        focusAndShowKeyboard(input, true);
         new AlertDialog.Builder(this).setTitle(getString(R.string.btn_new_deck))
             .setView(box)
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
@@ -1998,15 +2017,19 @@ public class MainActivity extends Activity {
         subtitleLp.topMargin=dp(2); subtitleLp.leftMargin=dp(18); subtitleLp.rightMargin=dp(18);
         root.addView(subtitleView, subtitleLp);
 
-        // "Tutti"/"Nessuno" rapidi, sopra un contenitore ben distinto (bordo+sfondo proprio) per le
-        // pillole — prima galleggiavano senza nessuna struttura visiva attorno.
+        // "Tutti": un solo controllo al posto della vecchia coppia di pulsanti testuali "Tutti"/"Nessuno".
+        // Riflette sempre lo stato reale (pieno solo se TUTTE le pillole sono selezionate) e funziona da
+        // interruttore: da parziale seleziona tutto, da pieno deseleziona tutto (era il ruolo di "Nessuno").
+        // Allineato a destra, sullo stesso margine del contenitore delle pillole sotto.
         LinearLayout quickRow = new LinearLayout(this); quickRow.setOrientation(LinearLayout.HORIZONTAL);
-        TextView allBtn = new TextView(this); allBtn.setText(getString(R.string.btn_select_all)); allBtn.setTextColor(blueColor()); allBtn.setTextSize(14); allBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        TextView noneBtn = new TextView(this); noneBtn.setText(getString(R.string.btn_select_none)); noneBtn.setTextColor(blueColor()); noneBtn.setTextSize(14); noneBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        noneBtn.setPadding(dp(18),0,0,0);
-        quickRow.addView(allBtn); quickRow.addView(noneBtn);
-        LinearLayout.LayoutParams quickRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        quickRowLp.topMargin=dp(14); quickRowLp.leftMargin=dp(18); quickRowLp.bottomMargin=dp(10);
+        quickRow.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
+        TextView allLabel = new TextView(this); allLabel.setText(getString(R.string.btn_select_all)); allLabel.setTextColor(Color.WHITE); allLabel.setTextSize(14);
+        allLabel.setPadding(0,0,dp(10),0);
+        AllSelectedRadioView allRadio = new AllSelectedRadioView(this);
+        quickRow.addView(allLabel);
+        quickRow.addView(allRadio, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        LinearLayout.LayoutParams quickRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        quickRowLp.topMargin=dp(14); quickRowLp.leftMargin=dp(18); quickRowLp.rightMargin=dp(18); quickRowLp.bottomMargin=dp(10);
         root.addView(quickRow, quickRowLp);
 
         LinearLayout pillsContainer = new LinearLayout(this); pillsContainer.setOrientation(LinearLayout.VERTICAL);
@@ -2035,6 +2058,9 @@ public class MainActivity extends Activity {
                 pills[i].setBackground(bg);
                 pills[i].setTextColor(sel?Color.WHITE:MUTED_TXT);
             }
+            // Il cerchio segue sempre lo stato reale: pieno solo quando NESSUNA pillola e' esclusa.
+            allRadio.checked = !names.isEmpty() && temp.size()>=names.size();
+            allRadio.invalidate();
         };
         for (int i=0;i<names.size();i++){
             String name = names.get(i);
@@ -2052,8 +2078,14 @@ public class MainActivity extends Activity {
             });
         }
         refreshPills[0].run();
-        allBtn.setOnClickListener(v -> { temp.clear(); temp.addAll(names); refreshPills[0].run(); });
-        noneBtn.setOnClickListener(v -> { temp.clear(); refreshPills[0].run(); });
+        // Tutta la riga e' cliccabile (etichetta compresa), non solo il cerchio da 24dp: zona di tocco piu'
+        // generosa e comportamento che ci si aspetta da una riga con controllo.
+        View.OnClickListener toggleAll = v -> {
+            if (temp.size()>=names.size()) temp.clear(); else { temp.clear(); temp.addAll(names); }
+            refreshPills[0].run();
+        };
+        quickRow.setOnClickListener(toggleAll);
+        allRadio.setOnClickListener(toggleAll);
 
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(12),dp(14),dp(14));
@@ -2202,6 +2234,71 @@ public class MainActivity extends Activity {
     // Il glifo "▾" nel testo di un pulsante (es. selettore deck) risultava troppo piccolo rispetto al resto:
     // qui lo ingrandiamo SOLO lui (l'ultimo carattere), lasciando il resto del testo alla dimensione normale.
 
+    // Porta il fuoco su un campo di testo E apre la tastiera: requestFocus() da solo NON la apre, va chiesta
+    // esplicitamente. Il post() serve perche' in un dialog appena creato la view non e' ancora pronta a
+    // riceverla nello stesso frame. selectAll=true seleziona tutto il testo (si sovrascrive digitando),
+    // altrimenti il cursore va in fondo, dopo l'ultimo carattere.
+    void focusAndShowKeyboard(EditText field, boolean selectAll){
+        field.requestFocus();
+        if (selectAll) field.selectAll(); else field.setSelection(field.getText().length());
+        field.post(() -> {
+            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm!=null) imm.showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
+    }
+
+    // Le icone dell'app sono disegnate su Canvas dentro TrackerView: questa piccola View le rende
+    // utilizzabili anche dentro i dialog (che sono fatti di View native), scalando come fanno le altre
+    // (DeckCardRowView ecc.). kind: "season" | "deck" | "stats" | "edit".
+    class GuideIconView extends View {
+        String kind; int iconColor; float density_;
+        GuideIconView(Context c, String kind, int color){ super(c); this.kind=kind; this.iconColor=color; density_=getResources().getDisplayMetrics().density; }
+        @Override protected void onDraw(Canvas c){
+            super.onDraw(c);
+            if (getWidth()==0 || view==null) return;
+            c.save(); c.scale(density_, density_);
+            float cx=(getWidth()/density_)/2f, cy=(getHeight()/density_)/2f;
+            switch(kind){
+                case "season": view.drawSeasonIcon(c, cx, cy, 22, iconColor); break;
+                case "deck":   view.drawCardTabIcon(c, cx, cy, 22, iconColor); break;
+                case "stats":  view.drawStatsTabIcon(c, cx, cy, 22, iconColor); break;
+                default:       view.drawEditIcon(c, cx, cy, 20, iconColor); break;
+            }
+            c.restore();
+        }
+    }
+
+    // Indicatore circolare "tutti selezionati" per il dialog filtri: vuoto = solo contorno; pieno = cerchio
+    // colorato con una spunta bianca dentro (una vera spunta a 2 segmenti, non un carattere unicode: il
+    // rendering di quelli varia troppo da dispositivo a dispositivo).
+    class AllSelectedRadioView extends View {
+        boolean checked=false; float density_;
+        AllSelectedRadioView(Context c){ super(c); density_=getResources().getDisplayMetrics().density; }
+        @Override protected void onDraw(Canvas c){
+            super.onDraw(c);
+            if (getWidth()==0) return;
+            c.save(); c.scale(density_, density_);
+            float size = getWidth()/density_;
+            float cx=size/2f, cy=(getHeight()/density_)/2f, r=size/2f-1.5f;
+            Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+            if (checked){
+                pp.setStyle(Paint.Style.FILL); pp.setColor(blueColor());
+                c.drawCircle(cx,cy,r,pp);
+                pp.setStyle(Paint.Style.STROKE); pp.setColor(Color.WHITE);
+                pp.setStrokeWidth(2f); pp.setStrokeCap(Paint.Cap.ROUND); pp.setStrokeJoin(Paint.Join.ROUND);
+                android.graphics.Path check = new android.graphics.Path();
+                check.moveTo(cx-r*0.42f, cy);
+                check.lineTo(cx-r*0.10f, cy+r*0.34f);
+                check.lineTo(cx+r*0.46f, cy-r*0.34f);
+                c.drawPath(check, pp);
+            } else {
+                pp.setStyle(Paint.Style.STROKE); pp.setStrokeWidth(2f); pp.setColor(Color.rgb(90,105,130));
+                c.drawCircle(cx,cy,r,pp);
+            }
+            c.restore();
+        }
+    }
+
     LinearLayout formBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(6),dp(20),0);return l;}
 
     // Applica un limite di caratteri a un campo (impedisce di digitarne oltre, invece di validare dopo) e
@@ -2294,11 +2391,12 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(getString(R.string.confirm_delete_all_title))
             .setMessage(getString(R.string.confirm_delete_all_msg))
             .setPositiveButton(getString(R.string.action_delete_all), (d,w) -> {
-                store.seasons.clear();
-                store.current = 0;
-                store.save();
-                if (view != null) view.invalidate();
-                wizardStep1(true, null);
+                // Cancella DAVVERO tutto (prima svuotava solo le Stagioni, lasciando nome allenatore,
+                // preferenze card, deck avversari conosciuti, flag di onboarding...): si azzerano le
+                // SharedPreferences per intero e si riavvia l'Activity, cosi' l'app riparte esattamente
+                // come a una prima installazione — schermata iniziale e poi wizard.
+                store.pref.edit().clear().apply();
+                recreate();
             })
             .setNegativeButton(getString(R.string.btn_cancel), null)
             .show();
@@ -2314,6 +2412,7 @@ public class MainActivity extends Activity {
         box.addView(header);
         EditText e=field(s.name); e.setText(s.name);
         box.addView(e);
+        focusAndShowKeyboard(e, false);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton(getString(R.string.btn_save), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
         showNonDismissing(dialog, () -> {
@@ -2402,6 +2501,7 @@ public class MainActivity extends Activity {
         // nell'anteprima finche' il salvataggio non lo trasferisce sul Deck vero.
         Deck pendingDeck = new Deck("");
         pendingDeck.previewStyle = store.preferredCardStyle; // parte dallo stile preferito, non sempre "spine"
+        pendingDeck.previewColor = store.preferredCardColor;   // idem per il colore: prima restava sempre "grigiochiaro"
         pendingDeck.previewFinish = store.preferredCardFinish; // idem per la finitura, non sempre "glossy"
         // true solo se l'utente ha esplicitamente confermato una scelta in "Scegli anteprima" per QUESTO
         // deck: da quel momento in poi la digitazione del nome non sovrascrive piu' la sua scelta manuale
@@ -2574,6 +2674,13 @@ public class MainActivity extends Activity {
         String initialStyle = java.util.Arrays.asList(styleKeysCheck).contains(store.preferredCardStyle) ? store.preferredCardStyle : "spine";
         String[] selectedStyle = { initialStyle };
         String[] selectedFinish = { "matte".equals(store.preferredCardFinish) ? "matte" : "glossy" };
+        // Colore preferito: prima questo dialog mostrava TUTTE le card in "grigiochiaro" fisso e non
+        // permetteva di sceglierlo, quindi la preferenza era una combinazione monca (stile+finitura). Ora e'
+        // completa (stile+colore+finitura), con lo stesso ciclatore a chevron gia' usato nel wizard.
+        String[] colorCycle = {"arcobaleno","verde","rosso","azzurro","giallo","viola","marrone","grigioscuro","oro","grigiochiaro"};
+        int[] colorLabelRes = {R.string.color_rainbow,R.string.color_green,R.string.color_red,R.string.color_blue,R.string.color_yellow,R.string.color_purple,R.string.color_brown,R.string.color_dark_gray,R.string.color_gold,R.string.color_light_gray};
+        int prefColorIdx = java.util.Arrays.asList(colorCycle).indexOf(store.preferredCardColor);
+        int[] colorIdx = { prefColorIdx>=0 ? prefColorIdx : 0 };
 
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
@@ -2595,7 +2702,7 @@ public class MainActivity extends Activity {
                 gridRowLp.topMargin = i==0?0:dp(12);
                 grid.addView(gridRow, gridRowLp);
             }
-            PreviewSwatchView sw = new PreviewSwatchView(this, styleKeys[i], "grigiochiaro");
+            PreviewSwatchView sw = new PreviewSwatchView(this, styleKeys[i], colorCycle[colorIdx[0]]);
             sw.selected = styleKeys[i].equals(selectedStyle[0]);
             swatches[i]=sw;
             LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(dp(84), dp(105));
@@ -2607,6 +2714,27 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         rowLp.topMargin=dp(10); rowLp.bottomMargin=dp(14);
         root.addView(grid, rowLp);
+
+        // Ciclatore colore (chevron sinistra/destra + nome colore al centro): cambia il colore mostrato su
+        // tutte e 6 le card contemporaneamente, indipendentemente da quale stile e' selezionato.
+        LinearLayout colorRow = new LinearLayout(this); colorRow.setOrientation(LinearLayout.HORIZONTAL); colorRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView prevColorBtn = new TextView(this); prevColorBtn.setText("\u2039"); prevColorBtn.setTextColor(Color.WHITE); prevColorBtn.setTextSize(24); prevColorBtn.setGravity(Gravity.CENTER);
+        TextView nextColorBtn = new TextView(this); nextColorBtn.setText("\u203A"); nextColorBtn.setTextColor(Color.WHITE); nextColorBtn.setTextSize(24); nextColorBtn.setGravity(Gravity.CENTER);
+        prevColorBtn.setPadding(dp(18),0,dp(18),0); nextColorBtn.setPadding(dp(18),0,dp(18),0);
+        TextView colorLabel = new TextView(this); colorLabel.setText(getString(colorLabelRes[colorIdx[0]])); colorLabel.setTextColor(Color.WHITE); colorLabel.setTextSize(13); colorLabel.setGravity(Gravity.CENTER);
+        colorRow.addView(prevColorBtn);
+        colorRow.addView(colorLabel, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        colorRow.addView(nextColorBtn);
+        LinearLayout.LayoutParams colorRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        colorRowLp.leftMargin=dp(18); colorRowLp.rightMargin=dp(18); colorRowLp.bottomMargin=dp(14);
+        root.addView(colorRow, colorRowLp);
+        Runnable applyColor = () -> {
+            String ck = colorCycle[colorIdx[0]];
+            for (PreviewSwatchView s: swatches){ s.color = ck; s.invalidate(); }
+            colorLabel.setText(getString(colorLabelRes[colorIdx[0]]));
+        };
+        prevColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]-1+colorCycle.length)%colorCycle.length; applyColor.run(); });
+        nextColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]+1)%colorCycle.length; applyColor.run(); });
 
         // Selettore Matte/Glossy, sotto le card: vale per QUALSIASI stile scelto, non e' legato a uno
         // stile specifico.
@@ -2659,6 +2787,7 @@ public class MainActivity extends Activity {
         confirmBtn.setOnClickListener(v -> {
             store.preferredCardStyle = selectedStyle[0];
             store.preferredCardFinish = selectedFinish[0];
+            store.preferredCardColor = colorCycle[colorIdx[0]];
             store.save(); view.invalidate();
             dialog.dismiss();
         });
@@ -2979,7 +3108,9 @@ public class MainActivity extends Activity {
     // una card preimpostata disegnata sul canvas — l'anteprima da immagine personalizzata e' stata rimossa
     // (causava troppi problemi), restano solo le Liste (screenshot) come funzione separata.
     void drawDeckPreview(Canvas c, Deck d, float l, float t, float r, float b){
-        if (d==null) { drawPresetPreviewCard(c, l,t,r,b, "spine", "arcobaleno", true); return; }
+        // Placeholder "nessun deck": mostra la combinazione PREFERITA (stile+colore+finitura), non piu'
+        // "spine"+arcobaleno fissi — era incoerente con lo stile scelto dall'utente nel wizard.
+        if (d==null) { drawPresetPreviewCard(c, l,t,r,b, store.preferredCardStyle, store.preferredCardColor, !"matte".equals(store.preferredCardFinish)); return; }
         drawPresetPreviewCard(c, l,t,r,b, d.previewStyle==null?"spine":d.previewStyle, d.previewColor==null?"grigiochiaro":d.previewColor, !"matte".equals(d.previewFinish));
     }
 
@@ -3841,7 +3972,7 @@ public class MainActivity extends Activity {
             // 282, non piu' 158-308): tolto il tip "Tocca per cambiare" sotto, restava spazio vuoto inutile.
             box(c,18,158,w-18,282,card);
             txt(c,getString(R.string.settings_preferred_style),w/2,180,12,muted,Paint.Align.CENTER);
-            drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, "grigiochiaro", !"matte".equals(store.preferredCardFinish));
+            drawPresetPreviewCard(c, w/2-32,192,w/2+32,272, store.preferredCardStyle, store.preferredCardColor, !"matte".equals(store.preferredCardFinish));
 
             // Lingua: stessa impostazione grafica di getString(R.string.label_trainer_name) sopra (etichetta + valore + matita).
             box(c,18,296,w-18,376,card);
@@ -3944,11 +4075,11 @@ public class MainActivity extends Activity {
             Deck curDeckObjForMenu = noDeck ? null : findDeck(s, s.currentDeck);
             if(noDeck){
                 box(c,18,152,w-18,244,Color.rgb(10,18,30));
-                float thumbW=64, thumbH=80, thumbX=28, thumbY=152+6;
-                drawDeckPreview(c, null, thumbX, thumbY, thumbX+thumbW, thumbY+thumbH); // null -> anteprima arcobaleno di default
-                float textX = thumbX+thumbW+14;
-                txt(c,getString(R.string.label_no_deck_selected),textX,178,17,muted,Paint.Align.LEFT);
-                txt(c,getString(R.string.hint_tap_select_deck),textX,198,12,muted,Paint.Align.LEFT);
+                // Nessuna anteprima card qui: la card rappresenta un deck, e qui un deck non c'e' — mostrarne
+                // una sarebbe concettualmente sbagliato. Il testo parte dal margine normale della card.
+                float textX = 34;
+                txt(c,getString(R.string.label_no_deck_selected),textX,186,17,muted,Paint.Align.LEFT);
+                txt(c,getString(R.string.hint_tap_select_deck),textX,208,12,muted,Paint.Align.LEFT);
                 currentDeckKebabX=-1000; currentDeckKebabY=-1000; // nessun deck selezionato: nessun tap accidentale su una coordinata di un disegno precedente
             } else {
                 int[] curWl = deckWL(s, s.currentDeck);
@@ -4732,6 +4863,32 @@ public class MainActivity extends Activity {
             c.drawRoundRect(cx-cw/2, cy-ch/2, cx+cw/2, cy+ch/2, r, r, p);
         }
         // Icona "grafico a barre" per il tab Stats.
+        // Icona "Stagione": un trofeo (coppa + manici + base) — non esisteva nessuna icona per le Stagioni,
+        // e il trofeo e' il simbolo piu' immediato per un periodo competitivo che si apre e si chiude.
+        void drawSeasonIcon(Canvas c, float cx, float cy, float size, int color){
+            float s = size/24f;
+            p.setColor(color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.8f); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND);
+            // Coppa: trapezio rovesciato con fondo arrotondato.
+            android.graphics.Path cup = new android.graphics.Path();
+            cup.moveTo(cx-6*s, cy-9*s);
+            cup.lineTo(cx+6*s, cy-9*s);
+            cup.lineTo(cx+4.5f*s, cy-1*s);
+            cup.quadTo(cx, cy+2.5f*s, cx-4.5f*s, cy-1*s);
+            cup.close();
+            c.drawPath(cup, p);
+            // Manici laterali.
+            android.graphics.Path lh = new android.graphics.Path();
+            lh.moveTo(cx-6*s, cy-7.5f*s); lh.quadTo(cx-10*s, cy-6*s, cx-5.5f*s, cy-3*s);
+            c.drawPath(lh, p);
+            android.graphics.Path rh = new android.graphics.Path();
+            rh.moveTo(cx+6*s, cy-7.5f*s); rh.quadTo(cx+10*s, cy-6*s, cx+5.5f*s, cy-3*s);
+            c.drawPath(rh, p);
+            // Stelo e base.
+            c.drawLine(cx, cy+2*s, cx, cy+5.5f*s, p);
+            c.drawLine(cx-4*s, cy+8*s, cx+4*s, cy+8*s, p);
+            c.drawLine(cx-2.5f*s, cy+5.5f*s, cx+2.5f*s, cy+5.5f*s, p);
+        }
+
         void drawStatsTabIcon(Canvas c, float cx, float cy, float size, int color){
             float s = size/24f;
             p.setColor(color); p.setStyle(Paint.Style.FILL);
@@ -4992,6 +5149,7 @@ public class MainActivity extends Activity {
         String trainerName=""; boolean onboardingDone=false; // nome allenatore e flag "wizard di benvenuto gia' fatto"
         String preferredCardStyle="spine"; // stile preferito per le anteprime dei nuovi deck ("spine"|"gem"|"crescent"|...)
         String preferredCardFinish="glossy"; // finitura preferita per le anteprime dei nuovi deck ("glossy"|"matte")
+        String preferredCardColor="grigiochiaro"; // colore preferito: prima non veniva salvato affatto, quindi un nuovo deck usciva sempre col colore di default anche dopo averne scelto un altro nel wizard
         boolean trackOpponentDeck=false; // preferenza silenziosa: di default spenta per ogni nuovo utente,
                                           // nessuna domanda nel wizard (vedi discussione: farla nel wizard
                                           // avrebbe aggiunto attrito prima ancora che l'utente sapesse se
@@ -5009,12 +5167,13 @@ public class MainActivity extends Activity {
         java.util.LinkedHashMap<String,String[]> deckAppearanceMemory=new java.util.LinkedHashMap<>();
         String language="en"; // lingua dell'app: "en" (default) | "it" — letta anche in attachBaseContext(), PRIMA che Store venga normalmente istanziato altrove, quindi con un accesso diretto alle SharedPreferences (vedi Companion piu' sotto)
         Store(Context c){pref=c.getSharedPreferences("tracker",0);load();}
-        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);JSONArray koa=new JSONArray();for(String k:knownOpponentDecks)koa.put(k);o.put("knownOpponentDecks",koa);JSONObject dam=new JSONObject();for(java.util.Map.Entry<String,String[]> en:deckAppearanceMemory.entrySet()){JSONArray triple=new JSONArray();triple.put(en.getValue()[0]);triple.put(en.getValue()[1]);triple.put(en.getValue()[2]);dam.put(en.getKey(),triple);}o.put("deckAppearanceMemory",dam);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putBoolean("trackOpponentDeck",trackOpponentDeck).putBoolean("firstMatchTipShown",firstMatchTipShown).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
+        void save(){try{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(Season s:seasons)a.put(s.json());o.put("seasons",a);o.put("current",current);JSONArray koa=new JSONArray();for(String k:knownOpponentDecks)koa.put(k);o.put("knownOpponentDecks",koa);JSONObject dam=new JSONObject();for(java.util.Map.Entry<String,String[]> en:deckAppearanceMemory.entrySet()){JSONArray triple=new JSONArray();triple.put(en.getValue()[0]);triple.put(en.getValue()[1]);triple.put(en.getValue()[2]);dam.put(en.getKey(),triple);}o.put("deckAppearanceMemory",dam);pref.edit().putString("data",o.toString()).putString("trainerName",trainerName).putBoolean("onboardingDone",onboardingDone).putString("preferredCardStyle",preferredCardStyle).putString("preferredCardFinish",preferredCardFinish).putString("preferredCardColor",preferredCardColor).putBoolean("trackOpponentDeck",trackOpponentDeck).putBoolean("firstMatchTipShown",firstMatchTipShown).putString("language",language).apply();}catch(Exception e){Log.e(TAG,"Errore nel salvataggio dati",e);}}
         void load(){
             trainerName = pref.getString("trainerName","");
             onboardingDone = pref.getBoolean("onboardingDone", false);
             preferredCardStyle = pref.getString("preferredCardStyle","spine");
             preferredCardFinish = pref.getString("preferredCardFinish","glossy");
+            preferredCardColor = pref.getString("preferredCardColor","grigiochiaro");
             trackOpponentDeck = pref.getBoolean("trackOpponentDeck", false);
             firstMatchTipShown = pref.getBoolean("firstMatchTipShown", false);
             language = pref.getString("language","en");
