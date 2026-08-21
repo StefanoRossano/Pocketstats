@@ -46,6 +46,8 @@
     <string name="btn_select_all">Tutti</string>
     <string name="msg_select_at_least_one">Seleziona almeno un deck per entrambi i giocatori</string>
     <string name="label_encountered_n_times">Incontrato %1$d volte</string>
+    <string name="label_faced_with_deck">Affrontato %1$d volte con %2$s (%3$d in totale)</string>
+    <string name="label_mirror_match">Mirror match</string>
     <string name="label_matchup_tough">Matchup difficile</string>
     <string name="label_matchup_even">Matchup in equilibrio</string>
     <string name="label_matchup_favorable">Matchup favorevole</string>
