@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketTracker";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.6.3";
+    static final String APP_VERSION = "v0.6.4";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1157,6 +1157,28 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Card deck AVVERSARIO nei dialog di selezione: stessa struttura di DeckCardRowView (stroke di
+    // selezione identico), ma disegna opponentDeckCardVisual invece di deckCardVisual — cosi' le due
+    // famiglie di card sono visivamente indistinguibili a parte l'assenza dell'anteprima grafica.
+    class OpponentDeckCardRowView extends View {
+        String oppName; int timesEncountered, wins, losses; boolean selected=false; float density_;
+        OpponentDeckCardRowView(Context c, String name, int times, int w, int l){ super(c); oppName=name; timesEncountered=times; wins=w; losses=l; density_=getResources().getDisplayMetrics().density; }
+        @Override protected void onDraw(Canvas c){
+            super.onDraw(c);
+            if (getWidth()==0) return;
+            c.save(); c.scale(density_, density_);
+            float w = getWidth()/density_;
+            view.opponentDeckCardVisual(c, oppName, timesEncountered, wins, losses, 1.5f, w);
+            if (selected) {
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
+                p.setColor(Color.argb(170,255,250,235));
+                c.drawRoundRect(new RectF(18,1.5f,w-18,93.5f), 18,18, p);
+            }
+            c.restore();
+        }
+    }
+
     // Menu "⋮" di una riga nel dialog getString(R.string.action_change_deck): stesse azioni disponibili altrove per un deck, con in
     // piu' getString(R.string.action_view_lista) separata da getString(R.string.action_add_lista) (prima un'unica voce faceva entrambe le cose in base
     // allo stato). onChanged: richiamato per far ridisegnare la riga (es. dopo rinomina).
@@ -1450,10 +1472,18 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText(getString(R.string.label_your_deck)); title.setTextColor(Color.WHITE); title.setTextSize(22); title.setTypeface(Typeface.DEFAULT_BOLD);
+        // Titolo generico (con il numero partita, cosi' e' chiaro DI QUALE partita si sta parlando) +
+        // sottotitolo che dice sia DI CHE PASSO si tratta sia QUANTI passi ci sono in totale — prima il
+        // titolo era solo "Il tuo deck", senza contesto su cosa si stesse facendo o quanti step mancassero.
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_edit_match_deck_title,num)); title.setTextColor(Color.WHITE); title.setTextSize(20); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
+
+        TextView subtitle = new TextView(this); subtitle.setText(getString(R.string.label_your_deck_step_subtitle)); subtitle.setTextColor(MUTED_TXT); subtitle.setTextSize(15);
+        LinearLayout.LayoutParams subtitleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subtitleLp.topMargin=dp(2); subtitleLp.leftMargin=dp(18); subtitleLp.rightMargin=dp(18);
+        root.addView(subtitle, subtitleLp);
 
         Deck[] selected = buildOwnDeckPickerSection(root, s, currentOwnSelection, null);
 
@@ -1487,10 +1517,15 @@ public class MainActivity extends Activity {
         GradientDrawable rootBg = new GradientDrawable(); rootBg.setColor(Color.rgb(14,24,38)); rootBg.setCornerRadius(dp(14));
         root.setBackground(rootBg);
 
-        TextView title = new TextView(this); title.setText(getString(R.string.label_opponent_deck)); title.setTextColor(Color.WHITE); title.setTextSize(22); title.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView title = new TextView(this); title.setText(getString(R.string.dialog_edit_match_deck_title,num)); title.setTextColor(Color.WHITE); title.setTextSize(20); title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleLp.topMargin=dp(16); titleLp.leftMargin=dp(18); titleLp.rightMargin=dp(18);
         root.addView(title, titleLp);
+
+        TextView subtitle = new TextView(this); subtitle.setText(getString(R.string.label_opponent_deck_step_subtitle)); subtitle.setTextColor(MUTED_TXT); subtitle.setTextSize(15);
+        LinearLayout.LayoutParams subtitleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subtitleLp.topMargin=dp(2); subtitleLp.leftMargin=dp(18); subtitleLp.rightMargin=dp(18);
+        root.addView(subtitle, subtitleLp);
 
         String[] selectedOpp = buildOpponentDeckPickerSection(root, s, m.opponentDeck);
 
@@ -1753,44 +1788,32 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(400));
         parent.addView(scroll, scrollLp);
 
-        int rowH = 72; // altezza fissa in dp di ogni card statistiche (nome + riga stats)
+        int rowH = 95; // stessa altezza (92+3 per lo stroke di selezione) delle card dei tuoi deck
 
         Runnable[] rebuildList = new Runnable[1];
         Runnable[] refreshFromSource = new Runnable[1];
         rebuildList[0] = () -> {
             list.removeAllViews();
             for (String name: filtered) {
-                LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
-                row.setPadding(dp(14),dp(10),dp(14),dp(10));
-                boolean isSelected = name.equalsIgnoreCase(selected[0]);
-                GradientDrawable rowBg = new GradientDrawable(); rowBg.setCornerRadius(dp(10)); rowBg.setColor(Color.rgb(20,30,46));
-                if (isSelected) rowBg.setStroke(dp(2), Color.argb(191,255,250,235));
-                row.setBackground(rowBg);
-                LinearLayout nameRow = new LinearLayout(this); nameRow.setOrientation(LinearLayout.HORIZONTAL); nameRow.setGravity(Gravity.CENTER_VERTICAL);
-                TextView nameTv = new TextView(this); nameTv.setText(name); nameTv.setTextColor(Color.WHITE); nameTv.setTextSize(15); nameTv.setTypeface(Typeface.DEFAULT_BOLD);
-                nameRow.addView(nameTv, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-                TextView kebabBtn = new TextView(this); kebabBtn.setText("⋮"); kebabBtn.setTextColor(MUTED_TXT); kebabBtn.setTextSize(18);
-                kebabBtn.setPadding(dp(10),dp(2),dp(2),dp(2));
-                nameRow.addView(kebabBtn);
-                row.addView(nameRow);
                 int[] st = stats.get(name);
-                TextView statsTv = new TextView(this); statsTv.setTextColor(MUTED_TXT); statsTv.setTextSize(12);
-                if (st!=null){
-                    int wr = Math.round(100f*st[1]/st[0]);
-                    statsTv.setText(getString(R.string.label_played_against_n_times,st[0])+" · "+st[1]+"W "+st[2]+"L · "+wr+"%");
-                } else {
-                    statsTv.setText(getString(R.string.label_played_against_n_times,0));
-                }
-                LinearLayout.LayoutParams statsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                statsLp.topMargin = dp(2);
-                row.addView(statsTv, statsLp);
-                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rowLp.bottomMargin = dp(8);
+                int times = st!=null ? st[0] : 0, w2 = st!=null ? st[1] : 0, l2 = st!=null ? st[2] : 0;
+                android.widget.FrameLayout row = new android.widget.FrameLayout(this);
+                OpponentDeckCardRowView cardView = new OpponentDeckCardRowView(this, name, times, w2, l2);
+                cardView.selected = name.equalsIgnoreCase(selected[0]);
+                row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(95)));
+                // Stessa identica zona di tocco del kebab "⋮" usata per i tuoi deck (stessa formula di
+                // disegno w-18-10-8,y+22 in opponentDeckCardVisual/deckCardVisual: la card e' identica).
+                View kebabHotspot = new View(this);
+                android.widget.FrameLayout.LayoutParams khLp = new android.widget.FrameLayout.LayoutParams(dp(44), dp(44));
+                khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(14); khLp.topMargin = dp(1.5f);
+                row.addView(kebabHotspot, khLp);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(95));
+                rowLp.bottomMargin = dp(10);
                 list.addView(row, rowLp);
-                row.setOnClickListener(v -> { selected[0]=name; rebuildList[0].run(); });
-                kebabBtn.setOnClickListener(v -> showOpponentDeckRowMenu(s, name, kebabBtn, refreshFromSource[0]));
+                cardView.setOnClickListener(v -> { selected[0]=name; rebuildList[0].run(); });
+                kebabHotspot.setOnClickListener(v -> showOpponentDeckRowMenu(s, name, kebabHotspot, refreshFromSource[0]));
             }
-            int rowHeightPx = dp(rowH)+dp(8);
+            int rowHeightPx = dp(rowH)+dp(10);
             int wantedHeight = filtered.size()*rowHeightPx;
             scrollLp.height = Math.min(wantedHeight, dp(400));
             scroll.setLayoutParams(scrollLp);
@@ -1801,7 +1824,7 @@ public class MainActivity extends Activity {
             int idx = -1;
             for (int i=0;i<filtered.size();i++) if (filtered.get(i).equalsIgnoreCase(selected[0])) { idx=i; break; }
             if (idx>=0) {
-                int rp = dp(rowH)+dp(8);
+                int rp = dp(rowH)+dp(10);
                 int targetY = Math.max(0, idx*rp - dp(10));
                 scroll.post(() -> scroll.scrollTo(0, targetY));
             }
@@ -4244,6 +4267,24 @@ public class MainActivity extends Activity {
             }
             int gcol = gain>0?green:(gain<0?red:muted);
             txt(c, getString(R.string.label_variation,(gain>0?"+":"")+gain), textX, y+82, 11, gcol, Paint.Align.LEFT);
+            return y+104;
+        }
+
+        // Card deck AVVERSARIO — stessa identica fisionomia di deckCardVisual (stesso sfondo, stessa
+        // dimensione, stesso stile W/L/%, stesso kebab "⋮"): l'unica differenza voluta e' l'assenza
+        // dell'anteprima grafica (gli avversari non hanno stile/colore, solo un nome) e della riga
+        // "Variazione" (non tracciata per un avversario) — lo spazio dove starebbe resta semplicemente vuoto,
+        // per mantenere la STESSA altezza (92) della card gemella.
+        float opponentDeckCardVisual(Canvas c, String name, int timesEncountered, int W, int L, float y, float w){
+            box(c,18,y,w-18,y+92,Color.rgb(10,18,30));
+            float textX = 34;
+            txt(c, name, textX, y+26, 17, white, Paint.Align.LEFT);
+            txt(c, getString(R.string.label_encountered_n_times,timesEncountered), textX, y+46, 12, white, Paint.Align.LEFT);
+            drawKebabIcon(c, w-18-10-8, y+22, muted);
+            float wr = (W+L)==0?0:100f*W/(W+L);
+            txtRow(c, textX, y+64, 11,
+                new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)},
+                new int[]{green, red, wrColor(wr,W+L)});
             return y+104;
         }
 
