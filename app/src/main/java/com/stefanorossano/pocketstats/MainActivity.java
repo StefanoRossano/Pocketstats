@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.10";
+    static final String APP_VERSION = "v0.8.11";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -933,6 +933,13 @@ public class MainActivity extends Activity {
                 wizardInProgress = false; // da qui in poi la schermata sotto e' la Stagione appena creata, non piu' una pagina vuota
                 if (view == null) { setupTrackerView(); }
                 screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
+                // Stessa regola di selezione deck usata rispondendo "No" (mancava qui: rispondendo "Si" e
+                // inserendo i dati pregressi, il dialog di scelta deck non veniva mai proposto).
+                if (store.seasons.size()<=1) {
+                    pickDeckFor(s, getString(R.string.dialog_choose_deck_title), getString(R.string.btn_skip), dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+                } else {
+                    showDeckSelectorDialog(s, getString(R.string.dialog_choose_deck_title), null, chosen -> { s.currentDeck = chosen.name; store.save(); view.invalidate(); });
+                }
                 return true;
             } catch (Exception e) { return false; }
         }, getString(R.string.err_invalid_values));
