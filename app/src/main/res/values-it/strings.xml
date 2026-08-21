@@ -42,7 +42,10 @@
     <string name="btn_select_all">Tutti</string>
     <string name="btn_select_none">Nessuno</string>
     <string name="msg_select_at_least_one">Seleziona almeno un deck per entrambi i giocatori</string>
-    <string name="label_played_against_n_times">Giocato %1$d volte</string>
+    <string name="label_encountered_n_times">Incontrato %1$d volte</string>
+    <string name="dialog_edit_match_deck_title">Modifica deck partita n.%1$d</string>
+    <string name="label_your_deck_step_subtitle">Il tuo deck (passaggio 1/2)</string>
+    <string name="label_opponent_deck_step_subtitle">Il deck dell\'avversario (passaggio 2/2)</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
     <string name="action_add_lista">Aggiungi Lista</string>
