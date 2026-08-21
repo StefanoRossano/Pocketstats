@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.7.2";
+    static final String APP_VERSION = "v0.7.6";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -531,7 +531,16 @@ public class MainActivity extends Activity {
     // Primo step del wizard (solo primissimo avvio): titolo + sottotitolo + pulsante, prima vivevano nello
     // splash automatico; ora e' un vero step del wizard, con un pulsante esplicito su cui l'utente clicca
     // per procedere (invece dello splash, che ora e' del tutto automatico/temporizzato).
+    // True dall'inizio del wizard di primo avvio fino alla creazione della prima Stagione: finche' e' attivo,
+    // la schermata sotto i dialog resta VUOTA (solo sfondo). Prima si intravedevano ingranaggio, "?", saluto
+    // orario e "Nuova Stagione" dietro ai dialog del wizard, il che stonava (siamo ancora in configurazione).
+    // Non si puo' usare "seasons.isEmpty()" al posto di questo flag: chi cancella tutte le Stagioni piu' tardi
+    // deve continuare a vedere la lista normale, non una pagina vuota.
+    boolean wizardInProgress = false;
+
     void showWizardIntroStep(){
+        wizardInProgress = true;
+        if (view!=null) view.invalidate();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setBackgroundColor(Color.rgb(7,11,18));
@@ -881,6 +890,7 @@ public class MainActivity extends Activity {
                 s.points = np; s.streak = ns;
                 importDeckNamesFromPreviousSeason(s);
                 store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
+                wizardInProgress = false; // da qui in poi la schermata sotto e' la Stagione appena creata, non piu' una pagina vuota
                 if (view == null) { setupTrackerView(); }
                 screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
                 return true;
@@ -898,9 +908,10 @@ public class MainActivity extends Activity {
         s.currentDeck = "Unknown";
         importDeckNamesFromPreviousSeason(s);
         store.seasons.add(s); store.current = store.seasons.size()-1; store.save();
+        wizardInProgress = false; // idem: la Stagione esiste, la pagina vuota del wizard non serve piu'
         if (view == null) { setupTrackerView(); }
         screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
-        pickDeckFor(s, getString(R.string.dialog_choose_deck_title), "Salta", dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        pickDeckFor(s, getString(R.string.dialog_choose_deck_title), getString(R.string.btn_skip), dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
     }
 
 
@@ -1068,8 +1079,23 @@ public class MainActivity extends Activity {
         sectionLp.topMargin = dp(10); newDeckSection.setLayoutParams(sectionLp); newDeckSection.setVisibility(View.GONE);
         box.addView(newDeckSection);
 
-        newDeckBtn.setOnClickListener(v -> { newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE); newDeckName.requestFocus(); });
-        closeNewDeck.setOnClickListener(v -> { newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE); });
+        newDeckBtn.setOnClickListener(v -> {
+            newDeckSection.setVisibility(View.VISIBLE); newDeckBtn.setVisibility(View.GONE);
+            newDeckName.requestFocus();
+            newDeckName.selectAll(); // testo gia' selezionato: si puo' sovrascrivere digitando, senza cancellare a mano
+            // requestFocus() da solo NON apre la tastiera: va chiesta esplicitamente. Il post() serve perche'
+            // la view e' appena diventata visibile e non e' ancora pronta a riceverla in questo stesso frame.
+            newDeckName.post(() -> {
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm!=null) imm.showSoftInput(newDeckName, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            });
+        });
+        closeNewDeck.setOnClickListener(v -> {
+            newDeckName.setText(""); newDeckSection.setVisibility(View.GONE); newDeckBtn.setVisibility(View.VISIBLE);
+            // Chiude anche la tastiera: restava aperta coprendo mezza lista deck dopo aver annullato.
+            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm!=null) imm.hideSoftInputFromWindow(newDeckName.getWindowToken(), 0);
+        });
 
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton(getString(R.string.btn_confirm), null).setNegativeButton(negativeLabel, null).create();
@@ -1087,7 +1113,17 @@ public class MainActivity extends Activity {
             String newName = newDeckName.getText().toString().trim();
             if (!newName.isEmpty()) {
                 if (deckNameTaken(s, newName)) return false;
-                s.decks.add(new Deck(newName)); store.save();
+                // Applica stile/colore/finitura preferiti (e la memoria di aspetto per quel nome, se gia'
+                // usato in passato): questa scorciatoia "crea deck al volo" li ignorava del tutto, quindi il
+                // PRIMO deck creato nel wizard usciva sempre con l'aspetto di default invece di quello
+                // appena scelto in "Qual e' il tuo stile?".
+                Deck created = new Deck(newName);
+                created.previewStyle = store.preferredCardStyle;
+                created.previewFinish = store.preferredCardFinish;
+                String[] remembered = store.deckAppearanceMemory.get(newName);
+                if (remembered!=null){ created.previewStyle=remembered[0]; created.previewColor=remembered[1]; created.previewFinish=remembered[2]; }
+                store.deckAppearanceMemory.put(newName, new String[]{created.previewStyle, created.previewColor, created.previewFinish});
+                s.decks.add(created); store.save();
                 onPicked.accept(newName);
                 return true;
             }
@@ -1677,6 +1713,10 @@ public class MainActivity extends Activity {
             .setCancelable(false)
             .setNegativeButton(getString(R.string.btn_no_thanks), (d,w) -> {
                 store.firstMatchTipShown = true; store.save();
+                // Anche rifiutando qui va detto dove ripescare la funzione, altrimenti il tip (che appare una
+                // sola volta in assoluto) sparisce per sempre senza lasciare traccia di dove riattivarlo.
+                // Riusa il dialog gia' esistente per "Non chiedermelo piu'": stesso identico messaggio.
+                showOpponentTrackingDisabledInfoDialog();
             })
             .setPositiveButton(getString(R.string.btn_yes_enable), (d,w) -> {
                 store.trackOpponentDeck = true; store.firstMatchTipShown = true; store.save();
@@ -3334,8 +3374,16 @@ public class MainActivity extends Activity {
         void resetScrollIfNeeded(String key){ if(!key.equals(scrollKey)){ scrollY=0; scrollKey=key; } }
         void finishScroll(){
             maxScrollY = Math.max(0, lastContentBottom-(bodyBottom-bodyTop));
-            if(scrollY>maxScrollY) scrollY=maxScrollY;
-            if(scrollY<0) scrollY=0;
+            // Se il contenuto si e' accorciato (es. un filtro Matchup che riduce le righe), lo scroll
+            // attuale puo' superare il nuovo massimo: va limitato. Ma il disegno di QUESTO frame e' gia'
+            // avvenuto con il vecchio scrollY, mentre i tocchi successivi userebbero subito quello nuovo —
+            // per un frame quello che vedi e' spostato rispetto a dove i tocchi finiscono davvero (era
+            // questo a rendere il pulsante filtro "a volte non cliccabile" finche' non si scrollava).
+            // Un invalidate() forza un ridisegno immediato con lo scroll corretto, riallineando le due cose.
+            boolean clamped = false;
+            if(scrollY>maxScrollY){ scrollY=maxScrollY; clamped=true; }
+            if(scrollY<0){ scrollY=0; clamped=true; }
+            if(clamped) post(this::invalidate);
         }
         // Calcola la baseline necessaria per centrare verticalmente un testo di questa dimensione su una
         // riga di centro comune (usa le metriche reali del font, non un offset indovinato): cosi' elementi
@@ -3664,7 +3712,12 @@ public class MainActivity extends Activity {
             c.translate(getPaddingLeft()/density, getPaddingTop()/density);
             float w=(getWidth()-getPaddingLeft()-getPaddingRight())/density;
             float h=(getHeight()-getPaddingTop()-getPaddingBottom())/density;
-            if (screen == SCREEN_SEASON_LIST) { seasonList(c,w,h); c.restore(); return; }
+            if (screen == SCREEN_SEASON_LIST) {
+                // Durante il wizard di primo avvio: pagina completamente vuota dietro ai dialog (nessun
+                // ingranaggio/"?"/saluto/"Nuova Stagione" a far capolino).
+                if (wizardInProgress) { c.restore(); return; }
+                seasonList(c,w,h); c.restore(); return;
+            }
             if (screen == SCREEN_SETTINGS) { settingsScreen(c,w,h); c.restore(); return; }
             // Rete di sicurezza: se per qualsiasi motivo si finisce qui senza Stagioni valide (es. stato
             // salvato che punta a una Stagione poi cancellata), si torna alla lista invece di crashare su
@@ -4426,7 +4479,7 @@ public class MainActivity extends Activity {
             if(nd[0]+nd[1]>mostPlayedCount){ mostPlayedCount=nd[0]+nd[1]; mostPlayedName=getString(R.string.label_unknown_deck); }
             box(c,c1L,340,c1R,420,card);
             txt(c,getString(R.string.label_decks_played),(c1L+c1R)/2,362,12,muted,Paint.Align.CENTER);
-            txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
+            txt(c,""+deckPlayedCount,(c1L+c1R)/2,centeredBaseline(390,22),22,white,Paint.Align.CENTER);
             box(c,c2L,340,c2R,420,card);
             txt(c,getString(R.string.label_most_played_deck),(c2L+c2R)/2,362,12,muted,Paint.Align.CENTER);
             txt(c,mostPlayedName,(c2L+c2R)/2,centeredBaseline(390,16),16,white,Paint.Align.CENTER);
@@ -4747,6 +4800,7 @@ public class MainActivity extends Activity {
             float contentY = (y>=bodyTop && y<=bodyBottom) ? y+scrollY : y;
 
             if(screen==SCREEN_SEASON_LIST){
+                if(wizardInProgress) return true; // pagina vuota durante il wizard: nessun pulsante invisibile da premere per sbaglio
                 if(y>=h-104 && y<=h-54 && x>=w-166){ newSeason(); return true; }
                 if(Math.hypot(x-(w-30), y-56) <= 24){ screen=SCREEN_SETTINGS; invalidate(); return true; }
                 if(Math.hypot(x-(w-64), y-56) <= 24){ showWelcomeGuide(); return true; }
