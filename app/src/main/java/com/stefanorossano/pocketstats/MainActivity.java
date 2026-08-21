@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.7.1";
+    static final String APP_VERSION = "v0.7.2";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -3448,7 +3448,11 @@ public class MainActivity extends Activity {
             p.setTextSize(textSize);
             for (int i=0;i<lines.length;i++){
                 if (p.measureText(lines[i]) > maxWidth){
-                    lines[i] = android.text.TextUtils.ellipsize(lines[i], p, maxWidth, android.text.TextUtils.TruncateAt.END).toString();
+                    // Troncamento manuale (niente TextUtils.ellipsize: vuole un TextPaint, mentre qui usiamo
+                    // un Paint normale): togliamo un carattere alla volta finche' testo+"…" non entra.
+                    String s = lines[i];
+                    while (s.length()>1 && p.measureText(s+"…") > maxWidth) s = s.substring(0, s.length()-1);
+                    lines[i] = s+"…";
                 }
             }
             return lines;
