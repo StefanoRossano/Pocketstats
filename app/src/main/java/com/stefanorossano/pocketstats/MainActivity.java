@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.9";
+    static final String APP_VERSION = "v0.8.10";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -4663,9 +4663,11 @@ public class MainActivity extends Activity {
             // iniziava a y=90, appena 2 unita' dopo, sembravano attaccati.
             box(c,18,100,w-18,148,Color.rgb(20,32,48));
             strokeBox(c,18,100,w-18,148,FIELD_BORDER);
-            txt(c,getString(R.string.btn_new_deck),w/2,centeredBaseline(124,14),14,white,Paint.Align.CENTER);
+            boolean lockedForKebab = isSeasonLocked(store.current); // a Stagione conclusa nessuna delle azioni del kebab/anteprima/"Nuovo Deck" deve modificare un elenco ormai congelato
+            // "Nuovo Deck" attenuato (non solo disattivato al tocco) a Stagione conclusa: un pulsante ben
+            // visibile ma inerte sarebbe confuso, stesso principio gia' applicato al kebab.
+            txt(c,getString(R.string.btn_new_deck),w/2,centeredBaseline(124,14),14,lockedForKebab?muted:white,Paint.Align.CENTER);
             float y=162;
-            boolean lockedForKebab = isSeasonLocked(store.current); // a Stagione conclusa il kebab non ha piu' senso: nessuna delle sue azioni deve modificare un elenco ormai congelato
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
                 if (!q.isEmpty() && !d.name.toLowerCase(Locale.ITALY).contains(q)) continue;
@@ -5153,7 +5155,7 @@ public class MainActivity extends Activity {
                 if (!lockedMatches) for(Hit hit: matchHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
             } else if(detailTab==2){
                 boolean lockedDecks = isSeasonLocked(store.current);
-                if(contentY>=100&&contentY<=148){ addDeck(newDeck -> scrollDeckTabToShow(s, newDeck)); return true; }
+                if(!lockedDecks && contentY>=100&&contentY<=148){ addDeck(newDeck -> scrollDeckTabToShow(s, newDeck)); return true; }
                 float yy=152;
                 // Kebab e anteprima disattivati a Stagione conclusa: rinominare/eliminare un deck o cambiarne
                 // stile/colore modificherebbe un elenco che dovrebbe restare congelato com'era allora.
