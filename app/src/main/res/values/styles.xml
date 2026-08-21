@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema principale dell'app: l'intera interfaccia e' disegnata a mano su Canvas (TrackerView), quindi
+         non serve nessuna action bar ne' altro chrome di sistema — solo uno sfondo scuro coerente con
+         quello disegnato dall'app stessa, cosi' non c'e' un lampo bianco/chiaro nell'istante prima che il
+         primo frame venga disegnato. -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- Tema per i Dialog custom dell'app (menu, form, wizard, popup a schermo intero): parte da
+         Theme.Material.Dialog.Alert ma senza titolo/chrome — ogni dialog imposta il proprio sfondo e
+         layout via codice (setContentView + setBackgroundDrawable), qui serve solo la base giusta perche'
+         quelle chiamate funzionino senza padding/inset indesiderati imposti dal tema di sistema. -->
+    <style name="PocketDialogTheme" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>
