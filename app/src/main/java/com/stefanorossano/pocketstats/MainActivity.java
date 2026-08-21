@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.3";
+    static final String APP_VERSION = "v0.8.4";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -140,6 +140,9 @@ public class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
+        // Dopo una cancellazione totale non va ripristinato NULLA dello stato precedente (nemmeno la
+        // schermata su cui si era): l'app deve ripartire esattamente come a una prima installazione.
+        if (dataWiped) return;
         outState.putInt("screen", screen);
         outState.putInt("seasonCurrent", store!=null ? store.current : 0);
         if (view != null) { outState.putInt("detailTab", view.detailTab); }
@@ -2426,6 +2429,12 @@ public class MainActivity extends Activity {
                 dataWiped = true;                       // da qui in poi nessun salvataggio deve piu' avvenire
                 store.seasons.clear(); store.current = 0; // svuota anche la copia in memoria, per sicurezza
                 store.pref.edit().clear().commit();       // commit(), non apply(): dev'essere gia' su disco prima del riavvio
+                // recreate() salva lo stato corrente prima di riavviare, e lo stato include la schermata
+                // attiva: essendo qui dentro le Impostazioni, al riavvio l'app le ripristinava, mostrandole
+                // dietro al wizard (a differenza del primissimo avvio, dove lo sfondo e' neutro). Si riporta
+                // tutto allo stato di "app appena installata" PRIMA del riavvio.
+                screen = SCREEN_SEASON_LIST;
+                wizardInProgress = true;
                 recreate();
             })
             .setNegativeButton(getString(R.string.btn_cancel), null)
