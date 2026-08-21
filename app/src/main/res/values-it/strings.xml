@@ -36,11 +36,12 @@
     <string name="label_no_games_today">Nessuna partita giocata oggi.</string>
     <string name="label_no_games_3_days">Nessuna partita giocata negli ultimi 3 giorni.</string>
     <string name="label_no_games_all">Nessuna partita giocata finora.</string>
-    <string name="dialog_matchup_filter_title_mine">Filtra: i tuoi deck</string>
-    <string name="dialog_matchup_filter_title_opp">Filtra: gli avversari</string>
+    <string name="dialog_filter_title">Filtro</string>
+    <string name="label_your_decks_subtitle">I tuoi deck</string>
+    <string name="label_opponent_decks_subtitle">Deck avversari</string>
     <string name="btn_select_all">Tutti</string>
     <string name="btn_select_none">Nessuno</string>
-    <string name="msg_select_at_least_one">Seleziona almeno 1 deck per lato</string>
+    <string name="msg_select_at_least_one">Seleziona almeno un deck per entrambi i giocatori</string>
     <string name="label_played_against_n_times">Giocato %1$d volte</string>
 
     <!-- Fetta 2: azioni, etichette e dialog comuni -->
