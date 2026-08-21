@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.2";
+    static final String APP_VERSION = "v0.8.3";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -259,10 +259,15 @@ public class MainActivity extends Activity {
         });
     }
 
+    // Alzato da resetAllData(): impedisce alla rete di sicurezza in onPause() di riscrivere su disco i dati
+    // ancora presenti in memoria subito dopo averli cancellati (recreate() passa proprio da onPause, ed era
+    // questo a rendere "Cancella tutti i dati" del tutto inefficace).
+    boolean dataWiped = false;
+
     @Override protected void onPause() {
         super.onPause();
         // Safety net: assicura la persistenza anche se un salvataggio puntuale fosse saltato.
-        if (store != null) store.save();
+        if (store != null && !dataWiped) store.save();
     }
 
     /** Naviga di un livello indietro nella gerarchia Lista Season -> Dettaglio/Impostazioni. */
@@ -351,7 +356,7 @@ public class MainActivity extends Activity {
             store.save(); view.invalidate();
             return true;
         }, getString(R.string.err_choose_valid_name));
-        dialog.show();
+        showDialogWithKeyboard(dialog);
     }
 
     // Schermata di ingresso vera e propria, mostrata UNA volta, prima ancora di chiedere il nome: prima
@@ -600,7 +605,7 @@ public class MainActivity extends Activity {
             confirmTrainerName(n);
             return true;
         }, getString(R.string.err_choose_valid_name_or_skip));
-        dialog.show();
+        showDialogWithKeyboard(dialog);
     }
 
     void confirmTrainerName(String name){
@@ -1176,7 +1181,7 @@ public class MainActivity extends Activity {
             if (onChanged!=null) onChanged.run();
             return true;
         }, getString(R.string.err_deck_name_invalid));
-        dialog.show();
+        showDialogWithKeyboard(dialog);
     }
 
     // Riga di una card deck dentro il dialog getString(R.string.action_change_deck): stesso disegno esatto delle card del tab Deck
@@ -1491,14 +1496,14 @@ public class MainActivity extends Activity {
         box.addView(input);
         applyMaxLength(box, input, 18);
         focusAndShowKeyboard(input, false);
-        new AlertDialog.Builder(this).setTitle(getString(R.string.action_rename_opponent_deck))
+        showDialogWithKeyboard(new AlertDialog.Builder(this).setTitle(getString(R.string.action_rename_opponent_deck))
             .setView(box)
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
                 renameOpponentDeck(currentName, input.getText().toString());
                 if (onRenamed!=null) onRenamed.run();
             })
             .setNegativeButton(getString(R.string.btn_cancel), null)
-            .show();
+            .create());
     }
 
     void chooseCurrentDeck() {
@@ -1792,14 +1797,14 @@ public class MainActivity extends Activity {
         box.addView(input);
         applyMaxLength(box, input, 18);
         focusAndShowKeyboard(input, true);
-        new AlertDialog.Builder(this).setTitle(getString(R.string.btn_new_deck))
+        showDialogWithKeyboard(new AlertDialog.Builder(this).setTitle(getString(R.string.btn_new_deck))
             .setView(box)
             .setPositiveButton(getString(R.string.btn_confirm), (d,w) -> {
                 String name = input.getText().toString().trim();
                 if (!name.isEmpty()) onCreated.accept(name);
             })
             .setNegativeButton(getString(R.string.btn_cancel), null)
-            .show();
+            .create());
     }
 
     boolean listContainsIgnoreCase(ArrayList<String> list, String val){
@@ -2234,17 +2239,40 @@ public class MainActivity extends Activity {
     // Il glifo "▾" nel testo di un pulsante (es. selettore deck) risultava troppo piccolo rispetto al resto:
     // qui lo ingrandiamo SOLO lui (l'ultimo carattere), lasciando il resto del testo alla dimensione normale.
 
-    // Porta il fuoco su un campo di testo E apre la tastiera: requestFocus() da solo NON la apre, va chiesta
-    // esplicitamente. Il post() serve perche' in un dialog appena creato la view non e' ancora pronta a
-    // riceverla nello stesso frame. selectAll=true seleziona tutto il testo (si sovrascrive digitando),
-    // altrimenti il cursore va in fondo, dopo l'ultimo carattere.
+    // Porta il fuoco su un campo di testo E apre la tastiera. Due insidie, entrambe gestite qui:
+    // 1) requestFocus() da solo NON apre la tastiera, va chiesta esplicitamente all'InputMethodManager;
+    // 2) questo metodo viene chiamato mentre si COSTRUISCE il dialog, quindi il campo non e' ancora dentro
+    //    una finestra e quella finestra non ha ancora il fuoco: una richiesta fatta subito (o con un semplice
+    //    post()) viene rifiutata in silenzio. Ci si aggancia percio' al momento in cui la view entra davvero
+    //    nella finestra, con un piccolo ritardo perche' il fuoco arriva un attimo dopo l'attach.
+    // selectAll=true seleziona tutto il testo (si sovrascrive digitando); altrimenti il cursore va in fondo.
+    // Rinforzo a livello di finestra: chiede ad Android di aprire la tastiera INSIEME al dialog. Da solo
+    // showSoftInput() puo' fallire per questioni di tempismo sul fuoco; questi due meccanismi insieme
+    // rendono l'apertura affidabile su tutti i dispositivi.
+    void showDialogWithKeyboard(AlertDialog d){
+        if (d.getWindow()!=null) d.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        d.show();
+    }
+
     void focusAndShowKeyboard(EditText field, boolean selectAll){
-        field.requestFocus();
-        if (selectAll) field.selectAll(); else field.setSelection(field.getText().length());
-        field.post(() -> {
+        field.setFocusableInTouchMode(true);
+        Runnable focusAndOpen = () -> {
+            field.requestFocus();
+            if (selectAll) field.selectAll(); else field.setSelection(field.getText().length());
             android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm!=null) imm.showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-        });
+        };
+        if (field.isAttachedToWindow()) {
+            field.postDelayed(focusAndOpen, 120);
+        } else {
+            field.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){
+                @Override public void onViewAttachedToWindow(View v){
+                    v.removeOnAttachStateChangeListener(this);
+                    v.postDelayed(focusAndOpen, 120);
+                }
+                @Override public void onViewDetachedFromWindow(View v){}
+            });
+        }
     }
 
     // Le icone dell'app sono disegnate su Canvas dentro TrackerView: questa piccola View le rende
@@ -2395,7 +2423,9 @@ public class MainActivity extends Activity {
                 // preferenze card, deck avversari conosciuti, flag di onboarding...): si azzerano le
                 // SharedPreferences per intero e si riavvia l'Activity, cosi' l'app riparte esattamente
                 // come a una prima installazione — schermata iniziale e poi wizard.
-                store.pref.edit().clear().apply();
+                dataWiped = true;                       // da qui in poi nessun salvataggio deve piu' avvenire
+                store.seasons.clear(); store.current = 0; // svuota anche la copia in memoria, per sicurezza
+                store.pref.edit().clear().commit();       // commit(), non apply(): dev'essere gia' su disco prima del riavvio
                 recreate();
             })
             .setNegativeButton(getString(R.string.btn_cancel), null)
@@ -2421,7 +2451,7 @@ public class MainActivity extends Activity {
             s.name = n; store.save(); view.invalidate();
             return true;
         }, getString(R.string.err_season_name_empty));
-        dialog.show();
+        showDialogWithKeyboard(dialog);
     }
 
     // Elimina un deck: se e' usato in una o piu' partite, avvisa prima e, se confermato, imposta quelle
