@@ -1,4 +1,4 @@
-# Pocket Tracker
+# Pocket Stats
 
 App Android locale per tenere traccia delle partite di Pokémon TCG Pocket (PvP): punti, streak di vittorie, deck usati e statistiche — tutto salvato solo sul telefono, nessun account o server.
 
