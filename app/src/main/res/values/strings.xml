@@ -23,8 +23,12 @@
     <string name="dialog_opponent_deck_title">Which deck did you play against?</string>
     <string name="hint_opponent_deck">Opponent\'s deck name</string>
     <string name="btn_skip">Skip</string>
+    <string name="btn_dont_ask_again">Don\'t ask again</string>
+    <string name="btn_got_it">Got it</string>
+    <string name="label_opponent_tracking_disabled_title">Tracking turned off</string>
+    <string name="label_opponent_tracking_disabled_msg">You won\'t be asked again. You can turn it back on anytime from Settings.</string>
     <string name="hint_disable_in_settings">You can turn this off anytime in Settings.</string>
-    <string name="label_matchups">Matchups</string>
+    <string name="label_matchups">MATCHUPS</string>
     <string name="label_vs">vs</string>
     <string name="label_opponent_deck">Opponent\'s deck</string>
     <string name="label_your_deck">Your deck</string>
@@ -33,7 +37,7 @@
     <string name="confirm_delete_opponent_deck_msg">Permanently delete this opponent\'s deck?</string>
     <string name="confirm_delete_opponent_deck_used_singular">This opponent\'s deck is used in %1$d match (this Season). Deleting it will clear it from that match.</string>
     <string name="confirm_delete_opponent_deck_used_plural">This opponent\'s deck is used in %1$d matches (this Season). Deleting it will clear it from those matches.</string>
-    <string name="label_worst_matchup_callout">Toughest matchup: %1$s — %2$d%% win rate (%3$d games)</string>
+    <string name="label_worst_matchup_callout">Toughest matchup: %1$s, %2$d%% win rate (%3$d games)</string>
     <string name="label_no_matchups_filtered">No matchup matches the current filter.</string>
     <string name="label_no_games_today">No games played today.</string>
     <string name="label_no_games_3_days">No games played in the last 3 days.</string>
@@ -44,7 +48,10 @@
     <string name="btn_select_all">All</string>
     <string name="btn_select_none">None</string>
     <string name="msg_select_at_least_one">Select at least one deck for both players</string>
-    <string name="label_encountered_n_times">Encountered %1$d times</string>
+    <string name="label_encountered_n_times">Faced %1$d times</string>
+    <string name="label_matchup_tough">Tough matchup</string>
+    <string name="label_matchup_even">Even matchup</string>
+    <string name="label_matchup_favorable">Favorable matchup</string>
     <string name="dialog_edit_match_deck_title">Edit match #%1$d deck</string>
     <string name="label_your_deck_step_subtitle">Your deck (step 1/2)</string>
     <string name="label_opponent_deck_step_subtitle">Opponent\'s deck (step 2/2)</string>
@@ -163,7 +170,7 @@
     <string name="btn_next">Next</string>
     <string name="btn_back">Back</string>
     <string name="btn_lets_start">Let\'s start!</string>
-    <string name="welcome_hero_title">Pocket Tracker</string>
+    <string name="welcome_hero_title">Pocket Stats</string>
     <string name="welcome_hero_tagline">Track your matches. Own your streaks.</string>
     <string name="btn_get_started">Get Started</string>
     <string name="btn_close">Close</string>
@@ -185,8 +192,8 @@
     <string name="label_outcome_win">a win (W)</string>
     <string name="label_outcome_loss">a loss (L)</string>
     <string name="confirm_undo_match_msg">You recorded %1$s. It\'ll be permanently deleted. If that was a mistake, just record %1$s again.</string>
-    <string name="dialog_welcome_title">Welcome to Pocket Tracker!</string>
-    <string name="dialog_welcome_title_named">Welcome to Pocket Tracker, %1$s!</string>
+    <string name="dialog_welcome_title">Welcome to Pocket Stats!</string>
+    <string name="dialog_welcome_title_named">Welcome to Pocket Stats, %1$s!</string>
     <string name="dialog_onboarding_style_title">What\'s your style?</string>
     <string name="dialog_onboarding_style_title_named">What\'s your style, %1$s?</string>
     <string name="btn_continue">Continue</string>
