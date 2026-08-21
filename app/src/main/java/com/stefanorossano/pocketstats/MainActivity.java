@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.1";
+    static final String APP_VERSION = "v0.8.2";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -2730,7 +2730,7 @@ public class MainActivity extends Activity {
         root.addView(colorRow, colorRowLp);
         Runnable applyColor = () -> {
             String ck = colorCycle[colorIdx[0]];
-            for (PreviewSwatchView s: swatches){ s.color = ck; s.invalidate(); }
+            for (PreviewSwatchView s: swatches){ s.colorKey = ck; s.invalidate(); }
             colorLabel.setText(getString(colorLabelRes[colorIdx[0]]));
         };
         prevColorBtn.setOnClickListener(v -> { colorIdx[0] = (colorIdx[0]-1+colorCycle.length)%colorCycle.length; applyColor.run(); });
