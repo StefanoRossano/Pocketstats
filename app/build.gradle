@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'com.stefanorossano.pockettracker'
+    namespace 'com.stefanorossano.pocketstats'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.stefanorossano.pockettracker'
+        applicationId 'com.stefanorossano.pocketstats'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.2'
+        versionCode 54
+        versionName '0.7.0'
     }
 
     // Chiave di firma debug FISSA (commitata nel repo, in keystore/debug.keystore).
