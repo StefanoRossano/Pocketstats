@@ -25,8 +25,8 @@
     <string name="btn_skip">Skip</string>
     <string name="btn_dont_ask_again">Don\'t ask again</string>
     <string name="btn_got_it">Got it</string>
-    <string name="label_opponent_tracking_disabled_title">Tracking turned off</string>
-    <string name="label_opponent_tracking_disabled_msg">You won\'t be asked again. You can turn it back on anytime from Settings.</string>
+    <string name="label_opponent_tracking_disabled_title">Opponent tracking is off</string>
+    <string name="label_opponent_tracking_disabled_msg">You won\'t be asked again. You can enable it anytime from Settings.</string>
     <string name="hint_disable_in_settings">You can turn this off anytime in Settings.</string>
     <string name="label_matchups">MATCHUPS</string>
     <string name="label_vs">vs</string>
@@ -171,7 +171,7 @@
     <string name="btn_back">Back</string>
     <string name="btn_lets_start">Let\'s start!</string>
     <string name="welcome_hero_title">Pocket Stats</string>
-    <string name="welcome_hero_tagline">Track your matches. Own your streaks.</string>
+    <string name="welcome_hero_tagline">Every match counts. Every stat matters.</string>
     <string name="btn_get_started">Get Started</string>
     <string name="btn_close">Close</string>
     <string name="btn_delete">Delete</string>
