@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.6";
+    static final String APP_VERSION = "v0.8.8";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -883,7 +883,20 @@ public class MainActivity extends Activity {
     void importDeckNamesFromPreviousSeason(Season newSeason){
         if (store.seasons.isEmpty()) return;
         Season prev = store.seasons.get(store.seasons.size()-1);
-        for (Deck d : prev.decks) newSeason.decks.add(new Deck(d.name));
+        for (Deck d : prev.decks) {
+            // Si porta dietro anche l'ASPETTO, non solo il nome: prima "new Deck(d.name)" scartava
+            // stile/colore/finitura, quindi ogni nuova Stagione azzerava le card di tutti i deck. Il deck
+            // e' la stessa entita' di sempre, cambiano solo le statistiche (che giustamente ripartono).
+            Deck copy = new Deck(d.name);
+            copy.previewStyle = d.previewStyle;
+            copy.previewColor = d.previewColor;
+            copy.previewFinish = d.previewFinish;
+            // La memoria di aspetto e' la fonte di verita' se presente (l'utente puo' aver ridefinito
+            // l'aspetto di quel nome altrove): allineiamo la copia a quella.
+            String[] remembered = store.deckAppearanceMemory.get(d.name);
+            if (remembered!=null){ copy.previewStyle=remembered[0]; copy.previewColor=remembered[1]; copy.previewFinish=remembered[2]; }
+            newSeason.decks.add(copy);
+        }
     }
 
     void wizardStep3Yes(boolean first, String name){
@@ -1233,14 +1246,17 @@ public class MainActivity extends Activity {
     // selezione identico), ma disegna opponentDeckCardVisual invece di deckCardVisual — cosi' le due
     // famiglie di card sono visivamente indistinguibili a parte l'assenza dell'anteprima grafica.
     class OpponentDeckCardRowView extends View {
-        String oppName; int timesEncountered, wins, losses; boolean selected=false; float density_;
-        OpponentDeckCardRowView(Context c, String name, int times, int w, int l){ super(c); oppName=name; timesEncountered=times; wins=w; losses=l; density_=getResources().getDisplayMetrics().density; }
+        String oppName, myDeckName; int facedWithMyDeck, totalFaced, wins, losses; boolean selected=false, mirror=false; float density_;
+        OpponentDeckCardRowView(Context c, String name, int facedWith, int total, int w, int l, String myDeck, boolean isMirror){
+            super(c); oppName=name; facedWithMyDeck=facedWith; totalFaced=total; wins=w; losses=l; myDeckName=myDeck; mirror=isMirror;
+            density_=getResources().getDisplayMetrics().density;
+        }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
             if (getWidth()==0) return;
             c.save(); c.scale(density_, density_);
             float w = getWidth()/density_;
-            view.opponentDeckCardVisual(c, oppName, timesEncountered, wins, losses, 1.5f, w);
+            view.opponentDeckCardVisual(c, oppName, facedWithMyDeck, totalFaced, wins, losses, myDeckName, mirror, 1.5f, w);
             if (selected) {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
@@ -1601,7 +1617,7 @@ public class MainActivity extends Activity {
         subtitleLp.topMargin=dp(2); subtitleLp.leftMargin=dp(18); subtitleLp.rightMargin=dp(18);
         root.addView(subtitle, subtitleLp);
 
-        String[] selectedOpp = buildOpponentDeckPickerSection(root, s, m.opponentDeck);
+        String[] selectedOpp = buildOpponentDeckPickerSection(root, s, m.opponentDeck, chosenOwnDeck!=null ? chosenOwnDeck.name : m.deck);
 
         LinearLayout footer = new LinearLayout(this); footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL|Gravity.END); footer.setPadding(dp(14),dp(6),dp(14),dp(14));
@@ -1844,7 +1860,7 @@ public class MainActivity extends Activity {
     // non piu' un campo di testo che fa doppio uso da ricerca+valore): lista di card statistiche (solo nome,
     // niente anteprima grafica), selezione evidenziata con un bordo, menu "⋮" per rinomina/elimina, "Nuovo
     // Deck" con un prompt dedicato invece di dover digitare-e-sperare nel campo di ricerca.
-    String[] buildOpponentDeckPickerSection(LinearLayout parent, Season s, String initialSelection){
+    String[] buildOpponentDeckPickerSection(LinearLayout parent, Season s, String initialSelection, String myDeckName){
         String[] selected = { initialSelection };
         java.util.LinkedHashMap<String,int[]> stats = view.opponentDeckStats(s);
         ArrayList<String> allNames = new ArrayList<>(stats.keySet());
@@ -1887,9 +1903,13 @@ public class MainActivity extends Activity {
             list.removeAllViews();
             for (String name: filtered) {
                 int[] st = stats.get(name);
-                int times = st!=null ? st[0] : 0, w2 = st!=null ? st[1] : 0, l2 = st!=null ? st[2] : 0;
+                int totalFaced = st!=null ? st[0] : 0;
+                // W/L e conteggio mostrati sono quelli della COPPIA (mio deck vs questo avversario), non
+                // l'aggregato contro tutti i miei deck: il matchup e' per definizione deck A vs deck B.
+                int[] pair = view.pairStats(s, myDeckName, name);
+                boolean isMirror = myDeckName!=null && myDeckName.equalsIgnoreCase(name);
                 android.widget.FrameLayout row = new android.widget.FrameLayout(this);
-                OpponentDeckCardRowView cardView = new OpponentDeckCardRowView(this, name, times, w2, l2);
+                OpponentDeckCardRowView cardView = new OpponentDeckCardRowView(this, name, pair[0], totalFaced, pair[1], pair[2], myDeckName, isMirror);
                 cardView.selected = name.equalsIgnoreCase(selected[0]);
                 row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(95)));
                 // Stessa identica zona di tocco del kebab "⋮" usata per i tuoi deck (stessa formula di
@@ -1970,7 +1990,7 @@ public class MainActivity extends Activity {
     void showOpponentDeckPicker(Match m, boolean showSettingsHint){
         Season s = store.seasons.get(store.current);
         LinearLayout box = formBox();
-        String[] selected = buildOpponentDeckPickerSection(box, s, m.opponentDeck);
+        String[] selected = buildOpponentDeckPickerSection(box, s, m.opponentDeck, m.deck);
 
         if (showSettingsHint){
             TextView hint = new TextView(this); hint.setText(getString(R.string.hint_disable_in_settings)); hint.setTextColor(MUTED_TXT); hint.setTextSize(12);
@@ -4150,8 +4170,14 @@ public class MainActivity extends Activity {
                 int[] curWl = deckWL(s, s.currentDeck);
                 int curBest = longestStreakForDeck(s, s.currentDeck);
                 int curGain = deckGain(s, s.currentDeck);
-                deckCardVisual(c, curDeckObjForMenu, s.currentDeck, false, curWl[0], curWl[1], curBest, curGain, 152, w, true);
-                currentDeckKebabX=w-36; currentDeckKebabY=152+22;
+                // Kebab "⋮" nascosto a Stagione conclusa: le sue voci (cambia deck, rinomina, elimina...)
+                // modificherebbero una Stagione ormai chiusa, quindi non ha senso offrirle. La zona di tocco
+                // viene spostata fuori schermo di conseguenza, altrimenti resterebbe attiva su un'icona che
+                // non c'e' piu'.
+                boolean lockedSeason = isSeasonLocked(store.current);
+                deckCardVisual(c, curDeckObjForMenu, s.currentDeck, false, curWl[0], curWl[1], curBest, curGain, 152, w, !lockedSeason);
+                if (lockedSeason) { currentDeckKebabX=-1000; currentDeckKebabY=-1000; }
+                else { currentDeckKebabX=w-36; currentDeckKebabY=152+22; }
             }
 
 
@@ -4558,16 +4584,37 @@ public class MainActivity extends Activity {
             return y+104;
         }
 
+        // Statistiche della singola COPPIA "mio deck X vs avversario Y" nella Stagione: {partite, vittorie,
+        // sconfitte}. Stesso criterio case-insensitive usato ovunque per i nomi avversario.
+        int[] pairStats(Season s, String myDeck, String oppName){
+            int g=0,wn=0,ls=0;
+            if (myDeck!=null && oppName!=null){
+                String ok = oppName.toLowerCase(Locale.US);
+                for (Match m: s.matches){
+                    if (m.unknown || m.opponentDeck==null) continue;
+                    if (!m.opponentDeck.toLowerCase(Locale.US).equals(ok)) continue;
+                    if (m.deck==null || !m.deck.equalsIgnoreCase(myDeck)) continue;
+                    g++; if (m.win) wn++; else ls++;
+                }
+            }
+            return new int[]{g,wn,ls};
+        }
+
         // Card deck AVVERSARIO — stessa identica fisionomia di deckCardVisual (stesso sfondo, stessa
         // dimensione, stesso stile W/L/%, stesso kebab "⋮"): l'unica differenza voluta e' l'assenza
         // dell'anteprima grafica (gli avversari non hanno stile/colore, solo un nome) e della riga
         // "Variazione" (non tracciata per un avversario) — lo spazio dove starebbe resta semplicemente vuoto,
         // per mantenere la STESSA altezza (92) della card gemella.
-        float opponentDeckCardVisual(Canvas c, String name, int timesEncountered, int W, int L, float y, float w){
+        float opponentDeckCardVisual(Canvas c, String name, int facedWithMyDeck, int totalFaced, int W, int L, String myDeckName, boolean isMirror, float y, float w){
             box(c,18,y,w-18,y+92,Color.rgb(10,18,30));
             float textX = 34;
             txt(c, name, textX, y+26, 17, white, Paint.Align.LEFT);
-            txt(c, getString(R.string.label_encountered_n_times,timesEncountered), textX, y+46, 12, white, Paint.Align.LEFT);
+            // Con un mio deck di riferimento noto, il conteggio e' specifico della COPPIA (e mostra anche il
+            // totale complessivo tra parentesi); altrimenti resta il solo totale.
+            String facedLine = (myDeckName==null || myDeckName.isEmpty())
+                ? getString(R.string.label_encountered_n_times, totalFaced)
+                : getString(R.string.label_faced_with_deck, facedWithMyDeck, myDeckName, totalFaced);
+            txt(c, facedLine, textX, y+46, 12, white, Paint.Align.LEFT);
             drawKebabIcon(c, w-18-10-8, y+22, muted);
             float wr = (W+L)==0?0:100f*W/(W+L);
             txtRow(c, textX, y+64, 11,
@@ -4576,9 +4623,14 @@ public class MainActivity extends Activity {
             // Quarta riga (prima vuota, la card gemella dei tuoi deck ne ha 4 mentre questa ne aveva solo 3):
             // un giudizio rapido sul matchup, in base al win rate — solo se esistono davvero partite,
             // altrimenti non c'e' ancora nulla su cui basare un giudizio.
-            // Almeno 5 partite: sotto quella soglia un "matchup difficile/favorevole" sarebbe solo rumore
-            // statistico (con 1-2 partite basta un risultato per ribaltare il giudizio).
-            if (W+L>=5) {
+            if (isMirror) {
+                // Stesso deck da entrambe le parti: nessun giudizio sul matchup ha senso (e' simmetrico per
+                // definizione), si dichiara solo che si tratta di uno specchio. Sempre, a prescindere dal
+                // numero di partite.
+                txt(c, getString(R.string.label_mirror_match), textX, y+82, 11, muted, Paint.Align.LEFT);
+            } else if (W+L>=5) {
+                // Almeno 5 partite: sotto quella soglia un "matchup difficile/favorevole" sarebbe solo rumore
+                // statistico (con 1-2 partite basta un risultato per ribaltare il giudizio).
                 String quality; int qcol;
                 if (wr>56) { quality=getString(R.string.label_matchup_favorable); qcol=green; }
                 else if (wr<44) { quality=getString(R.string.label_matchup_tough); qcol=red; }
