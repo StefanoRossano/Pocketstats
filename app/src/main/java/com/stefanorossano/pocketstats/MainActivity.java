@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.4";
+    static final String APP_VERSION = "v0.8.6";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -665,7 +665,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams prevColorLp = new LinearLayout.LayoutParams(dp(30), dp(30));
         colorRow.addView(prevColorBtn, prevColorLp);
 
-        TextView colorLabel = new TextView(this); colorLabel.setText(getString(colorLabelRes[0])); colorLabel.setTextColor(Color.WHITE); colorLabel.setTextSize(13); colorLabel.setGravity(Gravity.CENTER);
+        TextView colorLabel = new TextView(this); colorLabel.setText(getString(colorLabelRes[colorIdx[0]])); colorLabel.setTextColor(Color.WHITE); colorLabel.setTextSize(13); colorLabel.setGravity(Gravity.CENTER); // indice reale, non 0 fisso: la scritta diceva "Arcobaleno" mentre le card partivano dal verde
         LinearLayout.LayoutParams colorLabelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         colorRow.addView(colorLabel, colorLabelLp);
 
@@ -848,10 +848,13 @@ public class MainActivity extends Activity {
     void wizardStep1(boolean first, String prefillName){
         LinearLayout box = formBox();
         String defaultName = first ? getString(R.string.label_season_default_name,1) : getString(R.string.label_season_default_name,store.seasons.size()+1);
-        box.addView(label(getString(R.string.hint_season_name)));
+        // Niente etichetta "Nome Stagione": ridondante, il titolo del dialog dice gia' di cosa si tratta e il
+        // campo ha comunque il proprio placeholder.
         EditText name = field(defaultName);
         if (prefillName != null) name.setText(prefillName);
         box.addView(name);
+        applyMaxLength(box, name, 15);
+        focusAndShowKeyboard(name, false);
         AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(first ? getString(R.string.dialog_create_first_season_title) : getString(R.string.btn_new_season))
             .setView(box).setCancelable(!first)
             .setPositiveButton(getString(R.string.btn_next), (d,w) -> {
@@ -859,7 +862,7 @@ public class MainActivity extends Activity {
                 wizardStep2(first, n.isEmpty() ? defaultName : n);
             });
         if (!first) b.setNegativeButton(getString(R.string.btn_cancel), null); // solo se NON e' la primissima Stagione: qui c'e' gia' una lista a cui tornare
-        b.show();
+        showDialogWithKeyboard(b.create());
     }
 
     void wizardStep2(boolean first, String name){
@@ -935,7 +938,15 @@ public class MainActivity extends Activity {
         wizardInProgress = false; // idem: la Stagione esiste, la pagina vuota del wizard non serve piu'
         if (view == null) { setupTrackerView(); }
         screen = SCREEN_SEASON_DETAIL; view.detailTab = 0; view.invalidate();
-        pickDeckFor(s, getString(R.string.dialog_choose_deck_title), getString(R.string.btn_skip), dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        // Solo per la PRIMISSIMA Stagione (creata dal wizard) si usa il selettore semplificato: app appena
+        // installata, nessuna lista da sfogliare e nessuna anteprima da scegliere (lo stile e' appena stato
+        // chiesto dal wizard stesso). Dalla seconda in poi si usa il selettore completo, lo stesso che si
+        // apre toccando la card del deck: a quel punto ci sono deck veri tra cui scegliere.
+        if (store.seasons.size()<=1) {
+            pickDeckFor(s, getString(R.string.dialog_choose_deck_title), getString(R.string.btn_skip), dn -> { s.currentDeck = dn; store.save(); view.invalidate(); });
+        } else {
+            showDeckSelectorDialog(s, getString(R.string.dialog_choose_deck_title), null, chosen -> { s.currentDeck = chosen.name; store.save(); view.invalidate(); });
+        }
     }
 
 
@@ -1373,7 +1384,9 @@ public class MainActivity extends Activity {
         searchBar.addView(clearBtn, clearLp);
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
         searchLp.topMargin=dp(14); searchLp.leftMargin=dp(18); searchLp.rightMargin=dp(18); searchLp.bottomMargin=dp(10);
-        parent.addView(searchBar, searchLp);
+        // Barra di ricerca solo se c'e' davvero qualcosa da cercare: con 0, 1 o 2 deck e' solo ingombro
+        // (con zero deck era proprio insensata). Da 3 in su comincia ad avere utilita'.
+        if (allDecks.size()>=3) parent.addView(searchBar, searchLp);
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
@@ -1784,6 +1797,18 @@ public class MainActivity extends Activity {
     // Menu "⋮" per una card deck avversario — stesse regole di apertura di showDeckRowMenu (ancorato alla
     // view toccata, via showDialogMenu): Rinomina / Elimina.
     void showOpponentDeckRowMenu(Season s, String name, View anchorView, Runnable onChanged){
+        // Se il nome compare in questa lista perche' e' anche un TUO deck, eliminarlo da qui non avrebbe
+        // senso: non e' una voce "di proprieta'" di questo elenco (che pesca anche dai tuoi deck), e
+        // sparirebbe comunque solo finche' quel tuo deck esiste. In quel caso si offre la sola rinomina.
+        boolean isAlsoMyDeck = false;
+        for (Season sn: store.seasons) for (Deck d: sn.decks) if (d.name.equalsIgnoreCase(name)) isAlsoMyDeck = true;
+        if (isAlsoMyDeck) {
+            showDialogMenu(anchorView,
+                new String[]{getString(R.string.action_rename_opponent_deck)},
+                new int[]{Color.WHITE},
+                new Runnable[]{ () -> promptRenameOpponentDeck(name, onChanged) });
+            return;
+        }
         showDialogMenu(anchorView,
             new String[]{getString(R.string.action_rename_opponent_deck), getString(R.string.action_delete_opponent_deck)},
             new int[]{Color.WHITE, red()},
@@ -2451,6 +2476,7 @@ public class MainActivity extends Activity {
         box.addView(header);
         EditText e=field(s.name); e.setText(s.name);
         box.addView(e);
+        applyMaxLength(box, e, 15); // stesso limite della creazione Stagione: prima qui non c'era, e si poteva rinominare oltre il massimo
         focusAndShowKeyboard(e, false);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(box)
             .setPositiveButton(getString(R.string.btn_save), null).setNegativeButton(getString(R.string.btn_cancel), null).create();
@@ -4550,7 +4576,9 @@ public class MainActivity extends Activity {
             // Quarta riga (prima vuota, la card gemella dei tuoi deck ne ha 4 mentre questa ne aveva solo 3):
             // un giudizio rapido sul matchup, in base al win rate — solo se esistono davvero partite,
             // altrimenti non c'e' ancora nulla su cui basare un giudizio.
-            if (W+L>0) {
+            // Almeno 5 partite: sotto quella soglia un "matchup difficile/favorevole" sarebbe solo rumore
+            // statistico (con 1-2 partite basta un risultato per ribaltare il giudizio).
+            if (W+L>=5) {
                 String quality; int qcol;
                 if (wr>56) { quality=getString(R.string.label_matchup_favorable); qcol=green; }
                 else if (wr<44) { quality=getString(R.string.label_matchup_tough); qcol=red; }
