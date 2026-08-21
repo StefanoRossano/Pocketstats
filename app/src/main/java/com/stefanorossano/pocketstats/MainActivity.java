@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "PocketStats";
     // Versione build: major.minor decisi da Stefano quando serve, build incrementato di 1 ad OGNI modifica
     // (anche piccola) che produce una nuova build — non solo per feature, e' un contatore di iterazioni.
-    static final String APP_VERSION = "v0.8.8";
+    static final String APP_VERSION = "v0.8.9";
 
     // Livelli di navigazione dell'app (schermata attualmente mostrata).
     static final int SCREEN_SEASON_LIST = 0;   // Lista delle Stagioni
@@ -1261,7 +1261,7 @@ public class MainActivity extends Activity {
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
                 p.setColor(Color.argb(170,255,250,235));
-                c.drawRoundRect(new RectF(18,1.5f,w-18,93.5f), 18,18, p);
+                c.drawRoundRect(new RectF(18,1.5f,w-18,79.5f), 18,18, p);
             }
             c.restore();
         }
@@ -1895,7 +1895,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(400));
         parent.addView(scroll, scrollLp);
 
-        int rowH = 95; // stessa altezza (92+3 per lo stroke di selezione) delle card dei tuoi deck
+        int rowH = 81; // card ridotta a 3 righe (78+3 per lo stroke di selezione)
 
         Runnable[] rebuildList = new Runnable[1];
         Runnable[] refreshFromSource = new Runnable[1];
@@ -1911,14 +1911,14 @@ public class MainActivity extends Activity {
                 android.widget.FrameLayout row = new android.widget.FrameLayout(this);
                 OpponentDeckCardRowView cardView = new OpponentDeckCardRowView(this, name, pair[0], totalFaced, pair[1], pair[2], myDeckName, isMirror);
                 cardView.selected = name.equalsIgnoreCase(selected[0]);
-                row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(95)));
+                row.addView(cardView, new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dp(rowH)));
                 // Stessa identica zona di tocco del kebab "⋮" usata per i tuoi deck (stessa formula di
                 // disegno w-18-10-8,y+22 in opponentDeckCardVisual/deckCardVisual: la card e' identica).
                 View kebabHotspot = new View(this);
                 android.widget.FrameLayout.LayoutParams khLp = new android.widget.FrameLayout.LayoutParams(dp(44), dp(44));
                 khLp.gravity = Gravity.TOP|Gravity.END; khLp.rightMargin = dp(14); khLp.topMargin = dp(1.5f);
                 row.addView(kebabHotspot, khLp);
-                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(95));
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(rowH));
                 rowLp.bottomMargin = dp(10);
                 list.addView(row, rowLp);
                 cardView.setOnClickListener(v -> { selected[0]=name; rebuildList[0].run(); });
@@ -4606,38 +4606,39 @@ public class MainActivity extends Activity {
         // "Variazione" (non tracciata per un avversario) — lo spazio dove starebbe resta semplicemente vuoto,
         // per mantenere la STESSA altezza (92) della card gemella.
         float opponentDeckCardVisual(Canvas c, String name, int facedWithMyDeck, int totalFaced, int W, int L, String myDeckName, boolean isMirror, float y, float w){
-            box(c,18,y,w-18,y+92,Color.rgb(10,18,30));
+            // Card ridotta a 3 righe (prima 4): il giudizio sul matchup si sposta a fianco della
+            // percentuale, sulla stessa riga di W/L — non serve piu' una riga a parte per lui.
+            box(c,18,y,w-18,y+78,Color.rgb(10,18,30));
             float textX = 34;
-            txt(c, name, textX, y+26, 17, white, Paint.Align.LEFT);
-            // Con un mio deck di riferimento noto, il conteggio e' specifico della COPPIA (e mostra anche il
-            // totale complessivo tra parentesi); altrimenti resta il solo totale.
+            txt(c, name, textX, y+24, 17, white, Paint.Align.LEFT);
+            // Rimosso il totale complessivo tra parentesi (occupava spazio prezioso a favore di un dato meno
+            // rilevante del giudizio sul matchup, che ora ha bisogno di quello spazio): resta solo quante
+            // volte incontrato CON QUESTO tuo deck specifico.
             String facedLine = (myDeckName==null || myDeckName.isEmpty())
                 ? getString(R.string.label_encountered_n_times, totalFaced)
-                : getString(R.string.label_faced_with_deck, facedWithMyDeck, myDeckName, totalFaced);
-            txt(c, facedLine, textX, y+46, 12, white, Paint.Align.LEFT);
+                : getString(R.string.label_faced_with_deck_short, facedWithMyDeck, myDeckName);
+            txt(c, facedLine, textX, y+44, 12, white, Paint.Align.LEFT);
             drawKebabIcon(c, w-18-10-8, y+22, muted);
             float wr = (W+L)==0?0:100f*W/(W+L);
-            txtRow(c, textX, y+64, 11,
-                new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)},
-                new int[]{green, red, wrColor(wr,W+L)});
-            // Quarta riga (prima vuota, la card gemella dei tuoi deck ne ha 4 mentre questa ne aveva solo 3):
-            // un giudizio rapido sul matchup, in base al win rate — solo se esistono davvero partite,
-            // altrimenti non c'e' ancora nulla su cui basare un giudizio.
-            if (isMirror) {
-                // Stesso deck da entrambe le parti: nessun giudizio sul matchup ha senso (e' simmetrico per
-                // definizione), si dichiara solo che si tratta di uno specchio. Sempre, a prescindere dal
-                // numero di partite.
-                txt(c, getString(R.string.label_mirror_match), textX, y+82, 11, muted, Paint.Align.LEFT);
-            } else if (W+L>=5) {
-                // Almeno 5 partite: sotto quella soglia un "matchup difficile/favorevole" sarebbe solo rumore
-                // statistico (con 1-2 partite basta un risultato per ribaltare il giudizio).
-                String quality; int qcol;
+            // Giudizio (o "Mirror match") accanto alla percentuale, sulla stessa riga di W/L — solo se
+            // esistono davvero dati su cui basarlo (il mirror e' sempre valido, il resto richiede >=5 partite).
+            String quality = null; int qcol = muted;
+            if (isMirror) { quality = getString(R.string.label_mirror_match); qcol = muted; }
+            else if (W+L>=5) {
                 if (wr>56) { quality=getString(R.string.label_matchup_favorable); qcol=green; }
                 else if (wr<44) { quality=getString(R.string.label_matchup_tough); qcol=red; }
                 else { quality=getString(R.string.label_matchup_even); qcol=muted; }
-                txt(c, quality, textX, y+82, 11, qcol, Paint.Align.LEFT);
             }
-            return y+104;
+            if (quality!=null) {
+                txtRow(c, textX, y+64, 11,
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)+"   ", quality},
+                    new int[]{green, red, wrColor(wr,W+L), qcol});
+            } else {
+                txtRow(c, textX, y+64, 11,
+                    new String[]{W+"W   ", L+"L   ", String.format(Locale.US,"%.1f%%",wr)},
+                    new int[]{green, red, wrColor(wr,W+L)});
+            }
+            return y+90;
         }
 
         // Wrapper usato dal tab Deck vero: disegna la card E registra la zona di tocco dell'anteprima nella
@@ -4664,17 +4665,18 @@ public class MainActivity extends Activity {
             strokeBox(c,18,100,w-18,148,FIELD_BORDER);
             txt(c,getString(R.string.btn_new_deck),w/2,centeredBaseline(124,14),14,white,Paint.Align.CENTER);
             float y=162;
+            boolean lockedForKebab = isSeasonLocked(store.current); // a Stagione conclusa il kebab non ha piu' senso: nessuna delle sue azioni deve modificare un elenco ormai congelato
             String q = deckSearchQuery==null ? "" : deckSearchQuery.trim().toLowerCase(Locale.ITALY);
             for(Deck d: sortedDecks(s)){
                 if (!q.isEmpty() && !d.name.toLowerCase(Locale.ITALY).contains(q)) continue;
                 int[] wl=deckWL(s,d.name); int best=longestStreakForDeck(s,d.name); int gain=deckGain(s,d.name);
-                y = deckCard(c, d, d.name, false, wl[0], wl[1], best, gain, y, w, true);
+                y = deckCard(c, d, d.name, false, wl[0], wl[1], best, gain, y, w, !lockedForKebab);
             }
             if (q.isEmpty()) {
                 int[] nd = noDeckWL(s);
                 if (nd[0]+nd[1] > 0) {
                     int ndbest=longestStreakForDeck(s,"Unknown"); int ndgain=deckGain(s,"Unknown");
-                    y = deckCard(c, null, null, true, nd[0], nd[1], ndbest, ndgain, y, w, true);
+                    y = deckCard(c, null, null, true, nd[0], nd[1], ndbest, ndgain, y, w, !lockedForKebab);
                 }
             }
             lastContentBottom = y+20;
@@ -5145,17 +5147,25 @@ public class MainActivity extends Activity {
                     }
                     if(Math.hypot(x-matchesEditIconCx, contentY-matchesEditIconCy) <= 22){ addManualCorrection(); return true; }
                 }
-                for(Hit hit: matchHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
+                // A Stagione conclusa non si puo' modificare il deck di una partita: sarebbe riscrivere la
+                // storia di un periodo ormai chiuso.
+                boolean lockedMatches = isSeasonLocked(store.current);
+                if (!lockedMatches) for(Hit hit: matchHits){ if(contentY>=hit.top&&contentY<=hit.bottom){ Match tapped=s.matches.get(hit.index); if(!tapped.unknown) changeMatchDeck(tapped); return true; } }
             } else if(detailTab==2){
+                boolean lockedDecks = isSeasonLocked(store.current);
                 if(contentY>=100&&contentY<=148){ addDeck(newDeck -> scrollDeckTabToShow(s, newDeck)); return true; }
                 float yy=152;
-                for(Deck d: sortedDecks(s)){
-                    if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-36,yy+36-scrollY); return true; }
-                    yy+=104;
-                }
-                for(Object[] pz: deckPreviewTapZones){
-                    float x1=(float)pz[0], y1=(float)pz[1], x2=(float)pz[2], y2=(float)pz[3];
-                    if(x>=x1&&x<=x2&&contentY>=y1&&contentY<=y2){ handlePreviewTap((Deck)pz[4]); return true; }
+                // Kebab e anteprima disattivati a Stagione conclusa: rinominare/eliminare un deck o cambiarne
+                // stile/colore modificherebbe un elenco che dovrebbe restare congelato com'era allora.
+                if (!lockedDecks) {
+                    for(Deck d: sortedDecks(s)){
+                        if(contentY>=yy&&contentY<=yy+40&&x>=w-70){ deckActionsMenu(s,d,w-36,yy+36-scrollY); return true; }
+                        yy+=104;
+                    }
+                    for(Object[] pz: deckPreviewTapZones){
+                        float x1=(float)pz[0], y1=(float)pz[1], x2=(float)pz[2], y2=(float)pz[3];
+                        if(x>=x1&&x<=x2&&contentY>=y1&&contentY<=y2){ handlePreviewTap((Deck)pz[4]); return true; }
+                    }
                 }
             } else if(detailTab==3){
                 // Icona filtro Matchup: 2 zone separate (sinistra = i tuoi deck, destra = avversari), ognuna
