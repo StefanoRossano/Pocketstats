@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'com.stefanorossano.pocketstats'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'com.stefanorossano.pocketstats'
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 54
-        versionName '0.7.0'
+        versionName '0.8.13'
     }
 
     // Chiave di firma debug FISSA (commitata nel repo, in keystore/debug.keystore).
